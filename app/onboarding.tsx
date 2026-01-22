@@ -8,15 +8,15 @@ const { width } = Dimensions.get('window');
 const slides = [
   {
     title: '学校のテストを、ちゃんと残すだけのアプリです。',
-    description: '捨てられないテストを、画像に残しておくだけ。あとから見返せる状態にしておきます。',
+    description: '',
   },
   {
-    title: '残っている。',
-    description: 'それだけで十分です。',
+    title: '捨てられないテストを、写真に残すだけ。',
+    description: '',
   },
   {
-    title: 'さっそく始めましょう',
-    description: 'テストやプリントを撮影して、簡単に記録できます。',
+    title: '残っている。それだけで十分です。',
+    description: '',
   },
 ];
 
@@ -89,15 +89,16 @@ const styles = StyleSheet.create({
     maxWidth: 400,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontFamily: 'Nunito-SemiBold',
     textAlign: 'center',
     marginBottom: 20,
     color: '#333',
-    lineHeight: 36,
+    lineHeight: 34,
   },
   description: {
-    fontSize: 16,
+    fontSize: 15,
+    fontFamily: 'Nunito-Regular',
     textAlign: 'center',
     color: '#666',
     lineHeight: 24,
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     textAlign: 'center',
   },
 });

@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   yearText: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
     minWidth: 80,
     textAlign: 'center',
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   monthTabText: {
     fontSize: 13,
     color: '#666',
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   monthTabTextSelected: {
     color: '#fff',
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   },
   sectionHeaderText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#666',
   },
   recordItem: {
@@ -315,17 +315,17 @@ const styles = StyleSheet.create({
   subjectChipText: {
     color: '#fff',
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   typeText: {
     fontSize: 12,
     color: '#666',
-    fontWeight: '500',
+    fontFamily: 'Nunito-Regular',
   },
   evaluationText: {
     fontSize: 14,
     color: '#333',
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   emptyContainer: {
     flex: 1,

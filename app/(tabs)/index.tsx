@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
   },
   listContent: {
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   dateOverlayText: {
     color: '#fff',
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   cardContent: {
     padding: 14,
@@ -216,17 +216,17 @@ const styles = StyleSheet.create({
   subjectChipText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   typeText: {
     fontSize: 13,
     color: '#666',
-    fontWeight: '500',
+    fontFamily: 'Nunito-Regular',
   },
   evaluationText: {
     fontSize: 15,
     color: '#333',
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   dateText: {
     fontSize: 13,

@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
   },
   scrollView: {
@@ -234,17 +234,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginBottom: 8,
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   value: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '500',
+    fontFamily: 'Nunito-Regular',
   },
   valueHighlight: {
     fontSize: 18,
     color: '#333',
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
   },
   subjectChip: {
     backgroundColor: '#4A90E2',
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   subjectChipText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   memoText: {
     fontSize: 15,

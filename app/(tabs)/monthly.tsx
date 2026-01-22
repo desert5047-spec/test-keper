@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
   },
   scrollView: {
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 8,
   },
@@ -253,12 +253,12 @@ const styles = StyleSheet.create({
   subjectChipText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   statText: {
     fontSize: 14,
     color: '#333',
-    fontWeight: '500',
+    fontFamily: 'Nunito-Regular',
   },
   emptyContainer: {
     flex: 1,
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   },
   premiumButtonText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
   },
 });

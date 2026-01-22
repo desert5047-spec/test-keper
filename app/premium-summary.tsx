@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
   },
   scrollView: {
@@ -232,12 +232,12 @@ const styles = StyleSheet.create({
   },
   premiumBadgeText: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 8,
   },
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   },
   albumTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 12,
   },
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   albumPlaceholderText: {
     fontSize: 12,
     color: '#999',
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   infoBox: {
     backgroundColor: '#fff',
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 8,
   },

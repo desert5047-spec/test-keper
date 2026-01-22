@@ -11,9 +11,10 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
+  ActionSheetIOS,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, RotateCw, RotateCcw, X } from 'lucide-react-native';
+import { Camera, RotateCw, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
@@ -34,6 +35,8 @@ export default function AddScreen() {
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [memo, setMemo] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     loadSubjects();
@@ -61,7 +64,28 @@ export default function AddScreen() {
     }
   };
 
+  const showPhotoActionSheet = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['キャンセル', 'カメラで撮影', 'アルバムから選択'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            takePhoto();
+          } else if (buttonIndex === 2) {
+            pickImage();
+          }
+        }
+      );
+    } else {
+      setShowPhotoOptions(true);
+    }
+  };
+
   const pickImage = async () => {
+    setShowPhotoOptions(false);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: false,
@@ -75,6 +99,7 @@ export default function AddScreen() {
   };
 
   const takePhoto = async () => {
+    setShowPhotoOptions(false);
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: false,
       quality: 0.8,
@@ -86,12 +111,19 @@ export default function AddScreen() {
     }
   };
 
-  const rotatePhotoRight = () => {
+  const rotatePhoto = () => {
     setPhotoRotation((prev) => ((prev + 90) % 360) as 0 | 90 | 180 | 270);
   };
 
-  const rotatePhotoLeft = () => {
-    setPhotoRotation((prev) => ((prev - 90 + 360) % 360) as 0 | 90 | 180 | 270);
+  const confirmRemovePhoto = () => {
+    Alert.alert(
+      '写真を削除',
+      '写真を削除しますか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '削除', style: 'destructive', onPress: () => setPhotoUri(null) },
+      ]
+    );
   };
 
   const addNewSubject = async () => {
@@ -109,29 +141,23 @@ export default function AddScreen() {
     }
   };
 
-  const validateAndSave = async () => {
-    if (!selectedSubject) {
-      Alert.alert('エラー', '教科を選択してください');
-      return;
-    }
-
+  const canSave = () => {
+    if (!selectedSubject) return false;
     if (evaluationType === 'score') {
-      if (!score.trim()) {
-        Alert.alert('エラー', '点数を入力してください');
-        return;
-      }
+      if (!score.trim()) return false;
       const scoreNum = parseInt(score);
       const maxScoreNum = parseInt(maxScore);
       if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
-        Alert.alert('エラー', '有効な点数を入力してください');
-        return;
+        return false;
       }
     } else {
-      if (!stamp) {
-        Alert.alert('エラー', 'スタンプを選択してください');
-        return;
-      }
+      if (!stamp) return false;
     }
+    return true;
+  };
+
+  const validateAndSave = async () => {
+    if (!canSave()) return;
 
     setIsSaving(true);
 
@@ -162,12 +188,14 @@ export default function AddScreen() {
 
       if (error) throw error;
 
-      Alert.alert('完了', `${type}を残しました`);
-      resetForm();
-      router.push('/(tabs)');
+      setShowToast(true);
+      setTimeout(() => {
+        setShowToast(false);
+        resetForm();
+        router.push('/(tabs)');
+      }, 1500);
     } catch (error) {
       Alert.alert('エラー', '保存に失敗しました');
-    } finally {
       setIsSaving(false);
     }
   };
@@ -193,6 +221,12 @@ export default function AddScreen() {
           <Text style={styles.sectionTitle}>写真（任意）</Text>
           {photoUri ? (
             <View style={styles.photoContainer}>
+              <TouchableOpacity
+                style={styles.removePhotoButton}
+                onPress={confirmRemovePhoto}
+                activeOpacity={0.7}>
+                <X size={20} color="#fff" />
+              </TouchableOpacity>
               <View
                 style={[
                   styles.photoWrapper,
@@ -208,45 +242,21 @@ export default function AddScreen() {
               </View>
               <View style={styles.photoActions}>
                 <TouchableOpacity
-                  style={styles.photoActionButton}
-                  onPress={rotatePhotoLeft}
+                  style={styles.rotateButton}
+                  onPress={rotatePhoto}
                   activeOpacity={0.7}>
-                  <RotateCcw size={20} color="#fff" />
-                  <Text style={styles.photoActionText}>左回転</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.photoActionButton}
-                  onPress={rotatePhotoRight}
-                  activeOpacity={0.7}>
-                  <RotateCw size={20} color="#fff" />
-                  <Text style={styles.photoActionText}>右回転</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.photoActionButton, styles.removeButton]}
-                  onPress={() => setPhotoUri(null)}
-                  activeOpacity={0.7}>
-                  <X size={20} color="#fff" />
-                  <Text style={styles.photoActionText}>削除</Text>
+                  <RotateCw size={24} color="#666" />
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
-            <View style={styles.photoPickerContainer}>
-              <TouchableOpacity
-                style={styles.photoPickerButton}
-                onPress={takePhoto}
-                activeOpacity={0.7}>
-                <Camera size={32} color="#4A90E2" />
-                <Text style={styles.photoPickerText}>撮影する</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.photoPickerButton}
-                onPress={pickImage}
-                activeOpacity={0.7}>
-                <Text style={styles.photoPickerIcon}>📷</Text>
-                <Text style={styles.photoPickerText}>選択する</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.photoPickerButton}
+              onPress={showPhotoActionSheet}
+              activeOpacity={0.7}>
+              <Camera size={32} color="#4A90E2" />
+              <Text style={styles.photoPickerText}>テストの写真を追加（任意）</Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -439,20 +449,66 @@ export default function AddScreen() {
           />
         </View>
 
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      <View style={styles.saveButtonContainer}>
         <TouchableOpacity
-          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+          style={[
+            styles.saveButton,
+            (!canSave() || isSaving) && styles.saveButtonDisabled
+          ]}
           onPress={validateAndSave}
-          disabled={isSaving}
+          disabled={!canSave() || isSaving}
           activeOpacity={0.7}>
           {isSaving ? (
-            <ActivityIndicator color="#fff" />
+            <>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text style={styles.saveButtonText}> 保存中…</Text>
+            </>
           ) : (
             <Text style={styles.saveButtonText}>保存する</Text>
           )}
         </TouchableOpacity>
+      </View>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      <Modal
+        visible={showPhotoOptions}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPhotoOptions(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPhotoOptions(false)}>
+          <View style={styles.actionSheet}>
+            <TouchableOpacity
+              style={styles.actionSheetButton}
+              onPress={takePhoto}
+              activeOpacity={0.7}>
+              <Text style={styles.actionSheetButtonText}>カメラで撮影</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionSheetButton}
+              onPress={pickImage}
+              activeOpacity={0.7}>
+              <Text style={styles.actionSheetButtonText}>アルバムから選択</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionSheetButton, styles.actionSheetCancelButton]}
+              onPress={() => setShowPhotoOptions(false)}
+              activeOpacity={0.7}>
+              <Text style={styles.actionSheetCancelText}>キャンセル</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {showToast && (
+        <View style={styles.toastContainer}>
+          <Text style={styles.toastText}>記録を残しました</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -472,7 +528,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
   },
   scrollView: {
@@ -486,13 +542,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 12,
   },
   photoContainer: {
     borderRadius: 12,
     backgroundColor: '#f0f0f0',
+    position: 'relative',
   },
   photoWrapper: {
     width: '100%',
@@ -503,36 +560,36 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: '100%',
+    borderRadius: 12,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   photoActions: {
     flexDirection: 'row',
-    padding: 12,
-    gap: 8,
-  },
-  photoActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4A90E2',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 4,
+    padding: 12,
   },
-  removeButton: {
-    backgroundColor: '#FF6B6B',
-  },
-  photoActionText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  photoPickerContainer: {
-    flexDirection: 'row',
-    gap: 12,
+  rotateButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   photoPickerButton: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 32,
@@ -542,12 +599,9 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
     borderStyle: 'dashed',
   },
-  photoPickerIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
   photoPickerText: {
     fontSize: 14,
+    fontFamily: 'Nunito-Regular',
     color: '#666',
     marginTop: 8,
   },
@@ -570,8 +624,8 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
     color: '#666',
-    fontWeight: '600',
   },
   chipTextSelected: {
     color: '#fff',
@@ -586,8 +640,8 @@ const styles = StyleSheet.create({
   },
   chipAddText: {
     fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
     color: '#4A90E2',
-    fontWeight: '600',
   },
   inputRow: {
     flexDirection: 'row',
@@ -602,6 +656,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+    fontFamily: 'Nunito-Regular',
     color: '#333',
   },
   addButton: {
@@ -613,7 +668,7 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
   evaluationTypeContainer: {
     flexDirection: 'row',
@@ -632,8 +687,8 @@ const styles = StyleSheet.create({
   },
   evaluationTypeText: {
     fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
     color: '#666',
-    fontWeight: '600',
   },
   evaluationTypeTextSelected: {
     color: '#fff',
@@ -654,6 +709,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
     color: '#333',
     textAlign: 'center',
   },
@@ -665,11 +721,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
     color: '#333',
     textAlign: 'center',
   },
   scoreLabel: {
     fontSize: 14,
+    fontFamily: 'Nunito-Regular',
     color: '#666',
   },
   scoreSeparator: {
@@ -694,8 +752,8 @@ const styles = StyleSheet.create({
   },
   stampText: {
     fontSize: 15,
+    fontFamily: 'Nunito-SemiBold',
     color: '#666',
-    fontWeight: '600',
   },
   stampTextSelected: {
     color: '#4A90E2',
@@ -707,6 +765,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+    fontFamily: 'Nunito-Regular',
     color: '#333',
   },
   memoInput: {
@@ -716,23 +775,83 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+    fontFamily: 'Nunito-Regular',
     color: '#333',
     minHeight: 100,
   },
+  saveButtonContainer: {
+    position: 'absolute',
+    bottom: 70,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
   saveButton: {
     backgroundColor: '#4A90E2',
-    marginHorizontal: 20,
-    marginTop: 24,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   saveButtonDisabled: {
     backgroundColor: '#ccc',
+    opacity: 0.6,
   },
   saveButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: 'Nunito-Bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  actionSheetButton: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  actionSheetCancelButton: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+  },
+  actionSheetButtonText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#4A90E2',
+  },
+  actionSheetCancelText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: '#333',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
   },
 });
