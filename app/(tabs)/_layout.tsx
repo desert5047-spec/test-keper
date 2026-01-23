@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Home, List, Plus, Calendar } from 'lucide-react-native';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -12,20 +12,20 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#4A90E2',
         tabBarInactiveTintColor: '#999',
         tabBarStyle: {
-          height: 70,
-          paddingBottom: 12,
+          height: 65,
+          paddingBottom: 8,
           paddingTop: 8,
           borderTopWidth: 1,
           borderTopColor: '#eee',
           backgroundColor: '#fff',
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontFamily: 'Nunito-Bold',
-          marginTop: 2,
+          marginTop: 4,
         },
         tabBarIconStyle: {
-          marginTop: 4,
+          marginTop: 0,
         },
       }}>
       <Tabs.Screen
@@ -33,7 +33,7 @@ export default function TabLayout() {
         options={{
           title: 'ホーム',
           tabBarIcon: ({ color, focused }) => (
-            <Home size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <Home size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -42,7 +42,7 @@ export default function TabLayout() {
         options={{
           title: '一覧',
           tabBarIcon: ({ color, focused }) => (
-            <List size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <List size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -50,12 +50,17 @@ export default function TabLayout() {
         name="add"
         options={{
           title: '登録',
-          href: '/add',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.addButtonContainer}>
-              <Plus size={28} color="#fff" strokeWidth={2.5} />
+              <Plus size={24} color="#fff" strokeWidth={3} />
             </View>
           ),
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/add');
+          },
         }}
       />
       <Tabs.Screen
@@ -63,7 +68,7 @@ export default function TabLayout() {
         options={{
           title: '記録',
           tabBarIcon: ({ color, focused }) => (
-            <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <Calendar size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -73,17 +78,17 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   addButtonContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#4A90E2',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -8,
-    shadowColor: '#000',
+    marginTop: -4,
+    shadowColor: '#4A90E2',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 5,
   },
 });
