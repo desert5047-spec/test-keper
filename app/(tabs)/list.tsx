@@ -148,11 +148,11 @@ export default function ListScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.recordItem, !hasPhoto && styles.recordItemSmall]}
+        style={styles.recordItem}
         onPress={() => router.push(`/detail?id=${item.id}`)}
         activeOpacity={0.8}>
-        {hasPhoto && (
-          <View style={styles.thumbnailContainer}>
+        <View style={styles.thumbnailContainer}>
+          {hasPhoto ? (
             <View
               style={[
                 styles.thumbnailWrapper,
@@ -166,8 +166,10 @@ export default function ListScreen() {
                 resizeMode="cover"
               />
             </View>
-          </View>
-        )}
+          ) : (
+            <View style={styles.placeholderThumbnail} />
+          )}
+        </View>
         <View style={styles.recordContent}>
           <View style={styles.recordFirstRow}>
             <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
@@ -341,17 +343,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
-  },
-  recordItemSmall: {
-    minHeight: 70,
+    minHeight: 80,
   },
   thumbnailContainer: {
-    width: 80,
-    height: 80,
+    width: 64,
+    height: 64,
+    borderRadius: 8,
     backgroundColor: '#f0f0f0',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    margin: 8,
   },
   thumbnailWrapper: {
     width: '100%',
@@ -360,6 +362,11 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: '100%',
     height: '100%',
+  },
+  placeholderThumbnail: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e8e8e8',
   },
   recordContent: {
     flex: 1,

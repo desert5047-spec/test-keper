@@ -139,7 +139,7 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
-        <View style={styles.cardContent}>
+        <View style={[styles.cardContent, !hasPhoto && styles.cardContentCompact]}>
           <View style={styles.cardFirstRow}>
             <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
               <Text style={styles.subjectChipText}>{item.subject}</Text>
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardSmall: {
-    minHeight: 80,
+    minHeight: 0,
   },
   imageContainer: {
     position: 'relative',
@@ -334,10 +334,14 @@ const styles = StyleSheet.create({
   cardContent: {
     padding: 16,
   },
+  cardContentCompact: {
+    padding: 12,
+    paddingVertical: 10,
+  },
   cardFirstRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
     minHeight: 28,
   },
   subjectChip: {
@@ -357,7 +361,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontFamily: 'Nunito-Regular',
-    marginTop: 2,
   },
   evaluationText: {
     fontSize: 16,
@@ -367,9 +370,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   dateText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#999',
-    marginTop: 6,
+    marginTop: 4,
     fontFamily: 'Nunito-Regular',
   },
   emptyContainer: {
