@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Home, List, Plus, Calendar } from 'lucide-react-native';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -50,17 +50,22 @@ export default function TabLayout() {
         name="add"
         options={{
           title: '登録',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={styles.addButtonContainer}>
-              <Plus size={24} color="#fff" strokeWidth={3} />
-            </View>
+          href: null,
+          tabBarButton: (props) => (
+            <TouchableOpacity
+              {...props}
+              onPress={() => router.push('/add')}
+              style={{
+                flex: 1,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+              activeOpacity={0.7}>
+              <View style={styles.addButtonContainer}>
+                <Plus size={24} color="#fff" strokeWidth={3} />
+              </View>
+            </TouchableOpacity>
           ),
-        }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.push('/add');
-          },
         }}
       />
       <Tabs.Screen
