@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 
@@ -17,9 +18,11 @@ export default function HomeScreen() {
   const router = useRouter();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const monthScrollRef = useRef<ScrollView>(null);
+
+  const months = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
   useFocusEffect(
     useCallback(() => {
@@ -28,16 +31,18 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    setTimeout(() => {
-      monthScrollRef.current?.scrollTo({ x: selectedMonth * 44, animated: true });
-    }, 100);
-  }, []);
+    const index = months.indexOf(selectedMonth);
+    if (index !== -1) {
+      setTimeout(() => {
+        monthScrollRef.current?.scrollTo({ x: index * 56, animated: true });
+      }, 100);
+    }
+  }, [selectedMonth]);
 
   const loadRecords = async () => {
-    const month = selectedMonth + 1;
-    const startDate = `${selectedYear}-${String(month).padStart(2, '0')}-01`;
-    const endDate = new Date(selectedYear, month, 0);
-    const endDateStr = `${selectedYear}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+    const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+    const endDate = new Date(selectedYear, selectedMonth, 0);
+    const endDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
     const { data } = await supabase
       .from('records')
@@ -49,6 +54,16 @@ export default function HomeScreen() {
 
     if (data) {
       setRecords(data);
+    }
+  };
+
+  const handleYearChange = (direction: 'next' | 'prev') => {
+    if (direction === 'next') {
+      setSelectedYear(selectedYear + 1);
+      setSelectedMonth(1);
+    } else {
+      setSelectedYear(selectedYear - 1);
+      setSelectedMonth(12);
     }
   };
 
@@ -129,35 +144,53 @@ export default function HomeScreen() {
     );
   };
 
-  const renderMonthChip = (monthIndex: number) => {
-    const isSelected = monthIndex === selectedMonth;
-    const isCurrentMonth = monthIndex === new Date().getMonth() && selectedYear === new Date().getFullYear();
+  const renderMonthChip = (month: number) => {
+    const isSelected = month === selectedMonth;
 
     return (
       <TouchableOpacity
-        key={monthIndex}
+        key={month}
         style={[
           styles.monthChip,
           isSelected && styles.monthChipSelected,
-          isCurrentMonth && styles.monthChipCurrent,
         ]}
-        onPress={() => setSelectedMonth(monthIndex)}
-        activeOpacity={0.7}
-      />
+        onPress={() => setSelectedMonth(month)}
+        activeOpacity={0.7}>
+        <Text style={[
+          styles.monthText,
+          isSelected && styles.monthTextSelected
+        ]}>
+          {month}
+        </Text>
+      </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.yearText}>{selectedYear}年</Text>
+        <View style={styles.yearSelector}>
+          <TouchableOpacity
+            style={styles.yearArrow}
+            onPress={() => handleYearChange('next')}
+            activeOpacity={0.7}>
+            <ChevronLeft size={24} color="#4A90E2" strokeWidth={2.5} />
+          </TouchableOpacity>
+          <Text style={styles.yearText}>{selectedYear}年</Text>
+          <TouchableOpacity
+            style={styles.yearArrow}
+            onPress={() => handleYearChange('prev')}
+            activeOpacity={0.7}>
+            <ChevronRight size={24} color="#4A90E2" strokeWidth={2.5} />
+          </TouchableOpacity>
+        </View>
         <ScrollView
           ref={monthScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.monthSelector}
           style={styles.monthScrollView}>
-          {Array.from({ length: 12 }, (_, i) => renderMonthChip(i))}
+          {months.map((month) => renderMonthChip(month))}
         </ScrollView>
       </View>
 
@@ -190,16 +223,27 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     paddingTop: 50,
-    paddingBottom: 12,
+    paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  yearSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  yearArrow: {
+    padding: 4,
+  },
   yearText: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 12,
+    minWidth: 100,
+    textAlign: 'center',
   },
   monthScrollView: {
     marginHorizontal: -20,
@@ -207,22 +251,27 @@ const styles = StyleSheet.create({
   },
   monthSelector: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     paddingRight: 20,
   },
   monthChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E0E0E0',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E8E8E8',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   monthChipSelected: {
     backgroundColor: '#4A90E2',
   },
-  monthChipCurrent: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  monthText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    color: '#888',
+  },
+  monthTextSelected: {
+    color: '#fff',
   },
   listContent: {
     padding: 16,
