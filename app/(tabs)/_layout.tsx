@@ -11,8 +11,8 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#4A90E2',
-        tabBarInactiveTintColor: '#AAAAAA',
+        tabBarActiveTintColor: '#333',
+        tabBarInactiveTintColor: '#999',
       }}
       tabBar={(props) => {
         const { state, descriptors, navigation } = props;
@@ -46,12 +46,12 @@ export default function TabLayout() {
                   activeOpacity={0.7}>
                   {options.tabBarIcon?.({
                     focused: isFocused,
-                    color: isFocused ? '#4A90E2' : '#AAAAAA',
+                    color: isFocused ? '#333' : '#999',
                     size: 24,
                   })}
                   <Text style={[
                     styles.tabLabel,
-                    { color: isFocused ? '#4A90E2' : '#AAAAAA' }
+                    { color: isFocused ? '#333' : '#999' }
                   ]}>
                     {options.title}
                   </Text>
@@ -87,12 +87,12 @@ export default function TabLayout() {
                   activeOpacity={0.7}>
                   {options.tabBarIcon?.({
                     focused: isFocused,
-                    color: isFocused ? '#4A90E2' : '#AAAAAA',
+                    color: isFocused ? '#333' : '#999',
                     size: 24,
                   })}
                   <Text style={[
                     styles.tabLabel,
-                    { color: isFocused ? '#4A90E2' : '#AAAAAA' }
+                    { color: isFocused ? '#333' : '#999' }
                   ]}>
                     {options.title}
                   </Text>
@@ -108,7 +108,6 @@ export default function TabLayout() {
               <View style={styles.addButtonContainer}>
                 <Plus size={28} color="#fff" strokeWidth={3} />
               </View>
-              <Text style={[styles.tabLabel, styles.addLabel]}>＋</Text>
             </TouchableOpacity>
 
             {/* 記録 */}
@@ -139,12 +138,12 @@ export default function TabLayout() {
                   activeOpacity={0.7}>
                   {options.tabBarIcon?.({
                     focused: isFocused,
-                    color: isFocused ? '#4A90E2' : '#AAAAAA',
+                    color: isFocused ? '#333' : '#999',
                     size: 24,
                   })}
                   <Text style={[
                     styles.tabLabel,
-                    { color: isFocused ? '#4A90E2' : '#AAAAAA' }
+                    { color: isFocused ? '#333' : '#999' }
                   ]}>
                     {options.title}
                   </Text>
@@ -223,13 +222,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  addLabel: {
-    fontSize: 12,
-    color: '#4A90E2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
   },
 });
