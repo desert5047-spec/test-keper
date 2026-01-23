@@ -162,7 +162,7 @@ export default function AddScreen() {
     return true;
   };
 
-  const validateAndSave = async () => {
+  const handleSave = async () => {
     if (!canSave()) return;
 
     setIsSaving(true);
@@ -238,7 +238,17 @@ export default function AddScreen() {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>記録を残す</Text>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity
+          style={[styles.saveButton, (!selectedSubject || (evaluationType === 'score' && (!score || !maxScore))) && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={!selectedSubject || (evaluationType === 'score' && (!score || !maxScore)) || isSaving}
+          activeOpacity={0.7}>
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>保存</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -286,7 +296,7 @@ export default function AddScreen() {
               onPress={showPhotoActionSheet}
               activeOpacity={0.7}>
               <Camera size={32} color="#4A90E2" />
-              <Text style={styles.photoPickerText}>テストの写真を追加（任意）</Text>
+              <Text style={styles.photoPickerText}>写真を追加</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -480,28 +490,8 @@ export default function AddScreen() {
           />
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      <View style={styles.saveButtonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.saveButton,
-            (!canSave() || isSaving) && styles.saveButtonDisabled
-          ]}
-          onPress={validateAndSave}
-          disabled={!canSave() || isSaving}
-          activeOpacity={0.7}>
-          {isSaving ? (
-            <>
-              <ActivityIndicator color="#fff" size="small" />
-              <Text style={styles.saveButtonText}> 保存中…</Text>
-            </>
-          ) : (
-            <Text style={styles.saveButtonText}>保存する</Text>
-          )}
-        </TouchableOpacity>
-      </View>
 
       <Modal
         visible={showPhotoOptions}
@@ -575,9 +565,6 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
     textAlign: 'center',
-  },
-  headerSpacer: {
-    minWidth: 40,
   },
   scrollView: {
     flex: 1,
@@ -829,24 +816,13 @@ const styles = StyleSheet.create({
     color: '#333',
     minHeight: 100,
   },
-  saveButtonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
   saveButton: {
     backgroundColor: '#4A90E2',
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 70,
     alignItems: 'center',
-    flexDirection: 'row',
     justifyContent: 'center',
   },
   saveButtonDisabled: {
@@ -855,7 +831,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Nunito-Bold',
   },
   modalOverlay: {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { PlusCircle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 
@@ -17,20 +17,27 @@ export default function HomeScreen() {
   const router = useRouter();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const monthScrollRef = useRef<ScrollView>(null);
 
   useFocusEffect(
     useCallback(() => {
       loadRecords();
-    }, [])
+    }, [selectedMonth, selectedYear])
   );
 
+  useEffect(() => {
+    setTimeout(() => {
+      monthScrollRef.current?.scrollTo({ x: selectedMonth * 44, animated: true });
+    }, 100);
+  }, []);
+
   const loadRecords = async () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month, 0);
-    const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+    const month = selectedMonth + 1;
+    const startDate = `${selectedYear}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(selectedYear, month, 0);
+    const endDateStr = `${selectedYear}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
     const { data } = await supabase
       .from('records')
@@ -63,17 +70,23 @@ export default function HomeScreen() {
     return record.stamp || '';
   };
 
-  const getPraiseText = (record: TestRecord) => {
-    if (record.score !== null && record.max_score > 0) {
-      const percentage = (record.score / record.max_score) * 100;
-      if (percentage >= 90) return 'よくできました！';
-      if (percentage >= 80) return 'がんばりました！';
-    }
-    return null;
+  const getSubjectColor = (subject: string) => {
+    const colors: { [key: string]: string } = {
+      '国語': '#E74C3C',
+      '算数': '#3498DB',
+      '理科': '#27AE60',
+      '社会': '#E67E22',
+      '生活': '#9B59B6',
+      '図工': '#F39C12',
+      '音楽': '#1ABC9C',
+      '体育': '#E91E63',
+    };
+    return colors[subject] || '#95A5A6';
   };
 
   const renderRecord = ({ item }: { item: TestRecord }) => {
     const hasPhoto = !!item.photo_uri;
+    const subjectColor = getSubjectColor(item.subject);
 
     return (
       <TouchableOpacity
@@ -101,16 +114,13 @@ export default function HomeScreen() {
           </View>
         )}
         <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <View style={styles.subjectChip}>
+          <View style={styles.cardFirstRow}>
+            <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
               <Text style={styles.subjectChipText}>{item.subject}</Text>
             </View>
-            <Text style={styles.typeText}>{item.type}</Text>
+            <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
           </View>
-          <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
-          {getPraiseText(item) && (
-            <Text style={styles.praiseText}>{getPraiseText(item)}</Text>
-          )}
+          <Text style={styles.typeText}>{item.type}</Text>
           {!hasPhoto && (
             <Text style={styles.dateText}>{formatDate(item.date)}</Text>
           )}
@@ -119,16 +129,42 @@ export default function HomeScreen() {
     );
   };
 
+  const renderMonthChip = (monthIndex: number) => {
+    const isSelected = monthIndex === selectedMonth;
+    const isCurrentMonth = monthIndex === new Date().getMonth() && selectedYear === new Date().getFullYear();
+
+    return (
+      <TouchableOpacity
+        key={monthIndex}
+        style={[
+          styles.monthChip,
+          isSelected && styles.monthChipSelected,
+          isCurrentMonth && styles.monthChipCurrent,
+        ]}
+        onPress={() => setSelectedMonth(monthIndex)}
+        activeOpacity={0.7}
+      />
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>今月の記録</Text>
+        <Text style={styles.yearText}>{selectedYear}年</Text>
+        <ScrollView
+          ref={monthScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.monthSelector}
+          style={styles.monthScrollView}>
+          {Array.from({ length: 12 }, (_, i) => renderMonthChip(i))}
+        </ScrollView>
       </View>
 
       {records.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>まだ記録がありません</Text>
-          <Text style={styles.emptySubText}>＋ボタンから記録を残しましょう</Text>
+          <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
       ) : (
         <FlatList
@@ -142,13 +178,6 @@ export default function HomeScreen() {
           }
         />
       )}
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push('/add')}
-        activeOpacity={0.8}>
-        <PlusCircle size={32} color="#fff" />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -161,19 +190,43 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     paddingTop: 50,
-    paddingBottom: 16,
+    paddingBottom: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  headerTitle: {
-    fontSize: 20,
+  yearText: {
+    fontSize: 18,
     fontFamily: 'Nunito-Bold',
     color: '#333',
+    marginBottom: 12,
+  },
+  monthScrollView: {
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+  },
+  monthSelector: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingRight: 20,
+  },
+  monthChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E0E0E0',
+  },
+  monthChipSelected: {
+    backgroundColor: '#4A90E2',
+  },
+  monthChipCurrent: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   listContent: {
     padding: 16,
-    gap: 16,
+    gap: 12,
   },
   card: {
     backgroundColor: '#fff',
@@ -181,12 +234,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
   cardSmall: {
-    paddingVertical: 12,
+    minHeight: 80,
   },
   imageContainer: {
     position: 'relative',
@@ -219,45 +272,40 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-SemiBold',
   },
   cardContent: {
-    padding: 14,
+    padding: 16,
   },
-  cardHeader: {
+  cardFirstRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
-    gap: 8,
   },
   subjectChip: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
   subjectChipText: {
     color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Nunito-SemiBold',
+    fontSize: 13,
+    fontFamily: 'Nunito-Bold',
   },
   typeText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
     fontFamily: 'Nunito-Regular',
+    marginTop: 2,
   },
   evaluationText: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#333',
-    fontFamily: 'Nunito-SemiBold',
-  },
-  praiseText: {
-    fontSize: 13,
-    color: '#FF6B6B',
     fontFamily: 'Nunito-Bold',
-    marginTop: 4,
   },
   dateText: {
     fontSize: 13,
     color: '#999',
-    marginTop: 4,
+    marginTop: 6,
+    fontFamily: 'Nunito-Regular',
   },
   emptyContainer: {
     flex: 1,
@@ -266,28 +314,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#666',
     marginBottom: 8,
+    fontFamily: 'Nunito-SemiBold',
   },
   emptySubText: {
     fontSize: 14,
     color: '#999',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 90,
-    right: 20,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    fontFamily: 'Nunito-Regular',
   },
 });

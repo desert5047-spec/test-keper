@@ -110,6 +110,20 @@ export default function MonthlyScreen() {
     router.push(`/(tabs)/list?year=${year}&month=${month}`);
   };
 
+  const getSubjectColor = (subject: string) => {
+    const colors: { [key: string]: string } = {
+      '国語': '#E74C3C',
+      '算数': '#3498DB',
+      '理科': '#27AE60',
+      '社会': '#E67E22',
+      '生活': '#9B59B6',
+      '図工': '#F39C12',
+      '音楽': '#1ABC9C',
+      '体育': '#E91E63',
+    };
+    return colors[subject] || '#95A5A6';
+  };
+
   const renderMonthCard = (summary: MonthSummary) => {
     return (
       <TouchableOpacity
@@ -127,13 +141,17 @@ export default function MonthlyScreen() {
         {summary.subjectStats.length > 0 && (
           <View style={styles.subjectStatsContainer}>
             {summary.subjectStats.map((stat) => (
-              <Text key={stat.subject} style={styles.subjectStatText}>
-                [{stat.subject}]{' '}
-                {stat.averageScore !== null
-                  ? `平均${stat.averageScore}点 `
-                  : ''}
-                （登録{stat.totalCount}件）
-              </Text>
+              <View key={stat.subject} style={styles.subjectStatRow}>
+                <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(stat.subject) }]}>
+                  <Text style={styles.subjectChipText}>{stat.subject}</Text>
+                </View>
+                <Text style={styles.subjectStatText}>
+                  {stat.averageScore !== null
+                    ? `平均${stat.averageScore}点 `
+                    : ''}
+                  {stat.totalCount}件
+                </Text>
+              </View>
             ))}
           </View>
         )}
@@ -214,14 +232,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subjectStatsContainer: {
-    marginTop: 12,
-    gap: 8,
+    marginTop: 16,
+    gap: 10,
+  },
+  subjectStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  subjectChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  subjectChipText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Nunito-Bold',
   },
   subjectStatText: {
     fontSize: 14,
-    color: '#333',
+    color: '#555',
     fontFamily: 'Nunito-Regular',
-    lineHeight: 22,
   },
   emptyContainer: {
     flex: 1,

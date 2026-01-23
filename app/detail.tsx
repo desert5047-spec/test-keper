@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { X, ArrowLeft } from 'lucide-react-native';
+import { X, ArrowLeft, Home } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 
@@ -44,6 +44,20 @@ export default function DetailScreen() {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  };
+
+  const getSubjectColor = (subject: string) => {
+    const colors: { [key: string]: string } = {
+      '国語': '#E74C3C',
+      '算数': '#3498DB',
+      '理科': '#27AE60',
+      '社会': '#E67E22',
+      '生活': '#9B59B6',
+      '図工': '#F39C12',
+      '音楽': '#1ABC9C',
+      '体育': '#E91E63',
+    };
+    return colors[subject] || '#95A5A6';
   };
 
   if (loading) {
@@ -115,7 +129,7 @@ export default function DetailScreen() {
 
           <View style={styles.section}>
             <Text style={styles.label}>教科</Text>
-            <View style={styles.subjectChip}>
+            <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(record.subject) }]}>
               <Text style={styles.subjectChipText}>{record.subject}</Text>
             </View>
           </View>
@@ -142,8 +156,27 @@ export default function DetailScreen() {
               <Text style={styles.memoText}>{record.memo}</Text>
             </View>
           )}
+
+          <View style={{ height: 80 }} />
         </View>
       </ScrollView>
+
+      <View style={styles.bottomButtons}>
+        <TouchableOpacity
+          style={styles.homeButton}
+          onPress={() => router.push('/')}
+          activeOpacity={0.7}>
+          <Home size={20} color="#fff" />
+          <Text style={styles.homeButtonText}>ホーム</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.backBottomButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}>
+          <ArrowLeft size={20} color="#4A90E2" />
+          <Text style={styles.backBottomButtonText}>戻る</Text>
+        </TouchableOpacity>
+      </View>
 
       <Modal
         visible={showImageModal}
@@ -247,7 +280,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
   },
   subjectChip: {
-    backgroundColor: '#4A90E2',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
@@ -301,5 +333,51 @@ const styles = StyleSheet.create({
   modalImage: {
     width: '100%',
     height: '100%',
+  },
+  bottomButtons: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    gap: 12,
+  },
+  homeButton: {
+    flex: 1,
+    backgroundColor: '#4A90E2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+    gap: 6,
+  },
+  homeButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+  },
+  backBottomButton: {
+    flex: 1,
+    backgroundColor: '#F0F8FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    gap: 6,
+  },
+  backBottomButtonText: {
+    color: '#4A90E2',
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
   },
 });

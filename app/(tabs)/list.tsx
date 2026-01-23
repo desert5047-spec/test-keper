@@ -85,6 +85,20 @@ export default function ListScreen() {
     return record.stamp || '';
   };
 
+  const getSubjectColor = (subject: string) => {
+    const colors: { [key: string]: string } = {
+      '国語': '#E74C3C',
+      '算数': '#3498DB',
+      '理科': '#27AE60',
+      '社会': '#E67E22',
+      '生活': '#9B59B6',
+      '図工': '#F39C12',
+      '音楽': '#1ABC9C',
+      '体育': '#E91E63',
+    };
+    return colors[subject] || '#95A5A6';
+  };
+
   const goToPreviousYear = () => {
     setYear(year - 1);
   };
@@ -94,12 +108,15 @@ export default function ListScreen() {
   };
 
   const renderItem = ({ item }: { item: TestRecord }) => {
+    const subjectColor = getSubjectColor(item.subject);
+    const hasPhoto = !!item.photo_uri;
+
     return (
       <TouchableOpacity
-        style={styles.recordItem}
+        style={[styles.recordItem, !hasPhoto && styles.recordItemSmall]}
         onPress={() => router.push(`/detail?id=${item.id}`)}
         activeOpacity={0.8}>
-        {item.photo_uri && (
+        {hasPhoto && (
           <View style={styles.thumbnailContainer}>
             <View
               style={[
@@ -117,13 +134,13 @@ export default function ListScreen() {
           </View>
         )}
         <View style={styles.recordContent}>
-          <View style={styles.recordHeader}>
-            <View style={styles.subjectChip}>
+          <View style={styles.recordFirstRow}>
+            <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
               <Text style={styles.subjectChipText}>{item.subject}</Text>
             </View>
-            <Text style={styles.typeText}>{item.type}</Text>
+            <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
           </View>
-          <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
+          <Text style={styles.typeText}>{item.type}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -275,9 +292,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
+  },
+  recordItemSmall: {
+    minHeight: 70,
   },
   thumbnailContainer: {
     width: 80,
@@ -297,35 +317,35 @@ const styles = StyleSheet.create({
   },
   recordContent: {
     flex: 1,
-    padding: 12,
+    padding: 14,
     justifyContent: 'center',
   },
-  recordHeader: {
+  recordFirstRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 6,
-    gap: 8,
   },
   subjectChip: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   subjectChipText: {
     color: '#fff',
-    fontSize: 11,
-    fontFamily: 'Nunito-SemiBold',
+    fontSize: 12,
+    fontFamily: 'Nunito-Bold',
   },
   typeText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     fontFamily: 'Nunito-Regular',
+    marginTop: 2,
   },
   evaluationText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#333',
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: 'Nunito-Bold',
   },
   emptyContainer: {
     flex: 1,
