@@ -14,7 +14,7 @@ import {
   ActionSheetIOS,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, RotateCw, X } from 'lucide-react-native';
+import { Camera, RotateCw, RotateCcw, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
@@ -115,6 +115,10 @@ export default function AddScreen() {
 
   const rotatePhoto = () => {
     setPhotoRotation((prev) => ((prev + 90) % 360) as 0 | 90 | 180 | 270);
+  };
+
+  const rotatePhotoCounterClockwise = () => {
+    setPhotoRotation((prev) => ((prev - 90 + 360) % 360) as 0 | 90 | 180 | 270);
   };
 
   const confirmRemovePhoto = () => {
@@ -262,6 +266,12 @@ export default function AddScreen() {
                 />
               </View>
               <View style={styles.photoActions}>
+                <TouchableOpacity
+                  style={styles.rotateButton}
+                  onPress={rotatePhotoCounterClockwise}
+                  activeOpacity={0.7}>
+                  <RotateCcw size={24} color="#666" />
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.rotateButton}
                   onPress={rotatePhoto}
@@ -615,7 +625,9 @@ const styles = StyleSheet.create({
   photoActions: {
     flexDirection: 'row',
     justifyContent: 'center',
-    padding: 12,
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 8,
   },
   rotateButton: {
     width: 48,
