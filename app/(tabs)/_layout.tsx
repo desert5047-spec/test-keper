@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, List, PlusCircle, Calendar } from 'lucide-react-native';
+import { Home, List, Calendar } from 'lucide-react-native';
 import { View, StyleSheet } from 'react-native';
 
 export default function TabLayout() {
@@ -42,17 +42,6 @@ export default function TabLayout() {
           tabBarIcon: ({ size, color, focused }) => (
             <View style={focused && styles.activeIconContainer}>
               <List size={26} color={color} strokeWidth={focused ? 2.5 : 2} />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="add"
-        options={{
-          title: '登録',
-          tabBarIcon: ({ size, color, focused }) => (
-            <View style={focused && styles.activeIconContainer}>
-              <PlusCircle size={26} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}

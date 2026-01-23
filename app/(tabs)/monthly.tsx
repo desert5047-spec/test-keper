@@ -110,15 +110,6 @@ export default function MonthlyScreen() {
     router.push(`/(tabs)/list?year=${year}&month=${month}`);
   };
 
-  const handlePremiumPress = (
-    year: number,
-    month: number,
-    e: any
-  ) => {
-    e.stopPropagation();
-    router.push(`/premium-summary?year=${year}&month=${month}`);
-  };
-
   const renderMonthCard = (summary: MonthSummary) => {
     return (
       <TouchableOpacity
@@ -151,15 +142,6 @@ export default function MonthlyScreen() {
             ))}
           </View>
         )}
-
-        <TouchableOpacity
-          style={styles.premiumButton}
-          onPress={(e) => handlePremiumPress(summary.year, summary.month, e)}
-          activeOpacity={0.7}>
-          <Text style={styles.premiumButtonText}>
-            今月の記録をまとめて見る（有料）
-          </Text>
-        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
@@ -274,17 +256,5 @@ const styles = StyleSheet.create({
   emptySubText: {
     fontSize: 14,
     color: '#999',
-  },
-  premiumButton: {
-    marginTop: 16,
-    backgroundColor: '#FFD700',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  premiumButtonText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
   },
 });

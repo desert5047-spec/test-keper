@@ -88,7 +88,8 @@ export default function AddScreen() {
     setShowPhotoOptions(false);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: false,
+      allowsEditing: true,
+      aspect: [4, 3],
       quality: 0.8,
     });
 
@@ -101,7 +102,8 @@ export default function AddScreen() {
   const takePhoto = async () => {
     setShowPhotoOptions(false);
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false,
+      allowsEditing: true,
+      aspect: [4, 3],
       quality: 0.8,
     });
 
@@ -161,7 +163,11 @@ export default function AddScreen() {
 
     setIsSaving(true);
 
-    try {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('timeout')), 8000);
+    });
+
+    const savePromise = (async () => {
       const { data: children } = await supabase
         .from('children')
         .select('id')
@@ -187,6 +193,10 @@ export default function AddScreen() {
         });
 
       if (error) throw error;
+    })();
+
+    try {
+      await Promise.race([savePromise, timeoutPromise]);
 
       setShowToast(true);
       setTimeout(() => {
@@ -194,8 +204,12 @@ export default function AddScreen() {
         resetForm();
         router.push('/(tabs)');
       }, 1500);
-    } catch (error) {
-      Alert.alert('エラー', '保存に失敗しました');
+    } catch (error: any) {
+      if (error.message === 'timeout') {
+        Alert.alert('エラー', '保存に時間がかかっています。もう一度お試しください。');
+      } else {
+        Alert.alert('エラー', '保存に失敗しました');
+      }
       setIsSaving(false);
     }
   };
@@ -213,7 +227,14 @@ export default function AddScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}>
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>記録を残す</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -525,11 +546,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 4,
+    minWidth: 40,
+  },
+  backButtonText: {
+    fontSize: 28,
+    color: '#4A90E2',
+    fontFamily: 'Nunito-Regular',
   },
   headerTitle: {
     fontSize: 20,
     fontFamily: 'Nunito-Bold',
     color: '#333',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    minWidth: 40,
   },
   scrollView: {
     flex: 1,
@@ -781,12 +819,13 @@ const styles = StyleSheet.create({
   },
   saveButtonContainer: {
     position: 'absolute',
-    bottom: 70,
+    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: '#fff',
     paddingHorizontal: 20,
     paddingVertical: 12,
+    paddingBottom: 24,
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
