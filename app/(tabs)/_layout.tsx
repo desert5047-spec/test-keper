@@ -50,10 +50,8 @@ export default function TabLayout() {
         name="add"
         options={{
           title: '登録',
-          href: null,
           tabBarButton: (props) => (
             <TouchableOpacity
-              {...props}
               onPress={() => router.push('/add')}
               style={{
                 flex: 1,
