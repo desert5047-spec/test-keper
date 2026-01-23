@@ -110,16 +110,30 @@ export default function ListScreen() {
     return colors[subject] || '#95A5A6';
   };
 
-  const goToPreviousYear = () => {
-    const newYear = year - 1;
-    setYear(newYear);
-    setYearMonth(newYear, selectedMonth);
+  const goToPreviousMonth = () => {
+    if (selectedMonth === 1) {
+      const newYear = year - 1;
+      setYear(newYear);
+      setSelectedMonth(12);
+      setYearMonth(newYear, 12);
+    } else {
+      const newMonth = selectedMonth - 1;
+      setSelectedMonth(newMonth);
+      setYearMonth(year, newMonth);
+    }
   };
 
-  const goToNextYear = () => {
-    const newYear = year + 1;
-    setYear(newYear);
-    setYearMonth(newYear, selectedMonth);
+  const goToNextMonth = () => {
+    if (selectedMonth === 12) {
+      const newYear = year + 1;
+      setYear(newYear);
+      setSelectedMonth(1);
+      setYearMonth(newYear, 1);
+    } else {
+      const newMonth = selectedMonth + 1;
+      setSelectedMonth(newMonth);
+      setYearMonth(year, newMonth);
+    }
   };
 
   const handleMonthSelect = (month: number) => {
@@ -181,23 +195,23 @@ export default function ListScreen() {
         <View style={styles.yearMonthSelector}>
           <TouchableOpacity
             style={styles.yearButton}
-            onPress={goToPreviousYear}
+            onPress={goToPreviousMonth}
             activeOpacity={0.7}>
             <ChevronLeft size={24} color="#666" />
           </TouchableOpacity>
           <Text style={styles.yearText}>{year}年</Text>
-          <TouchableOpacity
-            style={styles.yearButton}
-            onPress={goToNextYear}
-            activeOpacity={0.7}>
-            <ChevronRight size={24} color="#666" />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.monthButton}
             onPress={() => setShowMonthPicker(true)}
             activeOpacity={0.7}>
             <Text style={styles.monthText}>{selectedMonth}月</Text>
             <ChevronDown size={20} color="#666" strokeWidth={2.5} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.yearButton}
+            onPress={goToNextMonth}
+            activeOpacity={0.7}>
+            <ChevronRight size={24} color="#666" />
           </TouchableOpacity>
         </View>
       </View>
