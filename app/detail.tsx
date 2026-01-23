@@ -8,11 +8,16 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
+  TextInput,
+  Alert,
+  Platform,
+  ActionSheetIOS,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { X, ArrowLeft, Home } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import type { TestRecord } from '@/types/database';
+import type { TestRecord, RecordType, StampType } from '@/types/database';
 
 export default function DetailScreen() {
   const router = useRouter();
@@ -20,6 +25,18 @@ export default function DetailScreen() {
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Edit form states
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoRotation, setPhotoRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
+  const [score, setScore] = useState<string>('');
+  const [maxScore, setMaxScore] = useState<string>('100');
+  const [stamp, setStamp] = useState<StampType | null>(null);
+  const [memo, setMemo] = useState<string>('');
 
   useEffect(() => {
     if (params.id) {
@@ -37,8 +54,163 @@ export default function DetailScreen() {
 
     if (data) {
       setRecord(data);
+      initializeEditForm(data);
     }
     setLoading(false);
+  };
+
+  const initializeEditForm = (data: TestRecord) => {
+    setPhotoUri(data.photo_uri);
+    setPhotoRotation(data.photo_rotation);
+    setEvaluationType(data.score !== null ? 'score' : 'stamp');
+    setScore(data.score?.toString() || '');
+    setMaxScore(data.max_score?.toString() || '100');
+    setStamp(data.stamp);
+    setMemo(data.memo || '');
+  };
+
+  const showPhotoActionSheet = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['キャンセル', 'カメラで撮影', 'アルバムから選択'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            takePhoto();
+          } else if (buttonIndex === 2) {
+            pickImage();
+          }
+        }
+      );
+    } else {
+      setShowPhotoOptions(true);
+    }
+  };
+
+  const pickImage = async () => {
+    setShowPhotoOptions(false);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setPhotoUri(result.assets[0].uri);
+      setPhotoRotation(0);
+    }
+  };
+
+  const takePhoto = async () => {
+    setShowPhotoOptions(false);
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setPhotoUri(result.assets[0].uri);
+      setPhotoRotation(0);
+    }
+  };
+
+  const rotatePhoto = () => {
+    setPhotoRotation((prev) => ((prev + 90) % 360) as 0 | 90 | 180 | 270);
+  };
+
+  const rotatePhotoCounterClockwise = () => {
+    setPhotoRotation((prev) => ((prev - 90 + 360) % 360) as 0 | 90 | 180 | 270);
+  };
+
+  const confirmRemovePhoto = () => {
+    Alert.alert(
+      '写真を削除',
+      '写真を削除しますか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '削除', style: 'destructive', onPress: () => setPhotoUri(null) },
+      ]
+    );
+  };
+
+  const handleSave = async () => {
+    if (!record) return;
+
+    if (evaluationType === 'score') {
+      if (!score.trim()) {
+        Alert.alert('エラー', '点数を入れてください');
+        return;
+      }
+      const scoreNum = parseInt(score);
+      const maxScoreNum = parseInt(maxScore);
+      if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
+        Alert.alert('エラー', '点数は正しい数字で入れてください');
+        return;
+      }
+    } else {
+      if (!stamp) {
+        Alert.alert('エラー', 'スタンプを選んでください');
+        return;
+      }
+    }
+
+    setIsSaving(true);
+
+    const { error } = await supabase
+      .from('records')
+      .update({
+        score: evaluationType === 'score' ? parseInt(score) : null,
+        max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
+        stamp: evaluationType === 'stamp' ? stamp : null,
+        memo: memo.trim() || null,
+        photo_uri: photoUri,
+        photo_rotation: photoRotation,
+      })
+      .eq('id', record.id);
+
+    setIsSaving(false);
+
+    if (error) {
+      Alert.alert('エラー', '保存に失敗しました');
+    } else {
+      await loadRecord(record.id);
+      setEditMode(false);
+      Alert.alert('成功', '記録を更新しました');
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      '記録を削除',
+      'この記録を削除しますか？\nこの操作は取り消せません。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除',
+          style: 'destructive',
+          onPress: handleDelete
+        },
+      ]
+    );
+  };
+
+  const handleDelete = async () => {
+    if (!record) return;
+
+    const { error } = await supabase
+      .from('records')
+      .delete()
+      .eq('id', record.id);
+
+    if (error) {
+      Alert.alert('エラー', '削除に失敗しました');
+    } else {
+      router.push('/(tabs)');
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -97,85 +269,281 @@ export default function DetailScreen() {
           <ArrowLeft size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>記録の詳細</Text>
+        <View style={styles.headerActions}>
+          {!editMode && (
+            <>
+              <TouchableOpacity
+                onPress={() => setEditMode(true)}
+                style={styles.headerIconButton}
+                activeOpacity={0.7}>
+                <Edit3 size={22} color="#4A90E2" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmDelete}
+                style={styles.headerIconButton}
+                activeOpacity={0.7}>
+                <Trash2 size={22} color="#E74C3C" />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {record.photo_uri && (
-          <TouchableOpacity
-            onPress={() => setShowImageModal(true)}
-            activeOpacity={0.9}
-            style={styles.imageContainer}>
-            <View
-              style={[
-                styles.imageWrapper,
-                {
-                  transform: [{ rotate: `${record.photo_rotation}deg` }],
-                },
-              ]}>
-              <Image
-                source={{ uri: record.photo_uri }}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        <View style={styles.content}>
-          <View style={styles.section}>
-            <Text style={styles.label}>日付</Text>
-            <Text style={styles.value}>{formatDate(record.date)}</Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>教科</Text>
-            <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(record.subject) }]}>
-              <Text style={styles.subjectChipText}>{record.subject}</Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>種類</Text>
-            <Text style={styles.value}>{record.type}</Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>評価</Text>
-            {record.score !== null ? (
-              <Text style={styles.valueHighlight}>
-                {record.score}点（{record.max_score}点中）
-              </Text>
+      {editMode ? (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.editSection}>
+            <Text style={styles.editSectionTitle}>写真</Text>
+            {photoUri ? (
+              <View style={styles.photoContainer}>
+                <TouchableOpacity
+                  style={styles.removePhotoButton}
+                  onPress={confirmRemovePhoto}
+                  activeOpacity={0.7}>
+                  <X size={20} color="#fff" />
+                </TouchableOpacity>
+                <View
+                  style={[
+                    styles.photoWrapper,
+                    {
+                      transform: [{ rotate: `${photoRotation}deg` }],
+                    },
+                  ]}>
+                  <Image
+                    source={{ uri: photoUri }}
+                    style={styles.photo}
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={styles.photoActions}>
+                  <TouchableOpacity
+                    style={styles.rotateButton}
+                    onPress={rotatePhotoCounterClockwise}
+                    activeOpacity={0.7}>
+                    <RotateCcw size={24} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.rotateButton}
+                    onPress={rotatePhoto}
+                    activeOpacity={0.7}>
+                    <RotateCw size={24} color="#666" />
+                  </TouchableOpacity>
+                </View>
+              </View>
             ) : (
-              <Text style={styles.valueHighlight}>{record.stamp}</Text>
+              <TouchableOpacity
+                style={styles.photoPickerButton}
+                onPress={showPhotoActionSheet}
+                activeOpacity={0.7}>
+                <Camera size={32} color="#4A90E2" />
+                <Text style={styles.photoPickerText}>写真を追加</Text>
+              </TouchableOpacity>
             )}
           </View>
 
-          {record.memo && (
-            <View style={styles.section}>
-              <Text style={styles.label}>メモ</Text>
-              <Text style={styles.memoText}>{record.memo}</Text>
+          <View style={styles.editSection}>
+            <Text style={styles.editSectionTitle}>評価</Text>
+            <View style={styles.evaluationTypeContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.evaluationTypeButton,
+                  evaluationType === 'score' && styles.evaluationTypeButtonSelected,
+                ]}
+                onPress={() => setEvaluationType('score')}
+                activeOpacity={0.7}>
+                <Text
+                  style={[
+                    styles.evaluationTypeText,
+                    evaluationType === 'score' && styles.evaluationTypeTextSelected,
+                  ]}>
+                  点数で残す
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.evaluationTypeButton,
+                  evaluationType === 'stamp' && styles.evaluationTypeButtonSelected,
+                ]}
+                onPress={() => setEvaluationType('stamp')}
+                activeOpacity={0.7}>
+                <Text
+                  style={[
+                    styles.evaluationTypeText,
+                    evaluationType === 'stamp' && styles.evaluationTypeTextSelected,
+                  ]}>
+                  スタンプで残す
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {evaluationType === 'score' ? (
+              <View style={styles.scoreInputContainer}>
+                <View style={styles.scoreInputRow}>
+                  <TextInput
+                    style={styles.scoreInput}
+                    value={score}
+                    onChangeText={setScore}
+                    placeholder="点数"
+                    keyboardType="numeric"
+                    placeholderTextColor="#999"
+                  />
+                  <Text style={styles.scoreLabel}>点</Text>
+                  <Text style={styles.scoreSeparator}>/</Text>
+                  <TextInput
+                    style={styles.maxScoreInput}
+                    value={maxScore}
+                    onChangeText={setMaxScore}
+                    keyboardType="numeric"
+                    placeholderTextColor="#999"
+                  />
+                  <Text style={styles.scoreLabel}>点中</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.stampContainer}>
+                {(['大変よくできました', 'よくできました', 'がんばりました'] as StampType[]).map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.stampButton,
+                      stamp === s && styles.stampButtonSelected,
+                    ]}
+                    onPress={() => setStamp(s)}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.stampText,
+                        stamp === s && styles.stampTextSelected,
+                      ]}>
+                      {s}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.editSection}>
+            <Text style={styles.editSectionTitle}>メモ</Text>
+            <TextInput
+              style={styles.memoInput}
+              value={memo}
+              onChangeText={setMemo}
+              placeholder="メモを入力"
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              placeholderTextColor="#999"
+            />
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      ) : (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {record.photo_uri && (
+            <TouchableOpacity
+              onPress={() => setShowImageModal(true)}
+              activeOpacity={0.9}
+              style={styles.imageContainer}>
+              <View
+                style={[
+                  styles.imageWrapper,
+                  {
+                    transform: [{ rotate: `${record.photo_rotation}deg` }],
+                  },
+                ]}>
+                <Image
+                  source={{ uri: record.photo_uri }}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
+              </View>
+            </TouchableOpacity>
           )}
 
-          <View style={{ height: 80 }} />
-        </View>
-      </ScrollView>
+          <View style={styles.content}>
+            <View style={styles.section}>
+              <Text style={styles.label}>日付</Text>
+              <Text style={styles.value}>{formatDate(record.date)}</Text>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>教科</Text>
+              <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(record.subject) }]}>
+                <Text style={styles.subjectChipText}>{record.subject}</Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>種類</Text>
+              <Text style={styles.value}>{record.type}</Text>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>評価</Text>
+              {record.score !== null ? (
+                <Text style={styles.valueHighlight}>
+                  {record.score}点（{record.max_score}点中）
+                </Text>
+              ) : (
+                <Text style={styles.valueHighlight}>{record.stamp}</Text>
+              )}
+            </View>
+
+            {record.memo && (
+              <View style={styles.section}>
+                <Text style={styles.label}>メモ</Text>
+                <Text style={styles.memoText}>{record.memo}</Text>
+              </View>
+            )}
+
+            <View style={{ height: 80 }} />
+          </View>
+        </ScrollView>
+      )}
 
       <View style={styles.bottomButtons}>
-        <TouchableOpacity
-          style={styles.homeButton}
-          onPress={() => router.push('/')}
-          activeOpacity={0.7}>
-          <Home size={20} color="#fff" />
-          <Text style={styles.homeButtonText}>ホーム</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.backBottomButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}>
-          <ArrowLeft size={20} color="#4A90E2" />
-          <Text style={styles.backBottomButtonText}>戻る</Text>
-        </TouchableOpacity>
+        {editMode ? (
+          <>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setEditMode(false);
+                initializeEditForm(record);
+              }}
+              activeOpacity={0.7}>
+              <Text style={styles.cancelButtonText}>キャンセル</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSave}
+              disabled={isSaving}
+              activeOpacity={0.7}>
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>保存</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={styles.homeButton}
+              onPress={() => router.push('/')}
+              activeOpacity={0.7}>
+              <Home size={20} color="#fff" />
+              <Text style={styles.homeButtonText}>ホーム</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.backBottomButton}
+              onPress={() => router.back()}
+              activeOpacity={0.7}>
+              <ArrowLeft size={20} color="#4A90E2" />
+              <Text style={styles.backBottomButtonText}>戻る</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       <Modal
@@ -207,6 +575,38 @@ export default function DetailScreen() {
           )}
         </View>
       </Modal>
+
+      <Modal
+        visible={showPhotoOptions}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPhotoOptions(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPhotoOptions(false)}>
+          <View style={styles.actionSheet}>
+            <TouchableOpacity
+              style={styles.actionSheetButton}
+              onPress={takePhoto}
+              activeOpacity={0.7}>
+              <Text style={styles.actionSheetButtonText}>カメラで撮影</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionSheetButton}
+              onPress={pickImage}
+              activeOpacity={0.7}>
+              <Text style={styles.actionSheetButtonText}>アルバムから選択</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionSheetButton, styles.actionSheetCancelButton]}
+              onPress={() => setShowPhotoOptions(false)}
+              activeOpacity={0.7}>
+              <Text style={styles.actionSheetCancelText}>キャンセル</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -234,6 +634,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'Nunito-Bold',
     color: '#333',
+    flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  headerIconButton: {
+    padding: 4,
   },
   scrollView: {
     flex: 1,
@@ -294,6 +702,178 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     lineHeight: 22,
+  },
+  editSection: {
+    backgroundColor: '#fff',
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  editSectionTitle: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  photoContainer: {
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    position: 'relative',
+  },
+  photoWrapper: {
+    width: '100%',
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  photoActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  rotateButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  photoPickerButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+  },
+  photoPickerText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    marginTop: 8,
+  },
+  evaluationTypeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  evaluationTypeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  evaluationTypeButtonSelected: {
+    backgroundColor: '#4A90E2',
+  },
+  evaluationTypeText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  evaluationTypeTextSelected: {
+    color: '#fff',
+  },
+  scoreInputContainer: {
+    alignItems: 'center',
+  },
+  scoreInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scoreInput: {
+    width: 80,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  maxScoreInput: {
+    width: 60,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  scoreLabel: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+  },
+  scoreSeparator: {
+    fontSize: 16,
+    color: '#666',
+    marginHorizontal: 4,
+  },
+  stampContainer: {
+    gap: 12,
+  },
+  stampButton: {
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  stampButtonSelected: {
+    backgroundColor: '#fff',
+    borderColor: '#4A90E2',
+  },
+  stampText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  stampTextSelected: {
+    color: '#4A90E2',
+  },
+  memoInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    minHeight: 100,
   },
   loadingContainer: {
     flex: 1,
@@ -379,5 +959,62 @@ const styles = StyleSheet.create({
     color: '#4A90E2',
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#4A90E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  actionSheetButton: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  actionSheetCancelButton: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+  },
+  actionSheetButtonText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#4A90E2',
+  },
+  actionSheetCancelText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
   },
 });

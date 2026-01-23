@@ -197,7 +197,7 @@ export default function ListScreen() {
         <View style={styles.yearMonthSelector}>
           <TouchableOpacity
             style={styles.yearButton}
-            onPress={goToPreviousMonth}
+            onPress={goToNextMonth}
             activeOpacity={0.7}>
             <ChevronLeft size={24} color="#666" />
           </TouchableOpacity>
@@ -211,7 +211,7 @@ export default function ListScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.yearButton}
-            onPress={goToNextMonth}
+            onPress={goToPreviousMonth}
             activeOpacity={0.7}>
             <ChevronRight size={24} color="#666" />
           </TouchableOpacity>
