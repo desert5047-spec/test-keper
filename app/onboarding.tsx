@@ -8,15 +8,15 @@ const { width } = Dimensions.get('window');
 const slides = [
   {
     title: '学校のテストを、ちゃんと残すだけのアプリです。',
-    description: '',
+    description: '捨てられないテストを、画像に残しておけます。',
   },
   {
-    title: '捨てられないテストを、写真に残すだけ。',
-    description: '',
+    title: '残っている。',
+    description: 'それだけで十分です。',
   },
   {
-    title: '残っている。それだけで十分です。',
-    description: '',
+    title: 'さっそく始めましょう。',
+    description: 'テストやプリントを撮って、簡単に残せます。',
   },
 ];
 

@@ -63,6 +63,15 @@ export default function HomeScreen() {
     return record.stamp || '';
   };
 
+  const getPraiseText = (record: TestRecord) => {
+    if (record.score !== null && record.max_score > 0) {
+      const percentage = (record.score / record.max_score) * 100;
+      if (percentage >= 90) return 'よくできました！';
+      if (percentage >= 80) return 'がんばりました！';
+    }
+    return null;
+  };
+
   const renderRecord = ({ item }: { item: TestRecord }) => {
     const hasPhoto = !!item.photo_uri;
 
@@ -99,6 +108,9 @@ export default function HomeScreen() {
             <Text style={styles.typeText}>{item.type}</Text>
           </View>
           <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
+          {getPraiseText(item) && (
+            <Text style={styles.praiseText}>{getPraiseText(item)}</Text>
+          )}
           {!hasPhoto && (
             <Text style={styles.dateText}>{formatDate(item.date)}</Text>
           )}
@@ -235,6 +247,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     fontFamily: 'Nunito-SemiBold',
+  },
+  praiseText: {
+    fontSize: 13,
+    color: '#FF6B6B',
+    fontFamily: 'Nunito-Bold',
+    marginTop: 4,
   },
   dateText: {
     fontSize: 13,

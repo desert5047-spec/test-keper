@@ -127,18 +127,13 @@ export default function MonthlyScreen() {
         {summary.subjectStats.length > 0 && (
           <View style={styles.subjectStatsContainer}>
             {summary.subjectStats.map((stat) => (
-              <View key={stat.subject} style={styles.subjectStatRow}>
-                <View style={styles.subjectChip}>
-                  <Text style={styles.subjectChipText}>{stat.subject}</Text>
-                </View>
-                <Text style={styles.statText}>
-                  {stat.averageScore !== null
-                    ? `平均${stat.averageScore}点`
-                    : ''}
-                  {stat.averageScore !== null ? '  ' : ''}
-                  登録{stat.totalCount}件
-                </Text>
-              </View>
+              <Text key={stat.subject} style={styles.subjectStatText}>
+                [{stat.subject}]{' '}
+                {stat.averageScore !== null
+                  ? `平均${stat.averageScore}点 `
+                  : ''}
+                （登録{stat.totalCount}件）
+              </Text>
             ))}
           </View>
         )}
@@ -219,28 +214,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subjectStatsContainer: {
-    gap: 10,
+    marginTop: 12,
+    gap: 8,
   },
-  subjectStatRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  subjectChip: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  subjectChipText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Nunito-SemiBold',
-  },
-  statText: {
+  subjectStatText: {
     fontSize: 14,
     color: '#333',
     fontFamily: 'Nunito-Regular',
+    lineHeight: 22,
   },
   emptyContainer: {
     flex: 1,
