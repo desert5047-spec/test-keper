@@ -2,14 +2,16 @@ import { Tabs, useRouter } from 'expo-router';
 import { Home, List, Plus, Calendar } from 'lucide-react-native';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DateProvider } from '@/contexts/DateContext';
 
 export default function TabLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   return (
-    <Tabs
-      screenOptions={{
+    <DateProvider>
+      <Tabs
+        screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#333',
         tabBarInactiveTintColor: '#999',
@@ -180,7 +182,8 @@ export default function TabLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </DateProvider>
   );
 }
 

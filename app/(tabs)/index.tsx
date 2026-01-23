@@ -13,13 +13,15 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
+import { useDateContext } from '@/contexts/DateContext';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const { year: contextYear, month: contextMonth, setYearMonth } = useDateContext();
+  const [selectedMonth, setSelectedMonth] = useState(contextMonth);
+  const [selectedYear, setSelectedYear] = useState(contextYear);
   const monthScrollRef = useRef<ScrollView>(null);
 
   const months = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -59,12 +61,21 @@ export default function HomeScreen() {
 
   const handleYearChange = (direction: 'next' | 'prev') => {
     if (direction === 'next') {
-      setSelectedYear(selectedYear + 1);
+      const newYear = selectedYear + 1;
+      setSelectedYear(newYear);
       setSelectedMonth(1);
+      setYearMonth(newYear, 1);
     } else {
-      setSelectedYear(selectedYear - 1);
+      const newYear = selectedYear - 1;
+      setSelectedYear(newYear);
       setSelectedMonth(12);
+      setYearMonth(newYear, 12);
     }
+  };
+
+  const handleMonthChange = (month: number) => {
+    setSelectedMonth(month);
+    setYearMonth(selectedYear, month);
   };
 
   const onRefresh = async () => {
@@ -154,7 +165,7 @@ export default function HomeScreen() {
           styles.monthChip,
           isSelected && styles.monthChipSelected,
         ]}
-        onPress={() => setSelectedMonth(month)}
+        onPress={() => handleMonthChange(month)}
         activeOpacity={0.7}>
         <Text style={[
           styles.monthText,
