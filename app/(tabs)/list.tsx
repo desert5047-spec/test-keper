@@ -323,18 +323,21 @@ const styles = StyleSheet.create({
   recordFirstRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 6,
+    minHeight: 26,
   },
   subjectChip: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 12,
+    minHeight: 26,
+    justifyContent: 'center',
   },
   subjectChipText: {
     color: '#fff',
     fontSize: 12,
     fontFamily: 'Nunito-Bold',
+    lineHeight: 14,
   },
   typeText: {
     fontSize: 13,
@@ -346,6 +349,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     fontFamily: 'Nunito-Bold',
+    marginLeft: 10,
+    lineHeight: 18,
   },
   emptyContainer: {
     flex: 1,

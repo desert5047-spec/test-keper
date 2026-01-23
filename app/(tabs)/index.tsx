@@ -326,18 +326,21 @@ const styles = StyleSheet.create({
   cardFirstRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 8,
+    minHeight: 28,
   },
   subjectChip: {
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 14,
+    minHeight: 28,
+    justifyContent: 'center',
   },
   subjectChipText: {
     color: '#fff',
     fontSize: 13,
     fontFamily: 'Nunito-Bold',
+    lineHeight: 16,
   },
   typeText: {
     fontSize: 14,
@@ -349,6 +352,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     fontFamily: 'Nunito-Bold',
+    marginLeft: 12,
+    lineHeight: 20,
   },
   dateText: {
     fontSize: 13,
