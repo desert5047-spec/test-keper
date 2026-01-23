@@ -37,6 +37,7 @@ export default function AddScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
     loadSubjects();
@@ -163,7 +164,38 @@ export default function AddScreen() {
   };
 
   const handleSave = async () => {
-    if (!canSave()) return;
+    if (!selectedSubject) {
+      setErrorMessage('教科を選んでください');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+
+    if (evaluationType === 'score') {
+      if (!score.trim()) {
+        setErrorMessage('点数を入れてください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+      const scoreNum = parseInt(score);
+      const maxScoreNum = parseInt(maxScore);
+      if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
+        setErrorMessage('点数は正しい数字で入れてください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+    } else {
+      if (!stamp) {
+        setErrorMessage('スタンプを選んでください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+    }
+
+    if (!date.trim()) {
+      setErrorMessage('日付を入れてください');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
 
     setIsSaving(true);
 
@@ -238,22 +270,12 @@ export default function AddScreen() {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>記録を残す</Text>
-        <TouchableOpacity
-          style={[styles.saveButton, (!selectedSubject || (evaluationType === 'score' && (!score || !maxScore))) && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={!selectedSubject || (evaluationType === 'score' && (!score || !maxScore)) || isSaving}
-          activeOpacity={0.7}>
-          {isSaving ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>保存</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>写真（任意）</Text>
+          <Text style={styles.sectionTitle}>写真</Text>
           {photoUri ? (
             <View style={styles.photoContainer}>
               <TouchableOpacity
@@ -302,7 +324,7 @@ export default function AddScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>教科（必須）</Text>
+          <Text style={styles.sectionTitle}>教科</Text>
           {!showSubjectInput ? (
             <>
               <View style={styles.chipContainer}>
@@ -360,31 +382,7 @@ export default function AddScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>種類（必須）</Text>
-          <View style={styles.chipContainer}>
-            {(['テスト', 'プリント', 'ドリル', '確認'] as RecordType[]).map((t) => (
-              <TouchableOpacity
-                key={t}
-                style={[
-                  styles.chip,
-                  type === t && styles.chipSelected,
-                ]}
-                onPress={() => setType(t)}
-                activeOpacity={0.7}>
-                <Text
-                  style={[
-                    styles.chipText,
-                    type === t && styles.chipTextSelected,
-                  ]}>
-                  {t}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>評価（必須）</Text>
+          <Text style={styles.sectionTitle}>記録の仕方</Text>
           <View style={styles.evaluationTypeContainer}>
             <TouchableOpacity
               style={[
@@ -398,7 +396,7 @@ export default function AddScreen() {
                   styles.evaluationTypeText,
                   evaluationType === 'score' && styles.evaluationTypeTextSelected,
                 ]}>
-                点数で記録
+                点数で残す
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -413,7 +411,7 @@ export default function AddScreen() {
                   styles.evaluationTypeText,
                   evaluationType === 'stamp' && styles.evaluationTypeTextSelected,
                 ]}>
-                スタンプで記録
+                スタンプで残す
               </Text>
             </TouchableOpacity>
           </View>
@@ -466,7 +464,7 @@ export default function AddScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>日付（必須）</Text>
+          <Text style={styles.sectionTitle}>日付</Text>
           <TextInput
             style={styles.dateInput}
             value={date}
@@ -477,7 +475,7 @@ export default function AddScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>メモ（任意）</Text>
+          <Text style={styles.sectionTitle}>メモ</Text>
           <TextInput
             style={styles.memoInput}
             value={memo}
@@ -490,8 +488,27 @@ export default function AddScreen() {
           />
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      <View style={styles.bottomButtonContainer}>
+        {errorMessage ? (
+          <View style={styles.errorMessageContainer}>
+            <Text style={styles.errorMessageText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+        <TouchableOpacity
+          style={styles.bottomSaveButton}
+          onPress={handleSave}
+          disabled={isSaving}
+          activeOpacity={0.7}>
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.bottomSaveButtonText}>保存</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
       <Modal
         visible={showPhotoOptions}
@@ -565,6 +582,9 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
     textAlign: 'center',
+  },
+  headerSpacer: {
+    minWidth: 40,
   },
   scrollView: {
     flex: 1,
@@ -816,23 +836,49 @@ const styles = StyleSheet.create({
     color: '#333',
     minHeight: 100,
   },
-  saveButton: {
-    backgroundColor: '#4A90E2',
+  bottomButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
     paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 70,
+    paddingTop: 12,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 10,
+  },
+  bottomSaveButton: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveButtonDisabled: {
-    backgroundColor: '#ccc',
-    opacity: 0.6,
-  },
-  saveButtonText: {
+  bottomSaveButtonText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 17,
     fontFamily: 'Nunito-Bold',
+  },
+  errorMessageContainer: {
+    backgroundColor: '#FFE5E5',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B6B',
+  },
+  errorMessageText: {
+    color: '#D63031',
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
