@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export default function AddTabScreen() {
@@ -8,5 +9,5 @@ export default function AddTabScreen() {
     router.push('/add');
   }, []);
 
-  return null;
+  return <View />;
 }

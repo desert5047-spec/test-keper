@@ -50,17 +50,12 @@ export default function TabLayout() {
         name="add"
         options={{
           title: '登録',
+          href: '/add',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.addButtonContainer}>
               <Plus size={28} color="#fff" strokeWidth={2.5} />
             </View>
           ),
-        }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.push('/add');
-          },
         }}
       />
       <Tabs.Screen
