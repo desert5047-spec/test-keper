@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Home, List, Plus, Calendar } from 'lucide-react-native';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -27,6 +27,60 @@ export default function TabLayout() {
         tabBarIconStyle: {
           marginTop: 0,
         },
+      }}
+      tabBar={(props) => {
+        const { state, descriptors, navigation } = props;
+
+        return (
+          <View style={styles.tabBarContainer}>
+            {state.routes.map((route, index) => {
+              const { options } = descriptors[route.key];
+              const isFocused = state.index === index;
+
+              const onPress = () => {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+
+                if (!isFocused && !event.defaultPrevented) {
+                  navigation.navigate(route.name);
+                }
+              };
+
+              return (
+                <TouchableOpacity
+                  key={route.key}
+                  accessibilityRole="button"
+                  accessibilityState={isFocused ? { selected: true } : {}}
+                  onPress={onPress}
+                  style={styles.tabButton}>
+                  {options.tabBarIcon?.({
+                    focused: isFocused,
+                    color: isFocused ? '#4A90E2' : '#999',
+                    size: 22,
+                  })}
+                  <Text style={[
+                    styles.tabLabel,
+                    { color: isFocused ? '#4A90E2' : '#999' }
+                  ]}>
+                    {options.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            <TouchableOpacity
+              onPress={() => router.push('/add')}
+              style={styles.tabButton}
+              activeOpacity={0.7}>
+              <View style={styles.addButtonContainer}>
+                <Plus size={24} color="#fff" strokeWidth={3} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        );
       }}>
       <Tabs.Screen
         name="index"
@@ -47,26 +101,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="add"
-        options={{
-          title: '登録',
-          tabBarButton: (props) => (
-            <TouchableOpacity
-              onPress={() => router.push('/add')}
-              style={{
-                flex: 1,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-              activeOpacity={0.7}>
-              <View style={styles.addButtonContainer}>
-                <Plus size={24} color="#fff" strokeWidth={3} />
-              </View>
-            </TouchableOpacity>
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="monthly"
         options={{
           title: '記録',
@@ -80,6 +114,25 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabBarContainer: {
+    flexDirection: 'row',
+    height: 65,
+    paddingBottom: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: '#fff',
+  },
+  tabButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontFamily: 'Nunito-Bold',
+    marginTop: 4,
+  },
   addButtonContainer: {
     width: 48,
     height: 48,
