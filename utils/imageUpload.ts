@@ -11,12 +11,12 @@ export const uploadImage = async (
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${userId}/${fileName}`;
 
-    let uploadData: Blob | ArrayBuffer;
+    let uploadData: Blob | Uint8Array;
 
-    if (Platform.OS === 'web' || !FileSystem.EncodingType) {
+    if (Platform.OS === 'web') {
       const response = await fetch(imageUri);
-      const arrayBuffer = await response.arrayBuffer();
-      uploadData = new Blob([arrayBuffer], { type: `image/${fileExt}` });
+      const blob = await response.blob();
+      uploadData = blob;
     } else {
       const base64Data = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -26,13 +26,13 @@ export const uploadImage = async (
         throw new Error('画像データの読み込みに失敗しました');
       }
 
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      const binaryString = atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      uploadData = new Blob([byteArray], { type: `image/${fileExt}` });
+      uploadData = bytes;
     }
 
     const { data, error } = await supabase.storage
