@@ -417,7 +417,7 @@ export default function AddScreen() {
         {contextChildren.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              {contextChildren.find(c => c.id === selectedChildId)?.name || '子ども'}の記録
+              {contextChildren.find(c => c.id === selectedChildId)?.name || '子供'}の記録
             </Text>
             <View style={styles.childChipContainer}>
               {contextChildren.map((child) => (

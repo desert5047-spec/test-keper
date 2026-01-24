@@ -53,7 +53,7 @@ export function ChildSwitcher() {
           onPress={() => setShowModal(false)}>
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>子どもを選択</Text>
+            <Text style={styles.modalTitle}>子供を選択</Text>
 
             {children.map((child) => (
               <TouchableOpacity
