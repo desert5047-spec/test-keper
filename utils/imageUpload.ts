@@ -1,6 +1,4 @@
 import { supabase } from '@/lib/supabase';
-import * as FileSystem from 'expo-file-system';
-import { Platform } from 'react-native';
 
 export const uploadImage = async (
   imageUri: string,
@@ -11,33 +9,12 @@ export const uploadImage = async (
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${userId}/${fileName}`;
 
-    let uploadData: Blob | Uint8Array;
-
-    if (Platform.OS === 'web') {
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      uploadData = blob;
-    } else {
-      const base64Data = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      if (!base64Data) {
-        throw new Error('画像データの読み込みに失敗しました');
-      }
-
-      const binaryString = atob(base64Data);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      uploadData = bytes;
-    }
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
 
     const { data, error } = await supabase.storage
       .from('test-images')
-      .upload(filePath, uploadData, {
+      .upload(filePath, blob, {
         contentType: `image/${fileExt}`,
         upsert: false,
       });
