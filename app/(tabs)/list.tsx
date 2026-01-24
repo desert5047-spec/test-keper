@@ -182,7 +182,6 @@ export default function ListScreen() {
             </View>
             <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
           </View>
-          <Text style={styles.typeText}>{item.type}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -396,12 +395,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Nunito-Bold',
     lineHeight: 14,
-  },
-  typeText: {
-    fontSize: 13,
-    color: '#666',
-    fontFamily: 'Nunito-Regular',
-    marginTop: 2,
   },
   evaluationText: {
     fontSize: 15,

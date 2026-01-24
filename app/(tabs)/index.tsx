@@ -151,7 +151,6 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
           </View>
-          <Text style={styles.typeText}>{item.type}</Text>
           {!hasPhoto && (
             <Text style={styles.dateText}>{formatDate(item.date)}</Text>
           )}
@@ -361,11 +360,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Nunito-Bold',
     lineHeight: 16,
-  },
-  typeText: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Nunito-Regular',
   },
   evaluationText: {
     fontSize: 16,
