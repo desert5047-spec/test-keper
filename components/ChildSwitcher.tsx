@@ -32,19 +32,14 @@ export function ChildSwitcher() {
   return (
     <>
       <TouchableOpacity
-        style={styles.container}
+        style={[styles.container, { backgroundColor: selectedChild.color }]}
         onPress={() => showChevron && setShowModal(true)}
         activeOpacity={showChevron ? 0.7 : 1}
         disabled={!showChevron}>
-        <View style={[styles.badge, { backgroundColor: selectedChild.color }]}>
-          <Text style={styles.badgeText}>
-            {selectedChild.name?.charAt(0) || '?'}
-          </Text>
-        </View>
         <Text style={styles.name} numberOfLines={1}>
           {selectedChild.name || '未設定'}
         </Text>
-        {showChevron && <ChevronDown size={16} color="#666" />}
+        {showChevron && <ChevronDown size={16} color="#FFF" />}
       </TouchableOpacity>
 
       <Modal
@@ -104,25 +99,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
     minHeight: 44,
-  },
-  badge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
   },
   name: {
     fontSize: 15,
     fontFamily: 'Nunito-SemiBold',
-    color: '#333',
+    color: '#FFF',
     maxWidth: 100,
   },
   modalOverlay: {

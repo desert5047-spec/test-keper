@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
+import { useChild } from '@/contexts/ChildContext';
 
 const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 
@@ -31,6 +32,7 @@ interface Child {
 
 export default function AddScreen() {
   const router = useRouter();
+  const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -47,25 +49,17 @@ export default function AddScreen() {
   const [showToast, setShowToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [children, setChildren] = useState<Child[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
 
   useEffect(() => {
     requestPermissions();
-    loadChildren();
   }, []);
 
-  const loadChildren = async () => {
-    const { data } = await supabase
-      .from('children')
-      .select('id, name, color')
-      .order('created_at');
-
-    if (data && data.length > 0) {
-      setChildren(data);
-      setSelectedChildId(data[0].id);
+  useEffect(() => {
+    if (contextSelectedChildId) {
+      setSelectedChildId(contextSelectedChildId);
     }
-  };
+  }, [contextSelectedChildId]);
 
   const requestPermissions = async () => {
     if (Platform.OS !== 'web') {
@@ -420,17 +414,18 @@ export default function AddScreen() {
           )}
         </View>
 
-        {children.length > 0 && (
+        {contextChildren.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>だれの記録？</Text>
+            <Text style={styles.sectionTitle}>
+              {contextChildren.find(c => c.id === selectedChildId)?.name || '子ども'}の記録
+            </Text>
             <View style={styles.childChipContainer}>
-              {children.map((child) => (
+              {contextChildren.map((child) => (
                 <TouchableOpacity
                   key={child.id}
                   style={[
                     styles.childChip,
                     selectedChildId === child.id && styles.childChipSelected,
-                    { borderColor: child.color },
                   ]}
                   onPress={() => setSelectedChildId(child.id)}
                   activeOpacity={0.7}>
@@ -507,7 +502,7 @@ export default function AddScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>記録の仕方</Text>
+          <Text style={styles.sectionTitle}>記録方法</Text>
           <View style={styles.evaluationTypeContainer}>
             <TouchableOpacity
               style={[
@@ -1081,13 +1076,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#f0f0f0',
     borderWidth: 2,
     borderColor: '#e0e0e0',
     gap: 6,
   },
   childChipSelected: {
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
   },
   childColorBadge: {
     width: 16,
@@ -1100,7 +1096,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   childChipTextSelected: {
-    color: '#333',
+    color: '#fff',
   },
   unlockModalOverlay: {
     flex: 1,
