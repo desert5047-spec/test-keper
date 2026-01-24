@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Users, ChevronRight } from 'lucide-react-native';
+import { Users, ChevronRight, ArrowLeft, Home, List, Plus, Calendar } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [recordsCount, setRecordsCount] = useState(0);
   const [isFeatureUnlocked, setIsFeatureUnlocked] = useState(false);
 
@@ -32,7 +34,12 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>設定</Text>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          activeOpacity={0.7}>
+          <ArrowLeft size={24} color="#333" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -79,6 +86,39 @@ export default function SettingsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => router.push('/(tabs)')}
+          activeOpacity={0.7}>
+          <Home size={24} color="#999" strokeWidth={2} />
+          <Text style={styles.tabLabel}>ホーム</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => router.push('/(tabs)/list')}
+          activeOpacity={0.7}>
+          <List size={24} color="#999" strokeWidth={2} />
+          <Text style={styles.tabLabel}>一覧</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push('/add')}
+          activeOpacity={0.85}>
+          <Plus size={32} color="#fff" strokeWidth={2.5} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => router.push('/(tabs)/monthly')}
+          activeOpacity={0.7}>
+          <Calendar size={24} color="#999" strokeWidth={2} />
+          <Text style={styles.tabLabel}>記録</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -95,11 +135,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
+  backButton: {
+    padding: 4,
   },
   scrollView: {
     flex: 1,
@@ -203,5 +243,45 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 8,
+    paddingHorizontal: 8,
+    alignItems: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#999',
+  },
+  addButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 8,
+    marginBottom: 8,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });
