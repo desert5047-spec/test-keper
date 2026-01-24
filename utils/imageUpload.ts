@@ -17,17 +17,16 @@ export const uploadImage = async (
       const response = await fetch(imageUri);
       uploadData = await response.blob();
     } else {
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+      const base64Data = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      const byteCharacters = atob(base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      if (!base64Data) {
+        throw new Error('画像データの読み込みに失敗しました');
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      uploadData = byteArray.buffer;
+
+      const response = await fetch(`data:image/${fileExt};base64,${base64Data}`);
+      uploadData = await response.blob();
     }
 
     const { data, error } = await supabase.storage
