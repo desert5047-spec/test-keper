@@ -66,6 +66,13 @@ export default function ChildrenScreen() {
   };
 
   const openAddModal = () => {
+    if (children.length >= 5) {
+      Alert.alert(
+        '追加できません',
+        '子供は最大5人まで登録できます。'
+      );
+      return;
+    }
     setEditingChild(null);
     setName('');
     setGrade(null);
@@ -232,11 +239,14 @@ export default function ChildrenScreen() {
 
       <View style={styles.bottomButton}>
         <TouchableOpacity
-          style={styles.addButton}
+          style={[styles.addButton, children.length >= 5 && styles.addButtonDisabled]}
           onPress={openAddModal}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+          disabled={children.length >= 5}>
           <Plus size={20} color="#fff" />
-          <Text style={styles.addButtonText}>子供を追加</Text>
+          <Text style={styles.addButtonText}>
+            {children.length >= 5 ? '上限に達しました（5人）' : '子供を追加'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -476,6 +486,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+  },
+  addButtonDisabled: {
+    backgroundColor: '#CCC',
+    opacity: 0.6,
   },
   addButtonText: {
     color: '#fff',
