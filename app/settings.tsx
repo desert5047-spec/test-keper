@@ -20,7 +20,10 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>機能</Text>
 
@@ -34,12 +37,12 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>子供設定</Text>
-                <Text style={styles.menuItemSubtext}>
+                <Text style={styles.menuItemSubtext} numberOfLines={1}>
                   {children.length === 0 ? 'まだ登録されていません' : `登録済み：${children.length}人`}
                 </Text>
               </View>
             </View>
-            <ChevronRight size={20} color="#999" />
+            <ChevronRight size={20} color="#999" style={styles.chevron} />
           </TouchableOpacity>
         </View>
 
@@ -100,6 +103,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 24,
+  },
   section: {
     marginTop: 24,
     paddingHorizontal: 20,
@@ -115,7 +121,8 @@ const styles = StyleSheet.create({
   menuItem: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -129,6 +136,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
+    minWidth: 0,
   },
   iconContainer: {
     width: 40,
@@ -145,6 +154,7 @@ const styles = StyleSheet.create({
   menuItemContent: {
     flex: 1,
     gap: 2,
+    minWidth: 0,
   },
   menuItemText: {
     fontSize: 16,
@@ -155,6 +165,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Nunito-Regular',
     color: '#999',
+  },
+  chevron: {
+    flexShrink: 0,
   },
   lockedItem: {
     backgroundColor: '#fff',
