@@ -21,11 +21,18 @@ import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 
+const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+
+interface Child {
+  id: string;
+  name: string | null;
+  color: string;
+}
+
 export default function AddScreen() {
   const router = useRouter();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
   const [type, setType] = useState<RecordType>('テスト');
@@ -40,11 +47,25 @@ export default function AddScreen() {
   const [showToast, setShowToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSubjects();
     requestPermissions();
+    loadChildren();
   }, []);
+
+  const loadChildren = async () => {
+    const { data } = await supabase
+      .from('children')
+      .select('id, name, color')
+      .order('created_at');
+
+    if (data && data.length > 0) {
+      setChildren(data);
+      setSelectedChildId(data[0].id);
+    }
+  };
 
   const requestPermissions = async () => {
     if (Platform.OS !== 'web') {
@@ -53,19 +74,6 @@ export default function AddScreen() {
     }
   };
 
-  const loadSubjects = async () => {
-    const { data } = await supabase
-      .from('subjects')
-      .select('name')
-      .order('created_at');
-
-    if (data) {
-      setSubjects(data.map(s => s.name));
-      if (data.length > 0) {
-        setSelectedSubject(data[0].name);
-      }
-    }
-  };
 
   const showPhotoActionSheet = () => {
     if (Platform.OS === 'ios') {
@@ -166,21 +174,51 @@ export default function AddScreen() {
     try {
       validateImageUri(photoUri);
 
+      // 画像のサイズを取得
       const result = await ImageManipulator.manipulateAsync(
         photoUri,
         [],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // 画像の実際のサイズを取得するために一度読み込む
+      const imageInfo = await new Promise<{ width: number; height: number }>((resolve) => {
+        Image.getSize(
+          result.uri,
+          (width, height) => resolve({ width, height }),
+          () => resolve({ width: 1000, height: 1000 })
+        );
+      });
+
+      const { width, height } = imageInfo;
+      const size = Math.min(width, height);
+      const originX = (width - size) / 2;
+      const originY = (height - size) / 2;
+
+      // 正方形にトリミング
+      const croppedResult = await ImageManipulator.manipulateAsync(
+        result.uri,
+        [
+          {
+            crop: {
+              originX,
+              originY,
+              width: size,
+              height: size,
+            },
+          },
+        ],
         { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
       );
 
-      validateImageUri(result.uri);
-      if (!isValidImageUri(result.uri)) {
-        throw new Error('編集後の画像が無効です');
+      validateImageUri(croppedResult.uri);
+      if (!isValidImageUri(croppedResult.uri)) {
+        throw new Error('トリミング後の画像が無効です');
       }
 
-      Alert.alert('成功', '画像を編集しました');
-      setPhotoUri(result.uri);
+      setPhotoUri(croppedResult.uri);
     } catch (error: any) {
-      Alert.alert('エラー', error.message || '画像の編集に失敗しました');
+      Alert.alert('エラー', error.message || '画像のトリミングに失敗しました');
     } finally {
       setIsProcessingImage(false);
     }
@@ -197,19 +235,11 @@ export default function AddScreen() {
     );
   };
 
-  const addNewSubject = async () => {
+  const handleAddOtherSubject = () => {
     if (!newSubject.trim()) return;
-
-    const { error } = await supabase
-      .from('subjects')
-      .insert({ name: newSubject.trim() });
-
-    if (!error) {
-      setSubjects([...subjects, newSubject.trim()]);
-      setSelectedSubject(newSubject.trim());
-      setNewSubject('');
-      setShowSubjectInput(false);
-    }
+    setSelectedSubject(newSubject.trim());
+    setNewSubject('');
+    setShowSubjectInput(false);
   };
 
   const canSave = () => {
@@ -279,19 +309,10 @@ export default function AddScreen() {
     setIsSaving(true);
 
     try {
-      const { data: children } = await supabase
-        .from('children')
-        .select('id')
-        .maybeSingle();
-
-      if (!children) {
-        throw new Error('子どもデータが見つかりません');
-      }
-
       const { error } = await supabase
         .from('records')
         .insert({
-          child_id: children.id,
+          child_id: selectedChildId,
           date,
           subject: selectedSubject,
           type,
@@ -379,6 +400,13 @@ export default function AddScreen() {
                   activeOpacity={0.7}>
                   <RotateCw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.rotateButton}
+                  onPress={cropPhoto}
+                  disabled={isProcessingImage}
+                  activeOpacity={0.7}>
+                  <Crop size={24} color={isProcessingImage ? '#ccc' : '#666'} />
+                </TouchableOpacity>
               </View>
             </View>
           ) : (
@@ -392,12 +420,40 @@ export default function AddScreen() {
           )}
         </View>
 
+        {children.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>だれの記録？</Text>
+            <View style={styles.childChipContainer}>
+              {children.map((child) => (
+                <TouchableOpacity
+                  key={child.id}
+                  style={[
+                    styles.childChip,
+                    selectedChildId === child.id && styles.childChipSelected,
+                    { borderColor: child.color },
+                  ]}
+                  onPress={() => setSelectedChildId(child.id)}
+                  activeOpacity={0.7}>
+                  <View style={[styles.childColorBadge, { backgroundColor: child.color }]} />
+                  <Text
+                    style={[
+                      styles.childChipText,
+                      selectedChildId === child.id && styles.childChipTextSelected,
+                    ]}>
+                    {child.name || '未設定'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>教科</Text>
           {!showSubjectInput ? (
             <>
               <View style={styles.chipContainer}>
-                {subjects.map((subject) => (
+                {MAIN_SUBJECTS.map((subject) => (
                   <TouchableOpacity
                     key={subject}
                     style={[
@@ -429,14 +485,14 @@ export default function AddScreen() {
                 style={styles.textInput}
                 value={newSubject}
                 onChangeText={setNewSubject}
-                placeholder="教科名を入力"
+                placeholder="教科名を入力（例：生活、図工、音楽、体育）"
                 placeholderTextColor="#999"
               />
               <TouchableOpacity
                 style={styles.addButton}
-                onPress={addNewSubject}
+                onPress={handleAddOtherSubject}
                 activeOpacity={0.7}>
-                <Text style={styles.addButtonText}>追加</Text>
+                <Text style={styles.addButtonText}>決定</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -1013,5 +1069,94 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
+  },
+  childChipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  childChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    gap: 6,
+  },
+  childChipSelected: {
+    backgroundColor: '#f8f8f8',
+  },
+  childColorBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  childChipText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  childChipTextSelected: {
+    color: '#333',
+  },
+  unlockModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  unlockModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  unlockModalTitle: {
+    fontSize: 20,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  unlockModalMessage: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    lineHeight: 22,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  unlockModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  unlockModalLaterButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  unlockModalLaterText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#666',
+  },
+  unlockModalAddButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#4A90E2',
+    alignItems: 'center',
+  },
+  unlockModalAddText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#fff',
   },
 });

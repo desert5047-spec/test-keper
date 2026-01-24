@@ -12,6 +12,8 @@ import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
+import { useChild } from '@/contexts/ChildContext';
+import { AppHeader } from '@/components/AppHeader';
 
 interface MonthSummary {
   year: number;
@@ -27,6 +29,7 @@ interface MonthSummary {
 export default function MonthlyScreen() {
   const router = useRouter();
   const { year: contextYear, month: contextMonth, setYearMonth } = useDateContext();
+  const { selectedChildId } = useChild();
   const [year, setYear] = useState(contextYear);
   const [selectedMonth, setSelectedMonth] = useState(contextMonth);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -35,14 +38,19 @@ export default function MonthlyScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadMonthlySummaries();
-    }, [year, selectedMonth])
+      if (selectedChildId) {
+        loadMonthlySummaries();
+      }
+    }, [year, selectedMonth, selectedChildId])
   );
 
   const loadMonthlySummaries = async () => {
+    if (!selectedChildId) return;
+
     const { data: allRecords } = await supabase
       .from('records')
       .select('*')
+      .eq('child_id', selectedChildId)
       .order('date', { ascending: false });
 
     if (!allRecords || allRecords.length === 0) {
@@ -160,6 +168,7 @@ export default function MonthlyScreen() {
       '算数': '#3498DB',
       '理科': '#27AE60',
       '社会': '#E67E22',
+      '英語': '#2C3E50',
       '生活': '#9B59B6',
       '図工': '#F39C12',
       '音楽': '#1ABC9C',
@@ -208,6 +217,7 @@ export default function MonthlyScreen() {
 
   return (
     <View style={styles.container}>
+      <AppHeader />
       <View style={styles.header}>
         <View style={styles.yearMonthSelector}>
           <TouchableOpacity
@@ -305,7 +315,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,

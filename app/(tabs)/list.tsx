@@ -14,7 +14,9 @@ import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
+import { useChild } from '@/contexts/ChildContext';
 import { isValidImageUri } from '@/utils/imageGuard';
+import { AppHeader } from '@/components/AppHeader';
 
 interface Section {
   title: string;
@@ -25,6 +27,7 @@ export default function ListScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { year: contextYear, month: contextMonth, setYearMonth } = useDateContext();
+  const { selectedChildId } = useChild();
   const [year, setYear] = useState(contextYear);
   const [selectedMonth, setSelectedMonth] = useState(contextMonth);
   const [sections, setSections] = useState<Section[]>([]);
@@ -45,11 +48,15 @@ export default function ListScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadRecords();
-    }, [year, selectedMonth])
+      if (selectedChildId) {
+        loadRecords();
+      }
+    }, [year, selectedMonth, selectedChildId])
   );
 
   const loadRecords = async () => {
+    if (!selectedChildId) return;
+
     const startDate = `${year}-${String(selectedMonth).padStart(2, '0')}-01`;
     const endDate = new Date(year, selectedMonth, 0);
     const endDateStr = `${year}-${String(selectedMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
@@ -57,6 +64,7 @@ export default function ListScreen() {
     const { data } = await supabase
       .from('records')
       .select('*')
+      .eq('child_id', selectedChildId)
       .gte('date', startDate)
       .lte('date', endDateStr)
       .order('date', { ascending: false })
@@ -103,6 +111,7 @@ export default function ListScreen() {
       '算数': '#3498DB',
       '理科': '#27AE60',
       '社会': '#E67E22',
+      '英語': '#2C3E50',
       '生活': '#9B59B6',
       '図工': '#F39C12',
       '音楽': '#1ABC9C',
@@ -197,6 +206,7 @@ export default function ListScreen() {
 
   return (
     <View style={styles.container}>
+      <AppHeader />
       <View style={styles.header}>
         <View style={styles.yearMonthSelector}>
           <TouchableOpacity
@@ -287,7 +297,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,

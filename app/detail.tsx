@@ -16,10 +16,11 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3 } from 'lucide-react-native';
+import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
+import { AppHeader } from '@/components/AppHeader';
 
 export default function DetailScreen() {
   const router = useRouter();
@@ -162,6 +163,63 @@ export default function DetailScreen() {
     }
   };
 
+  const cropPhoto = async () => {
+    if (!photoUri) return;
+
+    setIsProcessingImage(true);
+    try {
+      validateImageUri(photoUri);
+
+      // 画像のサイズを取得
+      const result = await ImageManipulator.manipulateAsync(
+        photoUri,
+        [],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // 画像の実際のサイズを取得するために一度読み込む
+      const imageInfo = await new Promise<{ width: number; height: number }>((resolve) => {
+        Image.getSize(
+          result.uri,
+          (width, height) => resolve({ width, height }),
+          () => resolve({ width: 1000, height: 1000 })
+        );
+      });
+
+      const { width, height } = imageInfo;
+      const size = Math.min(width, height);
+      const originX = (width - size) / 2;
+      const originY = (height - size) / 2;
+
+      // 正方形にトリミング
+      const croppedResult = await ImageManipulator.manipulateAsync(
+        result.uri,
+        [
+          {
+            crop: {
+              originX,
+              originY,
+              width: size,
+              height: size,
+            },
+          },
+        ],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      validateImageUri(croppedResult.uri);
+      if (!isValidImageUri(croppedResult.uri)) {
+        throw new Error('トリミング後の画像が無効です');
+      }
+
+      setPhotoUri(croppedResult.uri);
+    } catch (error: any) {
+      Alert.alert('エラー', error.message || '画像のトリミングに失敗しました');
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
   const confirmRemovePhoto = () => {
     Alert.alert(
       '写真を削除',
@@ -275,6 +333,7 @@ export default function DetailScreen() {
       '算数': '#3498DB',
       '理科': '#27AE60',
       '社会': '#E67E22',
+      '英語': '#2C3E50',
       '生活': '#9B59B6',
       '図工': '#F39C12',
       '音楽': '#1ABC9C',
@@ -294,15 +353,7 @@ export default function DetailScreen() {
   if (!record) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-            activeOpacity={0.7}>
-            <ArrowLeft size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>記録の詳細</Text>
-        </View>
+        <AppHeader showBack={true} showChildSwitcher={false} />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>記録が見つかりません</Text>
         </View>
@@ -312,15 +363,9 @@ export default function DetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          activeOpacity={0.7}>
-          <ArrowLeft size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>記録の詳細</Text>
-        <View style={styles.headerActions}>
+      <AppHeader showBack={true} showChildSwitcher={false} />
+      <View style={styles.detailHeader}>
+        <View style={styles.detailHeaderActions}>
           {!editMode && (
             <>
               <TouchableOpacity
@@ -379,6 +424,13 @@ export default function DetailScreen() {
                     disabled={isProcessingImage}
                     activeOpacity={0.7}>
                     <RotateCw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.rotateButton}
+                    onPress={cropPhoto}
+                    disabled={isProcessingImage}
+                    activeOpacity={0.7}>
+                    <Crop size={24} color={isProcessingImage ? '#ccc' : '#666'} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -638,27 +690,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
-  header: {
+  detailHeader: {
     backgroundColor: '#fff',
-    paddingTop: 50,
-    paddingBottom: 16,
     paddingHorizontal: 20,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'flex-end',
   },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-    flex: 1,
-  },
-  headerActions: {
+  detailHeaderActions: {
     flexDirection: 'row',
     gap: 12,
   },
