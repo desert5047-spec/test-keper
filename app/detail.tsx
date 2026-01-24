@@ -509,40 +509,21 @@ export default function DetailScreen() {
           )}
 
           <View style={styles.content}>
-            <View style={styles.section}>
-              <Text style={styles.label}>日付</Text>
-              <Text style={styles.value}>{formatDate(record.date)}</Text>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>教科</Text>
-              <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(record.subject) }]}>
-                <Text style={styles.subjectChipText}>{record.subject}</Text>
+            <View style={styles.infoCard}>
+              <View style={[styles.subjectChipLarge, { backgroundColor: getSubjectColor(record.subject) }]}>
+                <Text style={styles.subjectChipTextLarge}>{record.subject}</Text>
               </View>
-            </View>
 
-            <View style={styles.section}>
-              <Text style={styles.label}>種類</Text>
-              <Text style={styles.value}>{record.type}</Text>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>評価</Text>
               {record.score !== null ? (
-                <Text style={styles.valueHighlight}>
+                <Text style={styles.scoreDisplay}>
                   {record.score}点（{record.max_score}点中）
                 </Text>
               ) : (
-                <Text style={styles.valueHighlight}>{record.stamp}</Text>
+                <Text style={styles.stampDisplay}>{record.stamp}</Text>
               )}
-            </View>
 
-            {record.memo && (
-              <View style={styles.section}>
-                <Text style={styles.label}>メモ</Text>
-                <Text style={styles.memoText}>{record.memo}</Text>
-              </View>
-            )}
+              <Text style={styles.dateDisplay}>{formatDate(record.date)}</Text>
+            </View>
 
             <View style={{ height: 80 }} />
           </View>
@@ -705,7 +686,45 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    gap: 20,
+  },
+  infoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  subjectChipLarge: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+  subjectChipTextLarge: {
+    color: '#fff',
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+  },
+  scoreDisplay: {
+    fontSize: 28,
+    color: '#333',
+    fontFamily: 'Nunito-Bold',
+    marginBottom: 16,
+  },
+  stampDisplay: {
+    fontSize: 24,
+    color: '#4A90E2',
+    fontFamily: 'Nunito-Bold',
+    marginBottom: 16,
+  },
+  dateDisplay: {
+    fontSize: 15,
+    color: '#999',
+    fontFamily: 'Nunito-Regular',
   },
   section: {
     backgroundColor: '#fff',
