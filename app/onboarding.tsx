@@ -32,7 +32,7 @@ export default function OnboardingScreen() {
 
   const handleStart = async () => {
     await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
-    router.replace('/(tabs)');
+    router.replace('/register-child');
   };
 
   const slide = slides[currentIndex];

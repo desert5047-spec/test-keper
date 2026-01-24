@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,27 +8,10 @@ import {
 import { useRouter } from 'expo-router';
 import { Users, ChevronRight, ArrowLeft, Home, List, Plus, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [recordsCount, setRecordsCount] = useState(0);
-  const [isFeatureUnlocked, setIsFeatureUnlocked] = useState(false);
-
-  useEffect(() => {
-    loadRecordsCount();
-  }, []);
-
-  const loadRecordsCount = async () => {
-    const { count } = await supabase
-      .from('records')
-      .select('*', { count: 'exact', head: true });
-
-    const totalCount = count || 0;
-    setRecordsCount(totalCount);
-    setIsFeatureUnlocked(totalCount >= 1);
-  };
 
   return (
     <View style={styles.container}>
@@ -46,32 +28,18 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>機能</Text>
 
-          {isFeatureUnlocked ? (
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/children')}
-              activeOpacity={0.7}>
-              <View style={styles.menuItemLeft}>
-                <View style={styles.iconContainer}>
-                  <Users size={22} color="#4A90E2" />
-                </View>
-                <Text style={styles.menuItemText}>子ども管理</Text>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/children')}
+            activeOpacity={0.7}>
+            <View style={styles.menuItemLeft}>
+              <View style={styles.iconContainer}>
+                <Users size={22} color="#4A90E2" />
               </View>
-              <ChevronRight size={20} color="#999" />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.lockedItem}>
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, styles.iconContainerLocked]}>
-                  <Users size={22} color="#999" />
-                </View>
-                <View>
-                  <Text style={styles.menuItemTextLocked}>子ども管理</Text>
-                  <Text style={styles.lockedHint}>1件記録すると使えます</Text>
-                </View>
-              </View>
+              <Text style={styles.menuItemText}>子ども管理</Text>
             </View>
-          )}
+            <ChevronRight size={20} color="#999" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>

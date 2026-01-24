@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase';
 interface Child {
   id: string;
   name: string | null;
-  grade: string | null;
+  grade: number | null;
   color: string;
   is_default: boolean;
 }
@@ -26,6 +26,15 @@ interface Child {
 const COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
   '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B195', '#C06C84'
+];
+
+const GRADES = [
+  { label: '小学1年', value: 1 },
+  { label: '小学2年', value: 2 },
+  { label: '小学3年', value: 3 },
+  { label: '小学4年', value: 4 },
+  { label: '小学5年', value: 5 },
+  { label: '小学6年', value: 6 },
 ];
 
 export default function ChildrenScreen() {
@@ -36,7 +45,7 @@ export default function ChildrenScreen() {
   const [showModal, setShowModal] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
   const [name, setName] = useState('');
-  const [grade, setGrade] = useState('');
+  const [grade, setGrade] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
 
   useEffect(() => {
@@ -59,7 +68,7 @@ export default function ChildrenScreen() {
   const openAddModal = () => {
     setEditingChild(null);
     setName('');
-    setGrade('');
+    setGrade(null);
     setSelectedColor(COLORS[0]);
     setShowModal(true);
   };
@@ -67,7 +76,7 @@ export default function ChildrenScreen() {
   const openEditModal = (child: Child) => {
     setEditingChild(child);
     setName(child.name || '');
-    setGrade(child.grade || '');
+    setGrade(child.grade);
     setSelectedColor(child.color);
     setShowModal(true);
   };
@@ -83,7 +92,7 @@ export default function ChildrenScreen() {
         .from('children')
         .update({
           name: name.trim(),
-          grade: grade.trim() || null,
+          grade: grade,
           color: selectedColor,
         })
         .eq('id', editingChild.id);
@@ -99,7 +108,7 @@ export default function ChildrenScreen() {
         .from('children')
         .insert({
           name: name.trim(),
-          grade: grade.trim() || null,
+          grade: grade,
           color: selectedColor,
           is_default: false,
         });
@@ -115,6 +124,14 @@ export default function ChildrenScreen() {
 
   const handleDelete = async (child: Child) => {
     if (!child.id) return;
+
+    if (children.length <= 1) {
+      Alert.alert(
+        '削除できません',
+        '最後の1人は削除できません。\n別の子を追加してから削除してください。'
+      );
+      return;
+    }
 
     Alert.alert(
       '子どもを削除',
@@ -183,7 +200,7 @@ export default function ChildrenScreen() {
                     <View style={styles.childInfo}>
                       <Text style={styles.childName}>{child.name || '未設定'}</Text>
                       {child.grade && (
-                        <Text style={styles.childGrade}>{child.grade}</Text>
+                        <Text style={styles.childGrade}>小学{child.grade}年</Text>
                       )}
                     </View>
                   </View>
@@ -275,13 +292,26 @@ export default function ChildrenScreen() {
 
             <View style={styles.modalSection}>
               <Text style={styles.modalLabel}>学年（任意）</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={grade}
-                onChangeText={setGrade}
-                placeholder="例：小学1年生"
-                placeholderTextColor="#999"
-              />
+              <View style={styles.gradeGrid}>
+                {GRADES.map((gradeOption) => (
+                  <TouchableOpacity
+                    key={gradeOption.value}
+                    style={[
+                      styles.gradeButton,
+                      grade === gradeOption.value && styles.gradeButtonSelected,
+                    ]}
+                    onPress={() => setGrade(gradeOption.value)}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.gradeButtonText,
+                        grade === gradeOption.value && styles.gradeButtonTextSelected,
+                      ]}>
+                      {gradeOption.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             <View style={styles.modalSection}>
@@ -489,6 +519,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  gradeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  gradeButton: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  gradeButtonSelected: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  gradeButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  gradeButtonTextSelected: {
+    color: '#fff',
   },
   colorGrid: {
     flexDirection: 'row',

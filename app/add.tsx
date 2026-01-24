@@ -47,29 +47,13 @@ export default function AddScreen() {
   const [showToast, setShowToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [isFeatureUnlocked, setIsFeatureUnlocked] = useState(false);
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   useEffect(() => {
     requestPermissions();
-    checkFeatureUnlock();
+    loadChildren();
   }, []);
-
-  const checkFeatureUnlock = async () => {
-    const { count } = await supabase
-      .from('records')
-      .select('*', { count: 'exact', head: true });
-
-    const totalCount = count || 0;
-    const unlocked = totalCount >= 1;
-    setIsFeatureUnlocked(unlocked);
-
-    if (unlocked) {
-      loadChildren();
-    }
-  };
 
   const loadChildren = async () => {
     const { data } = await supabase
@@ -325,16 +309,10 @@ export default function AddScreen() {
     setIsSaving(true);
 
     try {
-      const { count } = await supabase
-        .from('records')
-        .select('*', { count: 'exact', head: true });
-
-      const isFirstRecord = (count || 0) === 0;
-
       const { error } = await supabase
         .from('records')
         .insert({
-          child_id: isFeatureUnlocked && selectedChildId ? selectedChildId : null,
+          child_id: selectedChildId,
           date,
           subject: selectedSubject,
           type,
@@ -348,21 +326,12 @@ export default function AddScreen() {
 
       if (error) throw error;
 
-      if (isFirstRecord) {
-        setShowToast(true);
-        setTimeout(() => {
-          setShowToast(false);
-          resetForm();
-          setShowUnlockModal(true);
-        }, 1500);
-      } else {
-        setShowToast(true);
-        setTimeout(() => {
-          setShowToast(false);
-          resetForm();
-          router.push('/(tabs)');
-        }, 1500);
-      }
+      setShowToast(true);
+      setTimeout(() => {
+        setShowToast(false);
+        resetForm();
+        router.push('/(tabs)');
+      }, 1500);
     } catch (error: any) {
       Alert.alert('エラー', error.message || '保存に失敗しました');
     } finally {
@@ -451,7 +420,7 @@ export default function AddScreen() {
           )}
         </View>
 
-        {isFeatureUnlocked && children.length > 0 && (
+        {children.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>だれの記録？</Text>
             <View style={styles.childChipContainer}>
@@ -703,45 +672,6 @@ export default function AddScreen() {
           <Text style={styles.toastText}>記録を残しました</Text>
         </View>
       )}
-
-      <Modal
-        visible={showUnlockModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setShowUnlockModal(false);
-          router.push('/(tabs)');
-        }}>
-        <View style={styles.unlockModalOverlay}>
-          <View style={styles.unlockModalContent}>
-            <Text style={styles.unlockModalTitle}>子どもを追加できます</Text>
-            <Text style={styles.unlockModalMessage}>
-              きょうだい分も残せるようになりました。{'\n'}
-              必要なら追加してみてください。
-            </Text>
-            <View style={styles.unlockModalActions}>
-              <TouchableOpacity
-                style={styles.unlockModalLaterButton}
-                onPress={() => {
-                  setShowUnlockModal(false);
-                  router.push('/(tabs)');
-                }}
-                activeOpacity={0.7}>
-                <Text style={styles.unlockModalLaterText}>あとで</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.unlockModalAddButton}
-                onPress={() => {
-                  setShowUnlockModal(false);
-                  router.push('/children');
-                }}
-                activeOpacity={0.7}>
-                <Text style={styles.unlockModalAddText}>子どもを追加</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
