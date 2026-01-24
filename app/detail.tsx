@@ -16,15 +16,18 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop } from 'lucide-react-native';
+import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader } from '@/components/AppHeader';
+import { uploadImage, deleteImage } from '@/utils/imageUpload';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { user } = useAuth();
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -268,6 +271,29 @@ export default function DetailScreen() {
     setIsSaving(true);
 
     try {
+      let uploadedImageUrl: string | null = photoUri;
+
+      if (photoUri && photoUri !== record.photo_uri) {
+        if (!photoUri.startsWith('http')) {
+          try {
+            if (!user) {
+              Alert.alert('エラー', 'ログインが必要です');
+              setIsSaving(false);
+              return;
+            }
+            uploadedImageUrl = await uploadImage(photoUri, user.id);
+
+            if (record.photo_uri) {
+              await deleteImage(record.photo_uri);
+            }
+          } catch (uploadError: any) {
+            Alert.alert('エラー', uploadError.message || '画像のアップロードに失敗しました');
+            setIsSaving(false);
+            return;
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('records')
         .update({
@@ -275,7 +301,7 @@ export default function DetailScreen() {
           max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
           stamp: evaluationType === 'stamp' ? stamp : null,
           memo: memo.trim() || null,
-          photo_uri: photoUri,
+          photo_uri: uploadedImageUrl,
           photo_rotation: 0,
         })
         .eq('id', record.id);
@@ -309,6 +335,10 @@ export default function DetailScreen() {
 
   const handleDelete = async () => {
     if (!record) return;
+
+    if (record.photo_uri) {
+      await deleteImage(record.photo_uri);
+    }
 
     const { error } = await supabase
       .from('records')

@@ -66,7 +66,7 @@ export default function RegisterChildScreen() {
 
     const { error } = await supabase.from('children').insert({
       name: trimmedName,
-      grade,
+      grade: grade.toString(),
       color: '#4A90E2',
       is_default: false,
       user_id: user.id,
@@ -75,7 +75,8 @@ export default function RegisterChildScreen() {
     setSaving(false);
 
     if (error) {
-      Alert.alert('エラー', '登録に失敗しました');
+      console.error('Child registration error:', error);
+      Alert.alert('エラー', `登録に失敗しました: ${error.message}`);
       return;
     }
 

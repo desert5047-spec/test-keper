@@ -3,40 +3,34 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
-    checkOnboardingStatus();
-  }, []);
+    if (user) {
+      checkOnboardingStatus();
+    }
+  }, [user]);
 
   const checkOnboardingStatus = async () => {
     const hasCompleted = await AsyncStorage.getItem('hasCompletedOnboarding');
 
     if (hasCompleted) {
-      await ensureDefaultChild();
-      router.replace('/(tabs)');
+      const { data: children } = await supabase
+        .from('children')
+        .select('id')
+        .limit(1);
+
+      if (children && children.length > 0) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/register-child');
+      }
     } else {
       router.replace('/onboarding');
-    }
-  };
-
-  const ensureDefaultChild = async () => {
-    const { data: children } = await supabase
-      .from('children')
-      .select('*')
-      .maybeSingle();
-
-    if (!children) {
-      await supabase
-        .from('children')
-        .insert({
-          name: null,
-          grade: null,
-          color: '#FF6B6B',
-          is_default: true,
-        });
     }
   };
 

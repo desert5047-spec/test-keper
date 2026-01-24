@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from './AuthContext';
 
 interface Child {
   id: string;
@@ -21,8 +22,11 @@ const ChildContext = createContext<ChildContextType | undefined>(undefined);
 export function ChildProvider({ children: childrenProp }: { children: ReactNode }) {
   const [selectedChildId, setSelectedChildIdState] = useState<string | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
+  const { user, loading } = useAuth();
 
   const loadChildren = async () => {
+    if (!user) return;
+
     const { data } = await supabase
       .from('children')
       .select('id, name, grade, color')
@@ -37,8 +41,10 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
   };
 
   useEffect(() => {
-    loadChildren();
-  }, []);
+    if (!loading && user) {
+      loadChildren();
+    }
+  }, [user, loading]);
 
   const setSelectedChildId = (id: string) => {
     setSelectedChildIdState(id);

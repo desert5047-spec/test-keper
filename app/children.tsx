@@ -19,7 +19,7 @@ import { supabase } from '@/lib/supabase';
 interface Child {
   id: string;
   name: string | null;
-  grade: number | null;
+  grade: string | null;
   color: string;
   is_default: boolean;
 }
@@ -85,7 +85,7 @@ export default function ChildrenScreen() {
   const openEditModal = (child: Child) => {
     setEditingChild(child);
     setName(child.name || '');
-    setGrade(child.grade);
+    setGrade(child.grade ? parseInt(child.grade) : null);
     setSelectedColor(child.color);
     setShowModal(true);
   };
@@ -101,12 +101,17 @@ export default function ChildrenScreen() {
       return;
     }
 
+    if (grade === null) {
+      Alert.alert('エラー', '学年を選択してください');
+      return;
+    }
+
     if (editingChild) {
       const { error } = await supabase
         .from('children')
         .update({
           name: trimmedName,
-          grade: grade,
+          grade: grade?.toString(),
           color: selectedColor,
         })
         .eq('id', editingChild.id);
@@ -127,7 +132,7 @@ export default function ChildrenScreen() {
         .from('children')
         .insert({
           name: trimmedName,
-          grade: grade,
+          grade: grade?.toString(),
           color: selectedColor,
           is_default: false,
           user_id: user.id,
@@ -316,7 +321,9 @@ export default function ChildrenScreen() {
             </View>
 
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>学年（任意）</Text>
+              <Text style={styles.modalLabel}>
+                学年 <Text style={styles.required}>*</Text>
+              </Text>
               <View style={styles.gradeGrid}>
                 {GRADES.map((gradeOption) => (
                   <TouchableOpacity
@@ -650,6 +657,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Nunito-SemiBold',
     color: '#999',
+  },
+  required: {
+    color: '#E74C3C',
   },
   addButtonNav: {
     width: 64,

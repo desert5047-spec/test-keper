@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
+import { uploadImage } from '@/utils/imageUpload';
 
 const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 
@@ -310,6 +311,18 @@ export default function AddScreen() {
     setIsSaving(true);
 
     try {
+      let uploadedImageUrl: string | null = null;
+
+      if (photoUri) {
+        try {
+          uploadedImageUrl = await uploadImage(photoUri, user.id);
+        } catch (uploadError: any) {
+          Alert.alert('エラー', uploadError.message || '画像のアップロードに失敗しました');
+          setIsSaving(false);
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('records')
         .insert({
@@ -321,7 +334,7 @@ export default function AddScreen() {
           max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
           stamp: evaluationType === 'stamp' ? stamp : null,
           memo: memo.trim() || null,
-          photo_uri: photoUri,
+          photo_uri: uploadedImageUrl,
           photo_rotation: 0,
           user_id: user.id,
         });
