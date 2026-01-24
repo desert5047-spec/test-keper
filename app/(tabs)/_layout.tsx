@@ -1,5 +1,5 @@
 import { Tabs, useRouter } from 'expo-router';
-import { Home, List, Plus, Calendar, Settings } from 'lucide-react-native';
+import { Home, List, Plus, Calendar } from 'lucide-react-native';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DateProvider } from '@/contexts/DateContext';
@@ -152,47 +152,6 @@ export default function TabLayout() {
                 </TouchableOpacity>
               );
             })}
-
-            {/* 設定 */}
-            {state.routes.slice(3, 4).map((route, idx) => {
-              const actualIndex = 3;
-              const { options } = descriptors[route.key];
-              const isFocused = state.index === actualIndex;
-
-              const onPress = () => {
-                const event = navigation.emit({
-                  type: 'tabPress',
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-
-                if (!isFocused && !event.defaultPrevented) {
-                  navigation.navigate(route.name);
-                }
-              };
-
-              return (
-                <TouchableOpacity
-                  key={route.key}
-                  accessibilityRole="button"
-                  accessibilityState={isFocused ? { selected: true } : {}}
-                  onPress={onPress}
-                  style={styles.tabButton}
-                  activeOpacity={0.7}>
-                  {options.tabBarIcon?.({
-                    focused: isFocused,
-                    color: isFocused ? '#333' : '#999',
-                    size: 24,
-                  })}
-                  <Text style={[
-                    styles.tabLabel,
-                    { color: isFocused ? '#333' : '#999' }
-                  ]}>
-                    {options.title}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
           </View>
         );
       }}>
@@ -220,15 +179,6 @@ export default function TabLayout() {
           title: '記録',
           tabBarIcon: ({ color, focused }) => (
             <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: '設定',
-          tabBarIcon: ({ color, focused }) => (
-            <Settings size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />

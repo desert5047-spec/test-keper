@@ -16,7 +16,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop } from 'lucide-react-native';
+import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
@@ -360,6 +360,12 @@ export default function DetailScreen() {
             <ArrowLeft size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>記録の詳細</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/settings')}
+            style={styles.backButton}
+            activeOpacity={0.7}>
+            <Settings size={22} color="#333" />
+          </TouchableOpacity>
         </View>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>記録が見つかりません</Text>
@@ -381,6 +387,12 @@ export default function DetailScreen() {
         <View style={styles.headerActions}>
           {!editMode && (
             <>
+              <TouchableOpacity
+                onPress={() => router.push('/settings')}
+                style={styles.headerIconButton}
+                activeOpacity={0.7}>
+                <Settings size={22} color="#333" />
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setEditMode(true)}
                 style={styles.headerIconButton}

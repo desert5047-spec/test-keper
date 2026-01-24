@@ -8,7 +8,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ChevronDown, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
@@ -210,6 +210,15 @@ export default function MonthlyScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>記録</Text>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => router.push('/settings')}
+            activeOpacity={0.7}>
+            <Settings size={24} color="#333" strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
         <View style={styles.yearMonthSelector}>
           <TouchableOpacity
             style={styles.yearButton}
@@ -311,6 +320,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+  },
+  settingsButton: {
+    padding: 4,
   },
   yearMonthSelector: {
     flexDirection: 'row',
