@@ -3,13 +3,17 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
-    checkOnboardingStatus();
-  }, []);
+    if (user) {
+      checkOnboardingStatus();
+    }
+  }, [user]);
 
   const checkOnboardingStatus = async () => {
     const hasCompleted = await AsyncStorage.getItem('hasCompletedOnboarding');
@@ -23,6 +27,8 @@ export default function Index() {
   };
 
   const ensureDefaultChild = async () => {
+    if (!user) return;
+
     const { data: children } = await supabase
       .from('children')
       .select('*')
@@ -36,6 +42,7 @@ export default function Index() {
           grade: null,
           color: '#FF6B6B',
           is_default: true,
+          user_id: user.id,
         });
     }
   };
