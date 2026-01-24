@@ -82,8 +82,13 @@ export default function ChildrenScreen() {
   };
 
   const handleSave = async () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       Alert.alert('エラー', '名前を入力してください');
+      return;
+    }
+    if (trimmedName.length > 4) {
+      Alert.alert('エラー', '4文字までで入力してください');
       return;
     }
 
@@ -91,7 +96,7 @@ export default function ChildrenScreen() {
       const { error } = await supabase
         .from('children')
         .update({
-          name: name.trim(),
+          name: trimmedName,
           grade: grade,
           color: selectedColor,
         })
@@ -107,7 +112,7 @@ export default function ChildrenScreen() {
       const { error } = await supabase
         .from('children')
         .insert({
-          name: name.trim(),
+          name: trimmedName,
           grade: grade,
           color: selectedColor,
           is_default: false,
@@ -175,7 +180,7 @@ export default function ChildrenScreen() {
           activeOpacity={0.7}>
           <ArrowLeft size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>子ども管理</Text>
+        <Text style={styles.headerTitle}>子ども設定</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -280,14 +285,16 @@ export default function ChildrenScreen() {
             </Text>
 
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>名前</Text>
+              <Text style={styles.modalLabel}>なまえ（ニックネーム）</Text>
               <TextInput
                 style={styles.modalInput}
                 value={name}
                 onChangeText={setName}
                 placeholder="例：太郎"
                 placeholderTextColor="#999"
+                maxLength={4}
               />
+              <Text style={styles.modalHint}>1〜4文字で入力してください</Text>
             </View>
 
             <View style={styles.modalSection}>
@@ -519,6 +526,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  modalHint: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginTop: 4,
   },
   gradeGrid: {
     flexDirection: 'row',

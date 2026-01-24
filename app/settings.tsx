@@ -30,7 +30,7 @@ export default function SettingsScreen() {
               <View style={styles.iconContainer}>
                 <Users size={22} color="#4A90E2" />
               </View>
-              <Text style={styles.menuItemText}>子ども管理</Text>
+              <Text style={styles.menuItemText}>子供設定</Text>
             </View>
             <ChevronRight size={20} color="#999" />
           </TouchableOpacity>
