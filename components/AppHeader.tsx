@@ -12,13 +12,15 @@ interface AppHeaderProps {
   showSettings?: boolean;
   showChildSwitcher?: boolean;
   showYearMonthNav?: boolean;
+  title?: string;
 }
 
 export function AppHeader({
   showBack = false,
   showSettings = true,
   showChildSwitcher = true,
-  showYearMonthNav = false
+  showYearMonthNav = false,
+  title
 }: AppHeaderProps) {
   const router = useRouter();
   const { year, month, setYearMonth } = useDateContext();
@@ -85,6 +87,12 @@ export function AppHeader({
               <Text style={styles.monthText}>{month}月</Text>
               <ChevronDown size={14} color="#666" strokeWidth={2.5} />
             </TouchableOpacity>
+          </View>
+        )}
+
+        {title && (
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>{title}</Text>
           </View>
         )}
 
@@ -165,6 +173,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  titleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+  },
+  title: {
+    fontSize: 17,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
   },
   right: {
     alignItems: 'flex-end',

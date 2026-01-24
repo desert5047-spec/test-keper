@@ -18,7 +18,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader showBack={true} showSettings={true} showChildSwitcher={false} />
+      <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
 
       <ScrollView
         style={styles.scrollView}
