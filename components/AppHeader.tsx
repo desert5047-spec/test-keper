@@ -59,14 +59,14 @@ export function AppHeader({
           <View style={styles.center}>
             <TouchableOpacity
               style={styles.yearArrow}
-              onPress={() => handleYearChange('next')}
+              onPress={() => handleYearChange('prev')}
               activeOpacity={0.7}>
               <ChevronLeft size={18} color="#666" />
             </TouchableOpacity>
             <Text style={styles.yearText}>{year}年</Text>
             <TouchableOpacity
               style={styles.yearArrow}
-              onPress={() => handleYearChange('prev')}
+              onPress={() => handleYearChange('next')}
               activeOpacity={0.7}>
               <ChevronRight size={18} color="#666" />
             </TouchableOpacity>
