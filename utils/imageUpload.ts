@@ -10,11 +10,12 @@ export const uploadImage = async (
     const filePath = `${userId}/${fileName}`;
 
     const response = await fetch(imageUri);
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
 
     const { data, error } = await supabase.storage
       .from('test-images')
-      .upload(filePath, blob, {
+      .upload(filePath, bytes, {
         contentType: `image/${fileExt}`,
         upsert: false,
       });
