@@ -13,7 +13,7 @@ export const uploadImage = async (
 
     let uploadData: Blob | ArrayBuffer;
 
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !FileSystem.EncodingType) {
       const response = await fetch(imageUri);
       uploadData = await response.blob();
     } else {
