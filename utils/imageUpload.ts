@@ -15,7 +15,8 @@ export const uploadImage = async (
 
     if (Platform.OS === 'web' || !FileSystem.EncodingType) {
       const response = await fetch(imageUri);
-      uploadData = await response.blob();
+      const arrayBuffer = await response.arrayBuffer();
+      uploadData = new Blob([arrayBuffer], { type: `image/${fileExt}` });
     } else {
       const base64Data = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -25,8 +26,13 @@ export const uploadImage = async (
         throw new Error('画像データの読み込みに失敗しました');
       }
 
-      const response = await fetch(`data:image/${fileExt};base64,${base64Data}`);
-      uploadData = await response.blob();
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      uploadData = new Blob([byteArray], { type: `image/${fileExt}` });
     }
 
     const { data, error } = await supabase.storage
