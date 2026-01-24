@@ -18,7 +18,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} />
+      <AppHeader showBack={true} showSettings={true} showChildSwitcher={false} />
 
       <ScrollView
         style={styles.scrollView}
@@ -102,6 +102,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    paddingTop: 108,
   },
   scrollContent: {
     paddingBottom: 24,
