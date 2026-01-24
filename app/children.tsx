@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Plus, Edit3, Trash2, Home, List, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 interface Child {
@@ -40,6 +41,7 @@ const GRADES = [
 export default function ChildrenScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -116,6 +118,11 @@ export default function ChildrenScreen() {
         loadChildren();
       }
     } else {
+      if (!user) {
+        Alert.alert('エラー', 'ログインが必要です');
+        return;
+      }
+
       const { error } = await supabase
         .from('children')
         .insert({
@@ -123,6 +130,7 @@ export default function ChildrenScreen() {
           grade: grade,
           color: selectedColor,
           is_default: false,
+          user_id: user.id,
         });
 
       if (error) {

@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { useFonts, Nunito_400Regular, Nunito_700Bold, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
 
 const GRADES = [
@@ -25,6 +26,7 @@ const GRADES = [
 export default function RegisterChildScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [name, setName] = useState('');
   const [grade, setGrade] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -55,6 +57,11 @@ export default function RegisterChildScreen() {
       return;
     }
 
+    if (!user) {
+      Alert.alert('エラー', 'ログインが必要です');
+      return;
+    }
+
     setSaving(true);
 
     const { error } = await supabase.from('children').insert({
@@ -62,6 +69,7 @@ export default function RegisterChildScreen() {
       grade,
       color: '#4A90E2',
       is_default: false,
+      user_id: user.id,
     });
 
     setSaving(false);
