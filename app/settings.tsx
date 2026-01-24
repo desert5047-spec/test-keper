@@ -4,17 +4,73 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Users, ChevronRight, Home, List, Plus, Calendar } from 'lucide-react-native';
+import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '@/components/AppHeader';
 import { useChild } from '@/contexts/ChildContext';
+import { supabase } from '@/lib/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { children } = useChild();
+  const { children, loadChildren } = useChild();
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetData = () => {
+    Alert.alert(
+      '初期化しますか？',
+      '子ども・記録・写真の情報がすべて削除され、元に戻せません。',
+      [
+        {
+          text: 'キャンセル',
+          style: 'cancel',
+        },
+        {
+          text: '初期化する',
+          style: 'destructive',
+          onPress: async () => {
+            setIsResetting(true);
+
+            try {
+              const { error } = await supabase
+                .from('children')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000');
+
+              if (error) {
+                Alert.alert('エラー', '初期化に失敗しました');
+                setIsResetting(false);
+                return;
+              }
+
+              await AsyncStorage.removeItem('hasCompletedOnboarding');
+
+              await loadChildren();
+
+              Alert.alert('初期化完了', '初期化しました', [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    router.replace('/onboarding');
+                  },
+                },
+              ]);
+            } catch (err) {
+              Alert.alert('エラー', '初期化中にエラーが発生しました');
+            } finally {
+              setIsResetting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -55,6 +111,30 @@ export default function SettingsScreen() {
               子供のテストや成績を記録して、{'\n'}
               頑張りを見える化するアプリです。
             </Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>データ管理</Text>
+          <View style={styles.dangerZone}>
+            <View style={styles.dangerHeader}>
+              <Trash2 size={20} color="#E74C3C" />
+              <Text style={styles.dangerTitle}>データを初期化</Text>
+            </View>
+            <Text style={styles.dangerDescription}>
+              子ども・記録・写真がすべて削除されます
+            </Text>
+            <TouchableOpacity
+              style={[styles.dangerButton, isResetting && styles.dangerButtonDisabled]}
+              onPress={handleResetData}
+              disabled={isResetting}
+              activeOpacity={0.7}>
+              {isResetting ? (
+                <ActivityIndicator size="small" color="#E74C3C" />
+              ) : (
+                <Text style={styles.dangerButtonText}>初期化する</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -222,6 +302,53 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  dangerZone: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#FFE5E5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  dangerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  dangerTitle: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    color: '#E74C3C',
+  },
+  dangerDescription: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  dangerButton: {
+    backgroundColor: '#FFF5F5',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E74C3C',
+  },
+  dangerButtonDisabled: {
+    opacity: 0.6,
+  },
+  dangerButtonText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#E74C3C',
   },
   bottomNav: {
     flexDirection: 'row',
