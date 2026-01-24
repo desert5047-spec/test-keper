@@ -23,6 +23,12 @@ import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 
 const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 
+interface Child {
+  id: string;
+  name: string | null;
+  color: string;
+}
+
 export default function AddScreen() {
   const router = useRouter();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -41,10 +47,41 @@ export default function AddScreen() {
   const [showToast, setShowToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isFeatureUnlocked, setIsFeatureUnlocked] = useState(false);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   useEffect(() => {
     requestPermissions();
+    checkFeatureUnlock();
   }, []);
+
+  const checkFeatureUnlock = async () => {
+    const { count } = await supabase
+      .from('records')
+      .select('*', { count: 'exact', head: true });
+
+    const totalCount = count || 0;
+    const unlocked = totalCount >= 1;
+    setIsFeatureUnlocked(unlocked);
+
+    if (unlocked) {
+      loadChildren();
+    }
+  };
+
+  const loadChildren = async () => {
+    const { data } = await supabase
+      .from('children')
+      .select('id, name, color')
+      .order('created_at');
+
+    if (data && data.length > 0) {
+      setChildren(data);
+      setSelectedChildId(data[0].id);
+    }
+  };
 
   const requestPermissions = async () => {
     if (Platform.OS !== 'web') {
@@ -288,19 +325,16 @@ export default function AddScreen() {
     setIsSaving(true);
 
     try {
-      const { data: children } = await supabase
-        .from('children')
-        .select('id')
-        .maybeSingle();
+      const { count } = await supabase
+        .from('records')
+        .select('*', { count: 'exact', head: true });
 
-      if (!children) {
-        throw new Error('子どもデータが見つかりません');
-      }
+      const isFirstRecord = (count || 0) === 0;
 
       const { error } = await supabase
         .from('records')
         .insert({
-          child_id: children.id,
+          child_id: isFeatureUnlocked && selectedChildId ? selectedChildId : null,
           date,
           subject: selectedSubject,
           type,
@@ -314,12 +348,21 @@ export default function AddScreen() {
 
       if (error) throw error;
 
-      setShowToast(true);
-      setTimeout(() => {
-        setShowToast(false);
-        resetForm();
-        router.push('/(tabs)');
-      }, 1500);
+      if (isFirstRecord) {
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+          resetForm();
+          setShowUnlockModal(true);
+        }, 1500);
+      } else {
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+          resetForm();
+          router.push('/(tabs)');
+        }, 1500);
+      }
     } catch (error: any) {
       Alert.alert('エラー', error.message || '保存に失敗しました');
     } finally {
@@ -407,6 +450,34 @@ export default function AddScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {isFeatureUnlocked && children.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>だれの記録？</Text>
+            <View style={styles.childChipContainer}>
+              {children.map((child) => (
+                <TouchableOpacity
+                  key={child.id}
+                  style={[
+                    styles.childChip,
+                    selectedChildId === child.id && styles.childChipSelected,
+                    { borderColor: child.color },
+                  ]}
+                  onPress={() => setSelectedChildId(child.id)}
+                  activeOpacity={0.7}>
+                  <View style={[styles.childColorBadge, { backgroundColor: child.color }]} />
+                  <Text
+                    style={[
+                      styles.childChipText,
+                      selectedChildId === child.id && styles.childChipTextSelected,
+                    ]}>
+                    {child.name || '未設定'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>教科</Text>
@@ -632,6 +703,45 @@ export default function AddScreen() {
           <Text style={styles.toastText}>記録を残しました</Text>
         </View>
       )}
+
+      <Modal
+        visible={showUnlockModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowUnlockModal(false);
+          router.push('/(tabs)');
+        }}>
+        <View style={styles.unlockModalOverlay}>
+          <View style={styles.unlockModalContent}>
+            <Text style={styles.unlockModalTitle}>子どもを追加できます</Text>
+            <Text style={styles.unlockModalMessage}>
+              きょうだい分も残せるようになりました。{'\n'}
+              必要なら追加してみてください。
+            </Text>
+            <View style={styles.unlockModalActions}>
+              <TouchableOpacity
+                style={styles.unlockModalLaterButton}
+                onPress={() => {
+                  setShowUnlockModal(false);
+                  router.push('/(tabs)');
+                }}
+                activeOpacity={0.7}>
+                <Text style={styles.unlockModalLaterText}>あとで</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.unlockModalAddButton}
+                onPress={() => {
+                  setShowUnlockModal(false);
+                  router.push('/children');
+                }}
+                activeOpacity={0.7}>
+                <Text style={styles.unlockModalAddText}>子どもを追加</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1029,5 +1139,94 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
+  },
+  childChipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  childChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    gap: 6,
+  },
+  childChipSelected: {
+    backgroundColor: '#f8f8f8',
+  },
+  childColorBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  childChipText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  childChipTextSelected: {
+    color: '#333',
+  },
+  unlockModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  unlockModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  unlockModalTitle: {
+    fontSize: 20,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  unlockModalMessage: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    lineHeight: 22,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  unlockModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  unlockModalLaterButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  unlockModalLaterText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#666',
+  },
+  unlockModalAddButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#4A90E2',
+    alignItems: 'center',
+  },
+  unlockModalAddText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#fff',
   },
 });

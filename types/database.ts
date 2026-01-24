@@ -12,7 +12,7 @@ export interface Child {
 
 export interface TestRecord {
   id: string;
-  child_id: string;
+  child_id: string | null;
   date: string;
   subject: string;
   type: RecordType;
