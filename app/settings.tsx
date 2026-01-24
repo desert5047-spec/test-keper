@@ -9,18 +9,21 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2 } from 'lucide-react-native';
+import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '@/components/AppHeader';
 import { useChild } from '@/contexts/ChildContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { children, loadChildren } = useChild();
+  const { signOut, user } = useAuth();
   const [isResetting, setIsResetting] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleResetData = () => {
     Alert.alert(
@@ -72,6 +75,33 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'ログアウト',
+      'ログアウトしますか？',
+      [
+        {
+          text: 'キャンセル',
+          style: 'cancel',
+        },
+        {
+          text: 'ログアウト',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoggingOut(true);
+            try {
+              await signOut();
+            } catch (error) {
+              Alert.alert('エラー', 'ログアウトに失敗しました');
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
@@ -99,6 +129,30 @@ export default function SettingsScreen() {
               </View>
             </View>
             <ChevronRight size={20} color="#999" style={styles.chevron} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>アカウント</Text>
+
+          <View style={styles.accountCard}>
+            <Text style={styles.accountLabel}>ログイン中のメールアドレス</Text>
+            <Text style={styles.accountEmail}>{user?.email || '未設定'}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+            activeOpacity={0.7}>
+            {isLoggingOut ? (
+              <ActivityIndicator size="small" color="#E74C3C" />
+            ) : (
+              <>
+                <LogOut size={20} color="#E74C3C" />
+                <Text style={styles.logoutButtonText}>ログアウト</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -346,6 +400,53 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   dangerButtonText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#E74C3C',
+  },
+  accountCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  accountLabel: {
+    fontSize: 12,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#999',
+    marginBottom: 4,
+  },
+  accountEmail: {
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#333',
+  },
+  logoutButton: {
+    backgroundColor: '#FFF5F5',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FFE5E5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
+  logoutButtonText: {
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
     color: '#E74C3C',

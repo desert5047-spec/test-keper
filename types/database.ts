@@ -7,6 +7,7 @@ export interface Child {
   grade: string | null;
   color: string;
   is_default: boolean;
+  user_id: string;
   created_at: string;
 }
 
@@ -22,12 +23,14 @@ export interface TestRecord {
   memo: string | null;
   photo_uri: string | null;
   photo_rotation: 0 | 90 | 180 | 270;
+  user_id: string;
   created_at: string;
 }
 
 export interface Subject {
   id: string;
   name: string;
+  user_id: string | null;
   created_at: string;
 }
 

@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Camera, RotateCw, RotateCcw, X, Crop } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
@@ -32,6 +33,7 @@ interface Child {
 
 export default function AddScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
@@ -300,6 +302,11 @@ export default function AddScreen() {
       }
     }
 
+    if (!user) {
+      Alert.alert('エラー', 'ログインが必要です');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -316,6 +323,7 @@ export default function AddScreen() {
           memo: memo.trim() || null,
           photo_uri: photoUri,
           photo_rotation: 0,
+          user_id: user.id,
         });
 
       if (error) throw error;
