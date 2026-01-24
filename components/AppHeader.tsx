@@ -22,13 +22,19 @@ export function AppHeader({
   const { year, month, setYearMonth } = useDateContext();
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
-  const handleYearChange = (direction: 'next' | 'prev') => {
+  const handleMonthChange = (direction: 'next' | 'prev') => {
     if (direction === 'next') {
-      const newYear = year + 1;
-      setYearMonth(newYear, 1);
+      if (month === 12) {
+        setYearMonth(year + 1, 1);
+      } else {
+        setYearMonth(year, month + 1);
+      }
     } else {
-      const newYear = year - 1;
-      setYearMonth(newYear, 12);
+      if (month === 1) {
+        setYearMonth(year - 1, 12);
+      } else {
+        setYearMonth(year, month - 1);
+      }
     }
   };
 
@@ -59,14 +65,14 @@ export function AppHeader({
           <View style={styles.center}>
             <TouchableOpacity
               style={styles.yearArrow}
-              onPress={() => handleYearChange('prev')}
+              onPress={() => handleMonthChange('prev')}
               activeOpacity={0.7}>
               <ChevronLeft size={18} color="#666" />
             </TouchableOpacity>
             <Text style={styles.yearText}>{year}年</Text>
             <TouchableOpacity
               style={styles.yearArrow}
-              onPress={() => handleYearChange('next')}
+              onPress={() => handleMonthChange('next')}
               activeOpacity={0.7}>
               <ChevronRight size={18} color="#666" />
             </TouchableOpacity>
