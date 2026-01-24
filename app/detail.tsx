@@ -16,7 +16,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3 } from 'lucide-react-native';
+import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
@@ -162,6 +162,63 @@ export default function DetailScreen() {
     }
   };
 
+  const cropPhoto = async () => {
+    if (!photoUri) return;
+
+    setIsProcessingImage(true);
+    try {
+      validateImageUri(photoUri);
+
+      // 画像のサイズを取得
+      const result = await ImageManipulator.manipulateAsync(
+        photoUri,
+        [],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // 画像の実際のサイズを取得するために一度読み込む
+      const imageInfo = await new Promise<{ width: number; height: number }>((resolve) => {
+        Image.getSize(
+          result.uri,
+          (width, height) => resolve({ width, height }),
+          () => resolve({ width: 1000, height: 1000 })
+        );
+      });
+
+      const { width, height } = imageInfo;
+      const size = Math.min(width, height);
+      const originX = (width - size) / 2;
+      const originY = (height - size) / 2;
+
+      // 正方形にトリミング
+      const croppedResult = await ImageManipulator.manipulateAsync(
+        result.uri,
+        [
+          {
+            crop: {
+              originX,
+              originY,
+              width: size,
+              height: size,
+            },
+          },
+        ],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      validateImageUri(croppedResult.uri);
+      if (!isValidImageUri(croppedResult.uri)) {
+        throw new Error('トリミング後の画像が無効です');
+      }
+
+      setPhotoUri(croppedResult.uri);
+    } catch (error: any) {
+      Alert.alert('エラー', error.message || '画像のトリミングに失敗しました');
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
   const confirmRemovePhoto = () => {
     Alert.alert(
       '写真を削除',
@@ -275,6 +332,7 @@ export default function DetailScreen() {
       '算数': '#3498DB',
       '理科': '#27AE60',
       '社会': '#E67E22',
+      '英語': '#2C3E50',
       '生活': '#9B59B6',
       '図工': '#F39C12',
       '音楽': '#1ABC9C',
@@ -379,6 +437,13 @@ export default function DetailScreen() {
                     disabled={isProcessingImage}
                     activeOpacity={0.7}>
                     <RotateCw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.rotateButton}
+                    onPress={cropPhoto}
+                    disabled={isProcessingImage}
+                    activeOpacity={0.7}>
+                    <Crop size={24} color={isProcessingImage ? '#ccc' : '#666'} />
                   </TouchableOpacity>
                 </View>
               </View>

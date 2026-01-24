@@ -103,6 +103,7 @@ export default function HomeScreen() {
       '算数': '#3498DB',
       '理科': '#27AE60',
       '社会': '#E67E22',
+      '英語': '#2C3E50',
       '生活': '#9B59B6',
       '図工': '#F39C12',
       '音楽': '#1ABC9C',
@@ -121,39 +122,45 @@ export default function HomeScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.card, !hasPhoto && styles.cardSmall]}
+        style={styles.card}
         onPress={() => router.push(`/detail?id=${item.id}`)}
         activeOpacity={0.8}>
-        {hasPhoto && (
-          <View style={styles.imageContainer}>
-            <View
-              style={[
-                styles.imageWrapper,
-                {
-                  transform: [{ rotate: `${item.photo_rotation}deg` }],
-                },
-              ]}>
-              <Image
-                source={{ uri: item.photo_uri! }}
-                style={styles.cardImage}
-                resizeMode="cover"
-              />
-            </View>
-            <View style={styles.dateOverlay}>
-              <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
-            </View>
-          </View>
-        )}
-        <View style={[styles.cardContent, !hasPhoto && styles.cardContentCompact]}>
+        <View style={styles.imageContainer}>
+          {hasPhoto ? (
+            <>
+              <View
+                style={[
+                  styles.imageWrapper,
+                  {
+                    transform: [{ rotate: `${item.photo_rotation}deg` }],
+                  },
+                ]}>
+                <Image
+                  source={{ uri: item.photo_uri! }}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                />
+              </View>
+              <View style={styles.dateOverlay}>
+                <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.placeholderImage} />
+              <View style={styles.dateOverlay}>
+                <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
+              </View>
+            </>
+          )}
+        </View>
+        <View style={styles.cardContent}>
           <View style={styles.cardFirstRow}>
             <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
               <Text style={styles.subjectChipText}>{item.subject}</Text>
             </View>
             <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
           </View>
-          {!hasPhoto && (
-            <Text style={styles.dateText}>{formatDate(item.date)}</Text>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -302,9 +309,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  cardSmall: {
-    minHeight: 0,
-  },
   imageContainer: {
     position: 'relative',
     height: 240,
@@ -320,6 +324,11 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: '100%',
+  },
+  placeholderImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E8E8E8',
   },
   dateOverlay: {
     position: 'absolute',
@@ -337,10 +346,6 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 16,
-  },
-  cardContentCompact: {
-    padding: 12,
-    paddingVertical: 10,
   },
   cardFirstRow: {
     flexDirection: 'row',
@@ -367,12 +372,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     marginLeft: 12,
     lineHeight: 20,
-  },
-  dateText: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-    fontFamily: 'Nunito-Regular',
   },
   emptyContainer: {
     flex: 1,

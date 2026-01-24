@@ -21,11 +21,12 @@ import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 
+const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+
 export default function AddScreen() {
   const router = useRouter();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
   const [type, setType] = useState<RecordType>('テスト');
@@ -42,7 +43,6 @@ export default function AddScreen() {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
-    loadSubjects();
     requestPermissions();
   }, []);
 
@@ -53,19 +53,6 @@ export default function AddScreen() {
     }
   };
 
-  const loadSubjects = async () => {
-    const { data } = await supabase
-      .from('subjects')
-      .select('name')
-      .order('created_at');
-
-    if (data) {
-      setSubjects(data.map(s => s.name));
-      if (data.length > 0) {
-        setSelectedSubject(data[0].name);
-      }
-    }
-  };
 
   const showPhotoActionSheet = () => {
     if (Platform.OS === 'ios') {
@@ -166,21 +153,51 @@ export default function AddScreen() {
     try {
       validateImageUri(photoUri);
 
+      // 画像のサイズを取得
       const result = await ImageManipulator.manipulateAsync(
         photoUri,
         [],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // 画像の実際のサイズを取得するために一度読み込む
+      const imageInfo = await new Promise<{ width: number; height: number }>((resolve) => {
+        Image.getSize(
+          result.uri,
+          (width, height) => resolve({ width, height }),
+          () => resolve({ width: 1000, height: 1000 })
+        );
+      });
+
+      const { width, height } = imageInfo;
+      const size = Math.min(width, height);
+      const originX = (width - size) / 2;
+      const originY = (height - size) / 2;
+
+      // 正方形にトリミング
+      const croppedResult = await ImageManipulator.manipulateAsync(
+        result.uri,
+        [
+          {
+            crop: {
+              originX,
+              originY,
+              width: size,
+              height: size,
+            },
+          },
+        ],
         { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
       );
 
-      validateImageUri(result.uri);
-      if (!isValidImageUri(result.uri)) {
-        throw new Error('編集後の画像が無効です');
+      validateImageUri(croppedResult.uri);
+      if (!isValidImageUri(croppedResult.uri)) {
+        throw new Error('トリミング後の画像が無効です');
       }
 
-      Alert.alert('成功', '画像を編集しました');
-      setPhotoUri(result.uri);
+      setPhotoUri(croppedResult.uri);
     } catch (error: any) {
-      Alert.alert('エラー', error.message || '画像の編集に失敗しました');
+      Alert.alert('エラー', error.message || '画像のトリミングに失敗しました');
     } finally {
       setIsProcessingImage(false);
     }
@@ -197,19 +214,11 @@ export default function AddScreen() {
     );
   };
 
-  const addNewSubject = async () => {
+  const handleAddOtherSubject = () => {
     if (!newSubject.trim()) return;
-
-    const { error } = await supabase
-      .from('subjects')
-      .insert({ name: newSubject.trim() });
-
-    if (!error) {
-      setSubjects([...subjects, newSubject.trim()]);
-      setSelectedSubject(newSubject.trim());
-      setNewSubject('');
-      setShowSubjectInput(false);
-    }
+    setSelectedSubject(newSubject.trim());
+    setNewSubject('');
+    setShowSubjectInput(false);
   };
 
   const canSave = () => {
@@ -379,6 +388,13 @@ export default function AddScreen() {
                   activeOpacity={0.7}>
                   <RotateCw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.rotateButton}
+                  onPress={cropPhoto}
+                  disabled={isProcessingImage}
+                  activeOpacity={0.7}>
+                  <Crop size={24} color={isProcessingImage ? '#ccc' : '#666'} />
+                </TouchableOpacity>
               </View>
             </View>
           ) : (
@@ -397,7 +413,7 @@ export default function AddScreen() {
           {!showSubjectInput ? (
             <>
               <View style={styles.chipContainer}>
-                {subjects.map((subject) => (
+                {MAIN_SUBJECTS.map((subject) => (
                   <TouchableOpacity
                     key={subject}
                     style={[
@@ -429,14 +445,14 @@ export default function AddScreen() {
                 style={styles.textInput}
                 value={newSubject}
                 onChangeText={setNewSubject}
-                placeholder="教科名を入力"
+                placeholder="教科名を入力（例：生活、図工、音楽、体育）"
                 placeholderTextColor="#999"
               />
               <TouchableOpacity
                 style={styles.addButton}
-                onPress={addNewSubject}
+                onPress={handleAddOtherSubject}
                 activeOpacity={0.7}>
-                <Text style={styles.addButtonText}>追加</Text>
+                <Text style={styles.addButtonText}>決定</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
