@@ -3,17 +3,17 @@
 
   ## 新規テーブル
 
-  ### 1. children（子どもテーブル）
+  ### 1. children（子供テーブル）
   - id (uuid, primary key)
-  - name (text, nullable) - 子どもの名前（ニックネーム可）
+  - name (text, nullable) - 子供の名前（ニックネーム可）
   - grade (text, nullable) - 学年
   - color (text) - 表示用のカラーコード
-  - is_default (boolean) - デフォルトの子どもかどうか
+  - is_default (boolean) - デフォルトの子供かどうか
   - created_at (timestamptz)
 
   ### 2. records（記録テーブル）
   - id (uuid, primary key)
-  - child_id (uuid, foreign key) - 子どもへの参照
+  - child_id (uuid, foreign key) - 子供への参照
   - date (date) - テスト実施日
   - subject (text, not null) - 教科
   - type (text, not null) - 種類（テスト/プリント/ドリル/確認）

@@ -9,10 +9,12 @@ import { useRouter } from 'expo-router';
 import { Users, ChevronRight, Home, List, Plus, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/AppHeader';
+import { useChild } from '@/contexts/ChildContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { children } = useChild();
 
   return (
     <View style={styles.container}>
@@ -30,7 +32,12 @@ export default function SettingsScreen() {
               <View style={styles.iconContainer}>
                 <Users size={22} color="#4A90E2" />
               </View>
-              <Text style={styles.menuItemText}>子供設定</Text>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>子供設定</Text>
+                <Text style={styles.menuItemSubtext}>
+                  {children.length === 0 ? 'まだ登録されていません' : `登録済み：${children.length}人`}
+                </Text>
+              </View>
             </View>
             <ChevronRight size={20} color="#999" />
           </TouchableOpacity>
@@ -42,7 +49,7 @@ export default function SettingsScreen() {
             <Text style={styles.appName}>テストキーパー</Text>
             <Text style={styles.appVersion}>Version 1.0.0</Text>
             <Text style={styles.appDescription}>
-              子どものテストや成績を記録して、{'\n'}
+              子供のテストや成績を記録して、{'\n'}
               頑張りを見える化するアプリです。
             </Text>
           </View>
@@ -135,10 +142,19 @@ const styles = StyleSheet.create({
   iconContainerLocked: {
     backgroundColor: '#f5f5f5',
   },
+  menuItemContent: {
+    flex: 1,
+    gap: 2,
+  },
   menuItemText: {
     fontSize: 16,
     fontFamily: 'Nunito-SemiBold',
     color: '#333',
+  },
+  menuItemSubtext: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
   },
   lockedItem: {
     backgroundColor: '#fff',
