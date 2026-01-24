@@ -14,6 +14,7 @@ import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
+import { isValidImageUri } from '@/utils/imageGuard';
 
 interface Section {
   title: string;
@@ -144,7 +145,11 @@ export default function ListScreen() {
 
   const renderItem = ({ item }: { item: TestRecord }) => {
     const subjectColor = getSubjectColor(item.subject);
-    const hasPhoto = !!item.photo_uri;
+    const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
+
+    if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
+      console.warn('[画像警告] 無効な画像URIが検出されました:', item.photo_uri);
+    }
 
     return (
       <TouchableOpacity
@@ -161,7 +166,7 @@ export default function ListScreen() {
                 },
               ]}>
               <Image
-                source={{ uri: item.photo_uri }}
+                source={{ uri: item.photo_uri! }}
                 style={styles.thumbnail}
                 resizeMode="cover"
               />

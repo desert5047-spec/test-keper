@@ -14,6 +14,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
+import { isValidImageUri } from '@/utils/imageGuard';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -111,8 +112,12 @@ export default function HomeScreen() {
   };
 
   const renderRecord = ({ item }: { item: TestRecord }) => {
-    const hasPhoto = !!item.photo_uri;
+    const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
     const subjectColor = getSubjectColor(item.subject);
+
+    if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
+      console.warn('[画像警告] 無効な画像URIが検出されました:', item.photo_uri);
+    }
 
     return (
       <TouchableOpacity

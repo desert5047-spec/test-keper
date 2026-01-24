@@ -15,9 +15,11 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
+import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 
 export default function DetailScreen() {
   const router = useRouter();
@@ -31,12 +33,12 @@ export default function DetailScreen() {
 
   // Edit form states
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [photoRotation, setPhotoRotation] = useState<0 | 90 | 180 | 270>(0);
   const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
   const [score, setScore] = useState<string>('');
   const [maxScore, setMaxScore] = useState<string>('100');
   const [stamp, setStamp] = useState<StampType | null>(null);
   const [memo, setMemo] = useState<string>('');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -61,7 +63,6 @@ export default function DetailScreen() {
 
   const initializeEditForm = (data: TestRecord) => {
     setPhotoUri(data.photo_uri);
-    setPhotoRotation(data.photo_rotation);
     setEvaluationType(data.score !== null ? 'score' : 'stamp');
     setScore(data.score?.toString() || '');
     setMaxScore(data.max_score?.toString() || '100');
@@ -91,39 +92,74 @@ export default function DetailScreen() {
 
   const pickImage = async () => {
     setShowPhotoOptions(false);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1.0,
+      });
 
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoRotation(0);
+      if (!result.canceled) {
+        const uri = result.assets[0].uri;
+        validateImageUri(uri);
+        if (!isValidImageUri(uri)) {
+          Alert.alert('エラー', '画像の読み込みに失敗しました。もう一度選択してください。');
+          return;
+        }
+        setPhotoUri(uri);
+      }
+    } catch (error: any) {
+      Alert.alert('エラー', error.message || '画像の読み込みに失敗しました');
     }
   };
 
   const takePhoto = async () => {
     setShowPhotoOptions(false);
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 1.0,
+      });
 
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoRotation(0);
+      if (!result.canceled) {
+        const uri = result.assets[0].uri;
+        validateImageUri(uri);
+        if (!isValidImageUri(uri)) {
+          Alert.alert('エラー', '画像の読み込みに失敗しました。もう一度選択してください。');
+          return;
+        }
+        setPhotoUri(uri);
+      }
+    } catch (error: any) {
+      Alert.alert('エラー', error.message || '画像の撮影に失敗しました');
     }
   };
 
-  const rotatePhoto = () => {
-    setPhotoRotation((prev) => ((prev + 90) % 360) as 0 | 90 | 180 | 270);
-  };
+  const rotatePhoto = async (direction: 'right' | 'left') => {
+    if (!photoUri) return;
 
-  const rotatePhotoCounterClockwise = () => {
-    setPhotoRotation((prev) => ((prev - 90 + 360) % 360) as 0 | 90 | 180 | 270);
+    setIsProcessingImage(true);
+    try {
+      validateImageUri(photoUri);
+
+      const rotation = direction === 'right' ? 90 : -90;
+      const result = await ImageManipulator.manipulateAsync(
+        photoUri,
+        [{ rotate: rotation }],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      validateImageUri(result.uri);
+      if (!isValidImageUri(result.uri)) {
+        throw new Error('回転後の画像が無効です');
+      }
+
+      setPhotoUri(result.uri);
+    } catch (error: any) {
+      Alert.alert('エラー', error.message || '画像の回転に失敗しました');
+    } finally {
+      setIsProcessingImage(false);
+    }
   };
 
   const confirmRemovePhoto = () => {
@@ -158,28 +194,43 @@ export default function DetailScreen() {
       }
     }
 
+    if (photoUri) {
+      try {
+        validateImageUri(photoUri);
+        if (!isValidImageUri(photoUri)) {
+          Alert.alert('エラー', '画像の形式が正しくありません');
+          return;
+        }
+      } catch (error: any) {
+        Alert.alert('エラー', error.message);
+        return;
+      }
+    }
+
     setIsSaving(true);
 
-    const { error } = await supabase
-      .from('records')
-      .update({
-        score: evaluationType === 'score' ? parseInt(score) : null,
-        max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
-        stamp: evaluationType === 'stamp' ? stamp : null,
-        memo: memo.trim() || null,
-        photo_uri: photoUri,
-        photo_rotation: photoRotation,
-      })
-      .eq('id', record.id);
+    try {
+      const { error } = await supabase
+        .from('records')
+        .update({
+          score: evaluationType === 'score' ? parseInt(score) : null,
+          max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
+          stamp: evaluationType === 'stamp' ? stamp : null,
+          memo: memo.trim() || null,
+          photo_uri: photoUri,
+          photo_rotation: 0,
+        })
+        .eq('id', record.id);
 
-    setIsSaving(false);
+      if (error) throw error;
 
-    if (error) {
-      Alert.alert('エラー', '保存に失敗しました');
-    } else {
       await loadRecord(record.id);
       setEditMode(false);
       Alert.alert('成功', '記録を更新しました');
+    } catch (error: any) {
+      Alert.alert('エラー', error.message || '保存に失敗しました');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -301,31 +352,33 @@ export default function DetailScreen() {
                   activeOpacity={0.7}>
                   <X size={20} color="#fff" />
                 </TouchableOpacity>
-                <View
-                  style={[
-                    styles.photoWrapper,
-                    {
-                      transform: [{ rotate: `${photoRotation}deg` }],
-                    },
-                  ]}>
+                <View style={styles.photoWrapper}>
                   <Image
                     source={{ uri: photoUri }}
                     style={styles.photo}
                     resizeMode="contain"
                   />
                 </View>
+                {isProcessingImage && (
+                  <View style={styles.processingOverlay}>
+                    <ActivityIndicator size="large" color="#4A90E2" />
+                    <Text style={styles.processingText}>処理中...</Text>
+                  </View>
+                )}
                 <View style={styles.photoActions}>
                   <TouchableOpacity
                     style={styles.rotateButton}
-                    onPress={rotatePhotoCounterClockwise}
+                    onPress={() => rotatePhoto('left')}
+                    disabled={isProcessingImage}
                     activeOpacity={0.7}>
-                    <RotateCcw size={24} color="#666" />
+                    <RotateCcw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.rotateButton}
-                    onPress={rotatePhoto}
+                    onPress={() => rotatePhoto('right')}
+                    disabled={isProcessingImage}
                     activeOpacity={0.7}>
-                    <RotateCw size={24} color="#666" />
+                    <RotateCw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -440,18 +493,12 @@ export default function DetailScreen() {
         </ScrollView>
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {record.photo_uri && (
+          {record.photo_uri && isValidImageUri(record.photo_uri) && (
             <TouchableOpacity
               onPress={() => setShowImageModal(true)}
               activeOpacity={0.9}
               style={styles.imageContainer}>
-              <View
-                style={[
-                  styles.imageWrapper,
-                  {
-                    transform: [{ rotate: `${record.photo_rotation}deg` }],
-                  },
-                ]}>
+              <View style={styles.imageWrapper}>
                 <Image
                   source={{ uri: record.photo_uri }}
                   style={styles.image}
@@ -558,14 +605,8 @@ export default function DetailScreen() {
             activeOpacity={0.7}>
             <X size={28} color="#fff" />
           </TouchableOpacity>
-          {record.photo_uri && (
-            <View
-              style={[
-                styles.modalImageWrapper,
-                {
-                  transform: [{ rotate: `${record.photo_rotation}deg` }],
-                },
-              ]}>
+          {record.photo_uri && isValidImageUri(record.photo_uri) && (
+            <View style={styles.modalImageWrapper}>
               <Image
                 source={{ uri: record.photo_uri }}
                 style={styles.modalImage}
@@ -725,6 +766,24 @@ const styles = StyleSheet.create({
     height: 300,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  processingText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
   },
   photo: {
     width: '100%',
