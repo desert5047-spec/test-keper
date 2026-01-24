@@ -13,7 +13,7 @@ import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { isValidImageUri } from '@/utils/imageGuard';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
 interface Section {
   title: string;
@@ -166,7 +166,7 @@ export default function ListScreen() {
       <AppHeader showYearMonthNav={true} />
 
       {sections.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
           <Text style={styles.emptyText}>
             {year}年{month}月の記録はありません
           </Text>
@@ -177,7 +177,7 @@ export default function ListScreen() {
           renderItem={renderItem}
           renderSectionHeader={renderSectionHeader}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 12 }]}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled={true}
         />
@@ -197,7 +197,9 @@ const styles = StyleSheet.create({
   sectionHeader: {
     backgroundColor: '#f8f8f8',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingTop: 12,
+    paddingBottom: 8,
+    marginTop: 8,
   },
   sectionHeaderText: {
     fontSize: 14,

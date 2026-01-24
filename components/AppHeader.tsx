@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
+export const HEADER_HEIGHT = 108;
+
 interface AppHeaderProps {
   showBack?: boolean;
   showSettings?: boolean;
@@ -140,6 +142,10 @@ export function AppHeader({
 
 const styles = StyleSheet.create({
   container: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#FFF',
     paddingTop: 50,
     paddingBottom: 8,
@@ -149,7 +155,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 58,
+    height: HEADER_HEIGHT,
+    zIndex: 10,
   },
   left: {
     alignItems: 'flex-start',
