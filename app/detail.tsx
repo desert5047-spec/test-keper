@@ -16,7 +16,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop } from 'lucide-react-native';
+import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
