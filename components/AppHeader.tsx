@@ -195,6 +195,7 @@ const styles = StyleSheet.create({
     minWidth: 36,
     minHeight: 36,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   settingsButton: {
     padding: 6,
