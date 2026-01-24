@@ -19,31 +19,18 @@ export default function Index() {
     const hasCompleted = await AsyncStorage.getItem('hasCompletedOnboarding');
 
     if (hasCompleted) {
-      await ensureDefaultChild();
-      router.replace('/(tabs)');
+      const { data: children } = await supabase
+        .from('children')
+        .select('id')
+        .limit(1);
+
+      if (children && children.length > 0) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/register-child');
+      }
     } else {
       router.replace('/onboarding');
-    }
-  };
-
-  const ensureDefaultChild = async () => {
-    if (!user) return;
-
-    const { data: children } = await supabase
-      .from('children')
-      .select('*')
-      .maybeSingle();
-
-    if (!children) {
-      await supabase
-        .from('children')
-        .insert({
-          name: null,
-          grade: null,
-          color: '#FF6B6B',
-          is_default: true,
-          user_id: user.id,
-        });
     }
   };
 
