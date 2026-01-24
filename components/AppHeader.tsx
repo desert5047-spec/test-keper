@@ -40,58 +40,56 @@ export function AppHeader({
   return (
     <>
       <View style={styles.container}>
-        <View style={styles.topRow}>
-          <View style={styles.left}>
-            {showBack ? (
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={styles.backButton}
-                activeOpacity={0.7}>
-                <ArrowLeft size={24} color="#333" />
-              </TouchableOpacity>
-            ) : showChildSwitcher ? (
-              <ChildSwitcher />
-            ) : (
-              <View style={styles.placeholder} />
-            )}
-          </View>
-
-          <View style={styles.right}>
-            {showSettings && (
-              <TouchableOpacity
-                onPress={() => router.push('/settings')}
-                style={styles.settingsButton}
-                activeOpacity={0.7}>
-                <Settings size={24} color="#666" />
-              </TouchableOpacity>
-            )}
-          </View>
+        <View style={styles.left}>
+          {showBack ? (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}>
+              <ArrowLeft size={20} color="#333" />
+            </TouchableOpacity>
+          ) : showChildSwitcher ? (
+            <ChildSwitcher />
+          ) : (
+            <View style={styles.placeholder} />
+          )}
         </View>
 
         {showYearMonthNav && (
-          <View style={styles.yearMonthRow}>
+          <View style={styles.center}>
             <TouchableOpacity
               style={styles.yearArrow}
               onPress={() => handleYearChange('next')}
               activeOpacity={0.7}>
-              <ChevronLeft size={24} color="#666" />
+              <ChevronLeft size={18} color="#666" />
             </TouchableOpacity>
             <Text style={styles.yearText}>{year}年</Text>
+            <TouchableOpacity
+              style={styles.yearArrow}
+              onPress={() => handleYearChange('prev')}
+              activeOpacity={0.7}>
+              <ChevronRight size={18} color="#666" />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.monthButton}
               onPress={() => setShowMonthPicker(true)}
               activeOpacity={0.7}>
               <Text style={styles.monthText}>{month}月</Text>
-              <ChevronDown size={20} color="#666" strokeWidth={2.5} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.yearArrow}
-              onPress={() => handleYearChange('prev')}
-              activeOpacity={0.7}>
-              <ChevronRight size={24} color="#666" />
+              <ChevronDown size={14} color="#666" strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
         )}
+
+        <View style={styles.right}>
+          {showSettings && (
+            <TouchableOpacity
+              onPress={() => router.push('/settings')}
+              style={styles.settingsButton}
+              activeOpacity={0.7}>
+              <Settings size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <Modal
@@ -138,53 +136,47 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFF',
     paddingTop: 50,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-  },
-  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    height: 58,
   },
   left: {
-    flex: 1,
     alignItems: 'flex-start',
+  },
+  center: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   right: {
     alignItems: 'flex-end',
   },
   backButton: {
-    padding: 8,
-    minWidth: 44,
-    minHeight: 44,
+    padding: 6,
+    minWidth: 36,
+    minHeight: 36,
     justifyContent: 'center',
   },
   settingsButton: {
-    padding: 8,
-    minWidth: 44,
-    minHeight: 44,
+    padding: 6,
+    minWidth: 36,
+    minHeight: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
   placeholder: {
-    width: 44,
-  },
-  yearMonthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
+    width: 36,
   },
   yearArrow: {
-    padding: 4,
+    padding: 2,
   },
   yearText: {
-    fontSize: 18,
+    fontSize: 15,
     fontFamily: 'Nunito-Bold',
     color: '#333',
   },
@@ -192,14 +184,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    gap: 4,
+    marginLeft: 4,
   },
   monthText: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#fff',
   },
