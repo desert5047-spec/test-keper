@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Trash2, Edit3 } from 'lucide-react-native';
+import { ArrowLeft, Plus, Edit3, Home, List, Calendar } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 
 interface Child {
@@ -29,6 +30,7 @@ const COLORS = [
 
 export default function ChildrenScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -111,33 +113,6 @@ export default function ChildrenScreen() {
     }
   };
 
-  const confirmDelete = (child: Child) => {
-    Alert.alert(
-      '子どもを削除',
-      `${child.name || '未設定'}を削除しますか？\nこの子どもに紐づく記録も削除されます。`,
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除',
-          style: 'destructive',
-          onPress: () => handleDelete(child.id)
-        },
-      ]
-    );
-  };
-
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase
-      .from('children')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      Alert.alert('エラー', '削除に失敗しました');
-    } else {
-      loadChildren();
-    }
-  };
 
   if (loading) {
     return (
@@ -185,20 +160,12 @@ export default function ChildrenScreen() {
                       )}
                     </View>
                   </View>
-                  <View style={styles.childCardActions}>
-                    <TouchableOpacity
-                      onPress={() => openEditModal(child)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}>
-                      <Edit3 size={20} color="#4A90E2" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => confirmDelete(child)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}>
-                      <Trash2 size={20} color="#E74C3C" />
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    onPress={() => openEditModal(child)}
+                    style={styles.iconButton}
+                    activeOpacity={0.7}>
+                    <Edit3 size={20} color="#4A90E2" />
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
@@ -213,6 +180,39 @@ export default function ChildrenScreen() {
           activeOpacity={0.7}>
           <Plus size={20} color="#fff" />
           <Text style={styles.addButtonText}>子どもを追加</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => router.push('/(tabs)')}
+          activeOpacity={0.7}>
+          <Home size={24} color="#999" strokeWidth={2} />
+          <Text style={styles.tabLabel}>ホーム</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => router.push('/(tabs)/list')}
+          activeOpacity={0.7}>
+          <List size={24} color="#999" strokeWidth={2} />
+          <Text style={styles.tabLabel}>一覧</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.addButtonNav}
+          onPress={() => router.push('/add')}
+          activeOpacity={0.85}>
+          <Plus size={32} color="#fff" strokeWidth={2.5} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => router.push('/(tabs)/monthly')}
+          activeOpacity={0.7}>
+          <Calendar size={24} color="#999" strokeWidth={2} />
+          <Text style={styles.tabLabel}>記録</Text>
         </TouchableOpacity>
       </View>
 
@@ -381,10 +381,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#999',
   },
-  childCardActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
   iconButton: {
     padding: 8,
   },
@@ -498,5 +494,45 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
     color: '#fff',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 8,
+    paddingHorizontal: 8,
+    alignItems: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#999',
+  },
+  addButtonNav: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 8,
+    marginBottom: 8,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });
