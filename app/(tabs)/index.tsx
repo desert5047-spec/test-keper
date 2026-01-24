@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,8 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
-  ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
@@ -22,37 +20,23 @@ export default function HomeScreen() {
   const router = useRouter();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const { year: contextYear, month: contextMonth, setYearMonth } = useDateContext();
+  const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
-  const [selectedMonth, setSelectedMonth] = useState(contextMonth);
-  const [selectedYear, setSelectedYear] = useState(contextYear);
-  const monthScrollRef = useRef<ScrollView>(null);
-
-  const months = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
   useFocusEffect(
     useCallback(() => {
       if (selectedChildId) {
         loadRecords();
       }
-    }, [selectedMonth, selectedYear, selectedChildId])
+    }, [year, month, selectedChildId])
   );
-
-  useEffect(() => {
-    const index = months.indexOf(selectedMonth);
-    if (index !== -1) {
-      setTimeout(() => {
-        monthScrollRef.current?.scrollTo({ x: index * 56, animated: true });
-      }, 100);
-    }
-  }, [selectedMonth]);
 
   const loadRecords = async () => {
     if (!selectedChildId) return;
 
-    const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-    const endDate = new Date(selectedYear, selectedMonth, 0);
-    const endDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0);
+    const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
     const { data } = await supabase
       .from('records')
@@ -66,25 +50,6 @@ export default function HomeScreen() {
     if (data) {
       setRecords(data);
     }
-  };
-
-  const handleYearChange = (direction: 'next' | 'prev') => {
-    if (direction === 'next') {
-      const newYear = selectedYear + 1;
-      setSelectedYear(newYear);
-      setSelectedMonth(1);
-      setYearMonth(newYear, 1);
-    } else {
-      const newYear = selectedYear - 1;
-      setSelectedYear(newYear);
-      setSelectedMonth(12);
-      setYearMonth(newYear, 12);
-    }
-  };
-
-  const handleMonthChange = (month: number) => {
-    setSelectedMonth(month);
-    setYearMonth(selectedYear, month);
   };
 
   const onRefresh = async () => {
@@ -174,56 +139,9 @@ export default function HomeScreen() {
     );
   };
 
-  const renderMonthChip = (month: number) => {
-    const isSelected = month === selectedMonth;
-
-    return (
-      <TouchableOpacity
-        key={month}
-        style={[
-          styles.monthChip,
-          isSelected && styles.monthChipSelected,
-        ]}
-        onPress={() => handleMonthChange(month)}
-        activeOpacity={0.7}>
-        <Text style={[
-          styles.monthText,
-          isSelected && styles.monthTextSelected
-        ]}>
-          {month}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <View style={styles.container}>
-      <AppHeader />
-      <View style={styles.header}>
-        <View style={styles.yearSelector}>
-          <TouchableOpacity
-            style={styles.yearArrow}
-            onPress={() => handleYearChange('next')}
-            activeOpacity={0.7}>
-            <ChevronLeft size={24} color="#4A90E2" strokeWidth={2.5} />
-          </TouchableOpacity>
-          <Text style={styles.yearText}>{selectedYear}年</Text>
-          <TouchableOpacity
-            style={styles.yearArrow}
-            onPress={() => handleYearChange('prev')}
-            activeOpacity={0.7}>
-            <ChevronRight size={24} color="#4A90E2" strokeWidth={2.5} />
-          </TouchableOpacity>
-        </View>
-        <ScrollView
-          ref={monthScrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.monthSelector}
-          style={styles.monthScrollView}>
-          {months.map((month) => renderMonthChip(month))}
-        </ScrollView>
-      </View>
+      <AppHeader showYearMonthNav={true} />
 
       {records.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -250,59 +168,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
-  },
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 16,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  yearSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    gap: 12,
-  },
-  yearArrow: {
-    padding: 4,
-  },
-  yearText: {
-    fontSize: 20,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-    minWidth: 100,
-    textAlign: 'center',
-  },
-  monthScrollView: {
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-  monthSelector: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingRight: 20,
-  },
-  monthChip: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E8E8E8',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  monthChipSelected: {
-    backgroundColor: '#4A90E2',
-  },
-  monthText: {
-    fontSize: 16,
-    fontFamily: 'Nunito-Bold',
-    color: '#888',
-  },
-  monthTextSelected: {
-    color: '#fff',
   },
   listContent: {
     padding: 16,

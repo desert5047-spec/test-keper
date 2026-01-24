@@ -9,16 +9,21 @@ import { useRouter } from 'expo-router';
 import { Users, ChevronRight, Home, List, Plus, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/AppHeader';
+import { useChild } from '@/contexts/ChildContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { children } = useChild();
 
   return (
     <View style={styles.container}>
-      <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} />
+      <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>機能</Text>
 
@@ -30,9 +35,14 @@ export default function SettingsScreen() {
               <View style={styles.iconContainer}>
                 <Users size={22} color="#4A90E2" />
               </View>
-              <Text style={styles.menuItemText}>子ども管理</Text>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>子供設定</Text>
+                <Text style={styles.menuItemSubtext} numberOfLines={1}>
+                  {children.length === 0 ? 'まだ登録されていません' : `登録済み：${children.length}人`}
+                </Text>
+              </View>
             </View>
-            <ChevronRight size={20} color="#999" />
+            <ChevronRight size={20} color="#999" style={styles.chevron} />
           </TouchableOpacity>
         </View>
 
@@ -42,7 +52,7 @@ export default function SettingsScreen() {
             <Text style={styles.appName}>テストキーパー</Text>
             <Text style={styles.appVersion}>Version 1.0.0</Text>
             <Text style={styles.appDescription}>
-              子どものテストや成績を記録して、{'\n'}
+              子供のテストや成績を記録して、{'\n'}
               頑張りを見える化するアプリです。
             </Text>
           </View>
@@ -92,6 +102,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    paddingTop: 108,
+  },
+  scrollContent: {
+    paddingBottom: 24,
   },
   section: {
     marginTop: 24,
@@ -108,7 +122,8 @@ const styles = StyleSheet.create({
   menuItem: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -122,6 +137,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
+    minWidth: 0,
   },
   iconContainer: {
     width: 40,
@@ -135,10 +152,23 @@ const styles = StyleSheet.create({
   iconContainerLocked: {
     backgroundColor: '#f5f5f5',
   },
+  menuItemContent: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
   menuItemText: {
     fontSize: 16,
     fontFamily: 'Nunito-SemiBold',
     color: '#333',
+  },
+  menuItemSubtext: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+  },
+  chevron: {
+    flexShrink: 0,
   },
   lockedItem: {
     backgroundColor: '#fff',

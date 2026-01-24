@@ -40,8 +40,13 @@ export default function RegisterChildScreen() {
   }
 
   const handleSave = async () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       Alert.alert('入力エラー', 'お子さまの名前を入力してください');
+      return;
+    }
+    if (trimmedName.length > 4) {
+      Alert.alert('入力エラー', '4文字までで入力してください');
       return;
     }
 
@@ -53,7 +58,7 @@ export default function RegisterChildScreen() {
     setSaving(true);
 
     const { error } = await supabase.from('children').insert({
-      name: name.trim(),
+      name: trimmedName,
       grade,
       color: '#4A90E2',
       is_default: false,
@@ -80,7 +85,7 @@ export default function RegisterChildScreen() {
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              お名前 <Text style={styles.required}>*</Text>
+              なまえ（ニックネーム） <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
               style={styles.input}
@@ -89,7 +94,9 @@ export default function RegisterChildScreen() {
               onChangeText={setName}
               autoCapitalize="none"
               autoCorrect={false}
+              maxLength={4}
             />
+            <Text style={styles.hint}>1〜4文字で入力してください</Text>
           </View>
 
           <View style={styles.inputGroup}>
@@ -181,6 +188,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     borderWidth: 1,
     borderColor: '#E5E5E5',
+  },
+  hint: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginTop: 4,
   },
   gradeGrid: {
     flexDirection: 'row',

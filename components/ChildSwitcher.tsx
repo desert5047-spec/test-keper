@@ -39,7 +39,7 @@ export function ChildSwitcher() {
         <Text style={styles.name} numberOfLines={1}>
           {selectedChild.name || '未設定'}
         </Text>
-        {showChevron && <ChevronDown size={16} color="#FFF" />}
+        {showChevron && <ChevronDown size={14} color="#FFF" />}
       </TouchableOpacity>
 
       <Modal
@@ -53,7 +53,7 @@ export function ChildSwitcher() {
           onPress={() => setShowModal(false)}>
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>子どもを選択</Text>
+            <Text style={styles.modalTitle}>子供を選択</Text>
 
             {children.map((child) => (
               <TouchableOpacity
@@ -95,17 +95,17 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    minHeight: 44,
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    minHeight: 32,
   },
   name: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
     color: '#FFF',
-    maxWidth: 100,
+    maxWidth: 80,
   },
   modalOverlay: {
     flex: 1,

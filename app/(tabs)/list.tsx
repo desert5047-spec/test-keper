@@ -6,17 +6,14 @@ import {
   SectionList,
   TouchableOpacity,
   Image,
-  Modal,
-  ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { isValidImageUri } from '@/utils/imageGuard';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
 interface Section {
   title: string;
@@ -26,40 +23,32 @@ interface Section {
 export default function ListScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { year: contextYear, month: contextMonth, setYearMonth } = useDateContext();
+  const { year, month, setYearMonth } = useDateContext();
   const { selectedChildId } = useChild();
-  const [year, setYear] = useState(contextYear);
-  const [selectedMonth, setSelectedMonth] = useState(contextMonth);
   const [sections, setSections] = useState<Section[]>([]);
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   useEffect(() => {
     if (params.year && params.month) {
       const newYear = parseInt(params.year as string);
       const newMonth = parseInt(params.month as string);
-      setYear(newYear);
-      setSelectedMonth(newMonth);
       setYearMonth(newYear, newMonth);
-    } else {
-      setYear(contextYear);
-      setSelectedMonth(contextMonth);
     }
-  }, [params, contextYear, contextMonth]);
+  }, [params]);
 
   useFocusEffect(
     useCallback(() => {
       if (selectedChildId) {
         loadRecords();
       }
-    }, [year, selectedMonth, selectedChildId])
+    }, [year, month, selectedChildId])
   );
 
   const loadRecords = async () => {
     if (!selectedChildId) return;
 
-    const startDate = `${year}-${String(selectedMonth).padStart(2, '0')}-01`;
-    const endDate = new Date(year, selectedMonth, 0);
-    const endDateStr = `${year}-${String(selectedMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0);
+    const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
     const { data } = await supabase
       .from('records')
@@ -120,38 +109,6 @@ export default function ListScreen() {
     return colors[subject] || '#95A5A6';
   };
 
-  const goToPreviousMonth = () => {
-    if (selectedMonth === 1) {
-      const newYear = year - 1;
-      setYear(newYear);
-      setSelectedMonth(12);
-      setYearMonth(newYear, 12);
-    } else {
-      const newMonth = selectedMonth - 1;
-      setSelectedMonth(newMonth);
-      setYearMonth(year, newMonth);
-    }
-  };
-
-  const goToNextMonth = () => {
-    if (selectedMonth === 12) {
-      const newYear = year + 1;
-      setYear(newYear);
-      setSelectedMonth(1);
-      setYearMonth(newYear, 1);
-    } else {
-      const newMonth = selectedMonth + 1;
-      setSelectedMonth(newMonth);
-      setYearMonth(year, newMonth);
-    }
-  };
-
-  const handleMonthSelect = (month: number) => {
-    setSelectedMonth(month);
-    setYearMonth(year, month);
-    setShowMonthPicker(false);
-  };
-
   const renderItem = ({ item }: { item: TestRecord }) => {
     const subjectColor = getSubjectColor(item.subject);
     const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
@@ -206,36 +163,12 @@ export default function ListScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader />
-      <View style={styles.header}>
-        <View style={styles.yearMonthSelector}>
-          <TouchableOpacity
-            style={styles.yearButton}
-            onPress={goToNextMonth}
-            activeOpacity={0.7}>
-            <ChevronLeft size={24} color="#666" />
-          </TouchableOpacity>
-          <Text style={styles.yearText}>{year}年</Text>
-          <TouchableOpacity
-            style={styles.monthButton}
-            onPress={() => setShowMonthPicker(true)}
-            activeOpacity={0.7}>
-            <Text style={styles.monthText}>{selectedMonth}月</Text>
-            <ChevronDown size={20} color="#666" strokeWidth={2.5} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.yearButton}
-            onPress={goToPreviousMonth}
-            activeOpacity={0.7}>
-            <ChevronRight size={24} color="#666" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader showYearMonthNav={true} />
 
       {sections.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
           <Text style={styles.emptyText}>
-            {year}年{selectedMonth}月の記録はありません
+            {year}年{month}月の記録はありません
           </Text>
         </View>
       ) : (
@@ -244,48 +177,11 @@ export default function ListScreen() {
           renderItem={renderItem}
           renderSectionHeader={renderSectionHeader}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 12 }]}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled={true}
         />
       )}
-
-      <Modal
-        visible={showMonthPicker}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowMonthPicker(false)}>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMonthPicker(false)}>
-          <View style={styles.monthPickerContainer}>
-            <Text style={styles.monthPickerTitle}>月を選択</Text>
-            <ScrollView style={styles.monthPickerScroll}>
-              <View style={styles.monthPickerGrid}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((month) => (
-                  <TouchableOpacity
-                    key={month}
-                    style={[
-                      styles.monthPickerItem,
-                      selectedMonth === month && styles.monthPickerItemSelected,
-                    ]}
-                    onPress={() => handleMonthSelect(month)}
-                    activeOpacity={0.7}>
-                    <Text
-                      style={[
-                        styles.monthPickerItemText,
-                        selectedMonth === month && styles.monthPickerItemTextSelected,
-                      ]}>
-                      {month}月
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 }
@@ -295,50 +191,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 16,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  yearMonthSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  yearButton: {
-    padding: 4,
-  },
-  yearText: {
-    fontSize: 18,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-  },
-  monthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    marginLeft: 8,
-  },
-  monthText: {
-    fontSize: 16,
-    fontFamily: 'Nunito-Bold',
-    color: '#fff',
-  },
   listContent: {
     paddingBottom: 20,
   },
   sectionHeader: {
     backgroundColor: '#f8f8f8',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingTop: 12,
+    paddingBottom: 8,
+    marginTop: 8,
   },
   sectionHeaderText: {
     fontSize: 14,
@@ -422,54 +283,5 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     color: '#666',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  monthPickerContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    width: '80%',
-    maxWidth: 360,
-    maxHeight: '70%',
-  },
-  monthPickerTitle: {
-    fontSize: 18,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-    textAlign: 'center',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  monthPickerScroll: {
-    maxHeight: 400,
-  },
-  monthPickerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    gap: 12,
-  },
-  monthPickerItem: {
-    width: '30%',
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-  },
-  monthPickerItemSelected: {
-    backgroundColor: '#4A90E2',
-  },
-  monthPickerItemText: {
-    fontSize: 15,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#666',
-  },
-  monthPickerItemTextSelected: {
-    color: '#fff',
   },
 });

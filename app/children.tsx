@@ -66,6 +66,13 @@ export default function ChildrenScreen() {
   };
 
   const openAddModal = () => {
+    if (children.length >= 5) {
+      Alert.alert(
+        '追加できません',
+        '子供は最大5人まで登録できます。'
+      );
+      return;
+    }
     setEditingChild(null);
     setName('');
     setGrade(null);
@@ -82,8 +89,13 @@ export default function ChildrenScreen() {
   };
 
   const handleSave = async () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       Alert.alert('エラー', '名前を入力してください');
+      return;
+    }
+    if (trimmedName.length > 4) {
+      Alert.alert('エラー', '4文字までで入力してください');
       return;
     }
 
@@ -91,7 +103,7 @@ export default function ChildrenScreen() {
       const { error } = await supabase
         .from('children')
         .update({
-          name: name.trim(),
+          name: trimmedName,
           grade: grade,
           color: selectedColor,
         })
@@ -107,7 +119,7 @@ export default function ChildrenScreen() {
       const { error } = await supabase
         .from('children')
         .insert({
-          name: name.trim(),
+          name: trimmedName,
           grade: grade,
           color: selectedColor,
           is_default: false,
@@ -134,8 +146,8 @@ export default function ChildrenScreen() {
     }
 
     Alert.alert(
-      '子どもを削除',
-      `${child.name || '未設定'}を削除しますか？\nこの子どもに紐づく記録も削除されます。`,
+      '子供を削除',
+      `${child.name || '未設定'}を削除しますか？\nこの子供に紐づく記録も削除されます。`,
       [
         { text: 'キャンセル', style: 'cancel' },
         {
@@ -175,20 +187,20 @@ export default function ChildrenScreen() {
           activeOpacity={0.7}>
           <ArrowLeft size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>子ども管理</Text>
+        <Text style={styles.headerTitle}>子供設定</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <Text style={styles.description}>
-            きょうだい分も記録できます。{'\n'}
-            子どもを追加して、それぞれの記録を管理しましょう。
+            兄弟分も記録できます。{'\n'}
+            子供を追加して、それぞれの記録を管理しましょう。
           </Text>
 
           {children.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>まだ子どもが登録されていません</Text>
+              <Text style={styles.emptyText}>まだ子供が登録されていません</Text>
               <Text style={styles.emptySubtext}>下のボタンから追加してみましょう</Text>
             </View>
           ) : (
@@ -227,11 +239,14 @@ export default function ChildrenScreen() {
 
       <View style={styles.bottomButton}>
         <TouchableOpacity
-          style={styles.addButton}
+          style={[styles.addButton, children.length >= 5 && styles.addButtonDisabled]}
           onPress={openAddModal}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+          disabled={children.length >= 5}>
           <Plus size={20} color="#fff" />
-          <Text style={styles.addButtonText}>子どもを追加</Text>
+          <Text style={styles.addButtonText}>
+            {children.length >= 5 ? '上限に達しました（5人）' : '子供を追加'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -276,18 +291,20 @@ export default function ChildrenScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
-              {editingChild ? '子どもを編集' : '子どもを追加'}
+              {editingChild ? '子供を編集' : '子供を追加'}
             </Text>
 
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>名前</Text>
+              <Text style={styles.modalLabel}>なまえ（ニックネーム）</Text>
               <TextInput
                 style={styles.modalInput}
                 value={name}
                 onChangeText={setName}
                 placeholder="例：太郎"
                 placeholderTextColor="#999"
+                maxLength={4}
               />
+              <Text style={styles.modalHint}>1〜4文字で入力してください</Text>
             </View>
 
             <View style={styles.modalSection}>
@@ -470,6 +487,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
+  addButtonDisabled: {
+    backgroundColor: '#CCC',
+    opacity: 0.6,
+  },
   addButtonText: {
     color: '#fff',
     fontSize: 17,
@@ -519,6 +540,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  modalHint: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginTop: 4,
   },
   gradeGrid: {
     flexDirection: 'row',
