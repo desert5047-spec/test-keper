@@ -34,6 +34,46 @@ export interface Subject {
   created_at: string;
 }
 
+export interface Goal {
+  id: string;
+  user_id: string;
+  child_id: string;
+  subject: string;
+  target_score: number | null;
+  target_count: number | null;
+  period_start: string | null;
+  period_end: string | null;
+  memo: string | null;
+  is_achieved: boolean;
+  created_at: string;
+}
+
+export interface Tag {
+  id: string;
+  user_id: string | null;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+export interface RecordTag {
+  record_id: string;
+  tag_id: string;
+  created_at: string;
+}
+
+export interface MonthlyStat {
+  user_id: string;
+  child_id: string;
+  year: number;
+  month: number;
+  subject: string;
+  record_count: number;
+  avg_score: number | null;
+  max_score: number | null;
+  min_score: number | null;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -62,9 +102,49 @@ export type Database = {
         Update: Partial<Omit<Subject, 'id' | 'created_at'>>;
         Relationships: [];
       };
+      goals: {
+        Row: Goal;
+        Insert: Omit<Goal, 'id' | 'created_at'> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Goal, 'id' | 'created_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'goals_child_id_fkey';
+            columns: ['child_id'];
+            referencedRelation: 'children';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      tags: {
+        Row: Tag;
+        Insert: Omit<Tag, 'id' | 'created_at'> & { id?: string; created_at?: string };
+        Update: Partial<Omit<Tag, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      record_tags: {
+        Row: RecordTag;
+        Insert: RecordTag;
+        Update: Partial<RecordTag>;
+        Relationships: [
+          {
+            foreignKeyName: 'record_tags_record_id_fkey';
+            columns: ['record_id'];
+            referencedRelation: 'records';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'record_tags_tag_id_fkey';
+            columns: ['tag_id'];
+            referencedRelation: 'tags';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
     };
     Views: {
-      [_ in never]: never;
+      monthly_stats: {
+        Row: MonthlyStat;
+      };
     };
     Functions: {
       [_ in never]: never;
