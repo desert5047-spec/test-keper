@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Edit3, Home, List, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Plus, Edit3, Trash2, Home, List, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 
@@ -113,6 +113,33 @@ export default function ChildrenScreen() {
     }
   };
 
+  const handleDelete = async (child: Child) => {
+    if (!child.id) return;
+
+    Alert.alert(
+      '子どもを削除',
+      `${child.name || '未設定'}を削除しますか？\nこの子どもに紐づく記録も削除されます。`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase
+              .from('children')
+              .delete()
+              .eq('id', child.id);
+
+            if (error) {
+              Alert.alert('エラー', '削除に失敗しました');
+            } else {
+              loadChildren();
+            }
+          }
+        },
+      ]
+    );
+  };
 
   if (loading) {
     return (
@@ -160,12 +187,20 @@ export default function ChildrenScreen() {
                       )}
                     </View>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => openEditModal(child)}
-                    style={styles.iconButton}
-                    activeOpacity={0.7}>
-                    <Edit3 size={20} color="#4A90E2" />
-                  </TouchableOpacity>
+                  <View style={styles.childCardActions}>
+                    <TouchableOpacity
+                      onPress={() => openEditModal(child)}
+                      style={styles.iconButton}
+                      activeOpacity={0.7}>
+                      <Edit3 size={20} color="#4A90E2" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDelete(child)}
+                      style={styles.iconButton}
+                      activeOpacity={0.7}>
+                      <Trash2 size={20} color="#E74C3C" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
             </View>
@@ -380,6 +415,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Nunito-Regular',
     color: '#999',
+  },
+  childCardActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   iconButton: {
     padding: 8,
