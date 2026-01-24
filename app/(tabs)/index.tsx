@@ -10,17 +10,20 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { ChevronLeft, ChevronRight, Settings } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
+import { useChild } from '@/contexts/ChildContext';
 import { isValidImageUri } from '@/utils/imageGuard';
+import { AppHeader } from '@/components/AppHeader';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const { year: contextYear, month: contextMonth, setYearMonth } = useDateContext();
+  const { selectedChildId } = useChild();
   const [selectedMonth, setSelectedMonth] = useState(contextMonth);
   const [selectedYear, setSelectedYear] = useState(contextYear);
   const monthScrollRef = useRef<ScrollView>(null);
@@ -29,8 +32,10 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadRecords();
-    }, [selectedMonth, selectedYear])
+      if (selectedChildId) {
+        loadRecords();
+      }
+    }, [selectedMonth, selectedYear, selectedChildId])
   );
 
   useEffect(() => {
@@ -43,6 +48,8 @@ export default function HomeScreen() {
   }, [selectedMonth]);
 
   const loadRecords = async () => {
+    if (!selectedChildId) return;
+
     const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
     const endDate = new Date(selectedYear, selectedMonth, 0);
     const endDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
@@ -50,6 +57,7 @@ export default function HomeScreen() {
     const { data } = await supabase
       .from('records')
       .select('*')
+      .eq('child_id', selectedChildId)
       .gte('date', startDate)
       .lte('date', endDateStr)
       .order('date', { ascending: false })
@@ -190,16 +198,8 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      <AppHeader />
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>ホーム</Text>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => router.push('/settings')}
-            activeOpacity={0.7}>
-            <Settings size={24} color="#333" strokeWidth={2} />
-          </TouchableOpacity>
-        </View>
         <View style={styles.yearSelector}>
           <TouchableOpacity
             style={styles.yearArrow}
@@ -253,25 +253,11 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-  },
-  settingsButton: {
-    padding: 4,
   },
   yearSelector: {
     flexDirection: 'row',

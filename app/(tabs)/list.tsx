@@ -10,11 +10,13 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, ChevronRight, ChevronDown, Settings } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
+import { useChild } from '@/contexts/ChildContext';
 import { isValidImageUri } from '@/utils/imageGuard';
+import { AppHeader } from '@/components/AppHeader';
 
 interface Section {
   title: string;
@@ -25,6 +27,7 @@ export default function ListScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { year: contextYear, month: contextMonth, setYearMonth } = useDateContext();
+  const { selectedChildId } = useChild();
   const [year, setYear] = useState(contextYear);
   const [selectedMonth, setSelectedMonth] = useState(contextMonth);
   const [sections, setSections] = useState<Section[]>([]);
@@ -45,11 +48,15 @@ export default function ListScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadRecords();
-    }, [year, selectedMonth])
+      if (selectedChildId) {
+        loadRecords();
+      }
+    }, [year, selectedMonth, selectedChildId])
   );
 
   const loadRecords = async () => {
+    if (!selectedChildId) return;
+
     const startDate = `${year}-${String(selectedMonth).padStart(2, '0')}-01`;
     const endDate = new Date(year, selectedMonth, 0);
     const endDateStr = `${year}-${String(selectedMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
@@ -57,6 +64,7 @@ export default function ListScreen() {
     const { data } = await supabase
       .from('records')
       .select('*')
+      .eq('child_id', selectedChildId)
       .gte('date', startDate)
       .lte('date', endDateStr)
       .order('date', { ascending: false })
@@ -198,16 +206,8 @@ export default function ListScreen() {
 
   return (
     <View style={styles.container}>
+      <AppHeader />
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>一覧</Text>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => router.push('/settings')}
-            activeOpacity={0.7}>
-            <Settings size={24} color="#333" strokeWidth={2} />
-          </TouchableOpacity>
-        </View>
         <View style={styles.yearMonthSelector}>
           <TouchableOpacity
             style={styles.yearButton}
@@ -297,25 +297,11 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-  },
-  settingsButton: {
-    padding: 4,
   },
   yearMonthSelector: {
     flexDirection: 'row',

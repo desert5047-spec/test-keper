@@ -6,8 +6,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Users, ChevronRight, ArrowLeft, Home, List, Plus, Calendar } from 'lucide-react-native';
+import { Users, ChevronRight, Home, List, Plus, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppHeader } from '@/components/AppHeader';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -15,14 +16,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          activeOpacity={0.7}>
-          <ArrowLeft size={24} color="#333" />
-        </TouchableOpacity>
-      </View>
+      <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} />
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
@@ -95,19 +89,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
-  },
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backButton: {
-    padding: 4,
   },
   scrollView: {
     flex: 1,

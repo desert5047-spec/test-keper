@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { Text, TextInput } from 'react-native';
+import { ChildProvider } from '@/contexts/ChildContext';
+import { DateProvider } from '@/contexts/DateContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -45,15 +47,17 @@ export default function RootLayout() {
   }
 
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="add" />
-        <Stack.Screen name="detail" />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </>
+    <ChildProvider>
+      <DateProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="add" />
+          <Stack.Screen name="detail" />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        <StatusBar style="auto" />
+      </DateProvider>
+    </ChildProvider>
   );
 }

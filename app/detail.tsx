@@ -16,10 +16,11 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, ArrowLeft, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop, Settings } from 'lucide-react-native';
+import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
+import { AppHeader } from '@/components/AppHeader';
 
 export default function DetailScreen() {
   const router = useRouter();
@@ -352,21 +353,7 @@ export default function DetailScreen() {
   if (!record) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-            activeOpacity={0.7}>
-            <ArrowLeft size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>記録の詳細</Text>
-          <TouchableOpacity
-            onPress={() => router.push('/settings')}
-            style={styles.backButton}
-            activeOpacity={0.7}>
-            <Settings size={22} color="#333" />
-          </TouchableOpacity>
-        </View>
+        <AppHeader showBack={true} showChildSwitcher={false} />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>記録が見つかりません</Text>
         </View>
@@ -376,23 +363,11 @@ export default function DetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          activeOpacity={0.7}>
-          <ArrowLeft size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>記録の詳細</Text>
-        <View style={styles.headerActions}>
+      <AppHeader showBack={true} showChildSwitcher={false} />
+      <View style={styles.detailHeader}>
+        <View style={styles.detailHeaderActions}>
           {!editMode && (
             <>
-              <TouchableOpacity
-                onPress={() => router.push('/settings')}
-                style={styles.headerIconButton}
-                activeOpacity={0.7}>
-                <Settings size={22} color="#333" />
-              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setEditMode(true)}
                 style={styles.headerIconButton}
@@ -715,27 +690,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
-  header: {
+  detailHeader: {
     backgroundColor: '#fff',
-    paddingTop: 50,
-    paddingBottom: 16,
     paddingHorizontal: 20,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'flex-end',
   },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-    flex: 1,
-  },
-  headerActions: {
+  detailHeaderActions: {
     flexDirection: 'row',
     gap: 12,
   },
