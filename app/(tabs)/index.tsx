@@ -119,9 +119,12 @@ export default function HomeScreen() {
               </View>
             </>
           ) : (
-            <View style={styles.dateOverlay}>
-              <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
-            </View>
+            <>
+              <Text style={styles.noPhotoText}>写真なし</Text>
+              <View style={styles.dateOverlay}>
+                <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
+              </View>
+            </>
           )}
         </View>
         <View style={styles.cardContent}>
@@ -189,10 +192,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imageContainerNoPhoto: {
-    height: 60,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+    height: 80,
+    backgroundColor: '#FAFAFA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#CCCCCC',
+    borderStyle: 'dashed',
+  },
+  noPhotoText: {
+    fontSize: 14,
+    color: '#999',
+    fontFamily: 'Nunito-Regular',
   },
   imageWrapper: {
     width: '100%',
