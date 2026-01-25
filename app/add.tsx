@@ -15,9 +15,9 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Camera, RotateCw, RotateCcw, X, Calendar as CalendarIcon } from 'lucide-react-native';
+import { Camera, RotateCw, RotateCcw, X, Calendar as CalendarIcon, Check } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { CalendarPicker } from '@/components/CalendarPicker';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
@@ -106,17 +106,6 @@ export default function AddScreen() {
     }
 
     setScoreError('');
-  };
-
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-
-    if (selectedDate) {
-      const formattedDate = selectedDate.toISOString().split('T')[0];
-      setDate(formattedDate);
-    }
   };
 
   const formatDisplayDate = (dateString: string) => {
@@ -232,11 +221,11 @@ export default function AddScreen() {
     );
   };
 
-  const handleAddOtherSubject = () => {
-    if (!newSubject.trim()) return;
-    setSelectedSubject(newSubject.trim());
-    setNewSubject('');
-    setShowSubjectInput(false);
+  const handleOtherSubjectChange = (value: string) => {
+    setNewSubject(value);
+    if (value.trim().length >= 2) {
+      setSelectedSubject(value.trim());
+    }
   };
 
   const canSave = () => {
@@ -500,18 +489,21 @@ export default function AddScreen() {
           ) : (
             <View style={styles.inputRow}>
               <TextInput
-                style={styles.textInput}
+                style={[
+                  styles.textInput,
+                  newSubject.trim().length >= 2 && styles.textInputValid,
+                ]}
                 value={newSubject}
-                onChangeText={setNewSubject}
+                onChangeText={handleOtherSubjectChange}
                 placeholder="教科名を入力（例：生活、図工、音楽、体育）"
                 placeholderTextColor="#999"
+                autoFocus
               />
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={handleAddOtherSubject}
-                activeOpacity={0.7}>
-                <Text style={styles.addButtonText}>決定</Text>
-              </TouchableOpacity>
+              {newSubject.trim().length >= 2 && (
+                <View style={styles.checkIconContainer}>
+                  <Check size={20} color="#4CAF50" />
+                </View>
+              )}
               <TouchableOpacity
                 onPress={() => {
                   setShowSubjectInput(false);
@@ -562,26 +554,35 @@ export default function AddScreen() {
           {evaluationType === 'score' ? (
             <View style={styles.scoreInputContainer}>
               <View style={styles.scoreInputRow}>
-                <TextInput
-                  style={[
-                    styles.scoreInput,
-                    scoreError ? styles.scoreInputError : null,
-                  ]}
-                  value={score}
-                  onChangeText={(value) => {
-                    setScore(value);
-                    validateScore(value, maxScore);
-                  }}
-                  placeholder="点数"
-                  keyboardType="numeric"
-                  placeholderTextColor="#999"
-                />
+                <View style={styles.scoreInputWrapper}>
+                  <TextInput
+                    style={[
+                      styles.scoreInput,
+                      scoreError ? styles.scoreInputError : null,
+                      !scoreError && score && maxScore && styles.scoreInputValid,
+                    ]}
+                    value={score}
+                    onChangeText={(value) => {
+                      setScore(value);
+                      validateScore(value, maxScore);
+                    }}
+                    placeholder="点数"
+                    keyboardType="numeric"
+                    placeholderTextColor="#999"
+                  />
+                  {!scoreError && score && maxScore && (
+                    <View style={styles.scoreCheckIcon}>
+                      <Check size={16} color="#4CAF50" />
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.scoreLabel}>点</Text>
                 <Text style={styles.scoreSeparator}>/</Text>
                 <TextInput
                   style={[
                     styles.maxScoreInput,
                     scoreError ? styles.scoreInputError : null,
+                    !scoreError && score && maxScore && styles.scoreInputValid,
                   ]}
                   value={maxScore}
                   onChangeText={(value) => {
@@ -654,24 +655,26 @@ export default function AddScreen() {
               ) : (
                 <View style={styles.customStampInputRow}>
                   <TextInput
-                    style={styles.customStampInput}
+                    style={[
+                      styles.customStampInput,
+                      customStamp.trim().length >= 2 && styles.textInputValid,
+                    ]}
                     value={customStamp}
-                    onChangeText={setCustomStamp}
+                    onChangeText={(value) => {
+                      setCustomStamp(value);
+                      if (value.trim().length >= 2) {
+                        setStamp(value.trim());
+                      }
+                    }}
                     placeholder="評価を入力（例：よくがんばった、もう少し）"
                     placeholderTextColor="#999"
                     autoFocus
                   />
-                  <TouchableOpacity
-                    style={styles.customStampConfirmButton}
-                    onPress={() => {
-                      if (customStamp.trim()) {
-                        setStamp(customStamp.trim());
-                        setShowCustomStampInput(false);
-                      }
-                    }}
-                    activeOpacity={0.7}>
-                    <Text style={styles.customStampConfirmText}>決定</Text>
-                  </TouchableOpacity>
+                  {customStamp.trim().length >= 2 && (
+                    <View style={styles.checkIconContainer}>
+                      <Check size={20} color="#4CAF50" />
+                    </View>
+                  )}
                   <TouchableOpacity
                     onPress={() => {
                       setShowCustomStampInput(false);
@@ -706,24 +709,15 @@ export default function AddScreen() {
           {date && (
             <Text style={styles.dateDisplayText}>{formatDisplayDate(date)}</Text>
           )}
-          {showDatePicker && (
-            <DateTimePicker
-              value={date ? new Date(date) : new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-            />
-          )}
-          {Platform.OS === 'ios' && showDatePicker && (
-            <TouchableOpacity
-              style={styles.datePickerCloseButton}
-              onPress={() => setShowDatePicker(false)}
-              activeOpacity={0.7}>
-              <Text style={styles.datePickerCloseButtonText}>完了</Text>
-            </TouchableOpacity>
-          )}
         </View>
+
+        <CalendarPicker
+          visible={showDatePicker}
+          selectedDate={date}
+          onDateSelect={setDate}
+          onClose={() => setShowDatePicker(false)}
+          maxDate={new Date()}
+        />
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>メモ</Text>
@@ -988,16 +982,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#333',
   },
-  addButton: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+  textInputValid: {
+    borderColor: '#4CAF50',
+    borderWidth: 2,
+    backgroundColor: '#F1F8F4',
   },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
+  checkIconContainer: {
+    marginLeft: -36,
+    marginRight: 8,
   },
   evaluationTypeContainer: {
     flexDirection: 'row',
@@ -1030,6 +1022,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  scoreInputWrapper: {
+    position: 'relative',
+  },
   scoreInput: {
     width: 80,
     borderWidth: 1,
@@ -1045,6 +1040,18 @@ const styles = StyleSheet.create({
   scoreInputError: {
     borderColor: '#E74C3C',
     borderWidth: 2,
+    backgroundColor: '#FFEBEE',
+  },
+  scoreInputValid: {
+    borderColor: '#4CAF50',
+    borderWidth: 2,
+    backgroundColor: '#F1F8F4',
+  },
+  scoreCheckIcon: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    transform: [{ translateY: -8 }],
   },
   maxScoreInput: {
     width: 60,
@@ -1141,17 +1148,6 @@ const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: '#fff',
   },
-  customStampConfirmButton: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  customStampConfirmText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
-  },
   dateInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1181,18 +1177,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-SemiBold',
     color: '#4A90E2',
     textAlign: 'center',
-  },
-  datePickerCloseButton: {
-    marginTop: 12,
-    paddingVertical: 12,
-    backgroundColor: '#4A90E2',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  datePickerCloseButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontFamily: 'Nunito-SemiBold',
   },
   memoInput: {
     borderWidth: 1,
