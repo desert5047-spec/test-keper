@@ -104,12 +104,12 @@ export default function DetailScreen() {
     }
 
     if (maxScoreNum <= 0) {
-      setScoreError('上限点数は1以上で入力してください');
+      setScoreError('満点は1以上で入力してください');
       return;
     }
 
     if (scoreNum > maxScoreNum) {
-      setScoreError(`点数は${maxScoreNum}点以下で入力してください`);
+      setScoreError(`エラー: 得点(${scoreNum}点)が満点(${maxScoreNum}点)を超えています`);
       return;
     }
 
