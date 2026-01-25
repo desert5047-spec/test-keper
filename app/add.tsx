@@ -44,7 +44,9 @@ export default function AddScreen() {
   const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
   const [score, setScore] = useState<string>('');
   const [maxScore, setMaxScore] = useState<string>('100');
-  const [stamp, setStamp] = useState<StampType | null>(null);
+  const [stamp, setStamp] = useState<string | null>(null);
+  const [customStamp, setCustomStamp] = useState<string>('');
+  const [showCustomStampInput, setShowCustomStampInput] = useState(false);
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [memo, setMemo] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
@@ -359,6 +361,8 @@ export default function AddScreen() {
     setScore('');
     setMaxScore('100');
     setStamp(null);
+    setCustomStamp('');
+    setShowCustomStampInput(false);
     setMemo('');
     setDate(new Date().toISOString().split('T')[0]);
   };
@@ -591,7 +595,11 @@ export default function AddScreen() {
                     styles.stampButton,
                     stamp === s && styles.stampButtonSelected,
                   ]}
-                  onPress={() => setStamp(s)}
+                  onPress={() => {
+                    setStamp(s);
+                    setShowCustomStampInput(false);
+                    setCustomStamp('');
+                  }}
                   activeOpacity={0.7}>
                   <Text
                     style={[
@@ -602,6 +610,58 @@ export default function AddScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
+
+              {!showCustomStampInput ? (
+                <TouchableOpacity
+                  style={[
+                    styles.stampButton,
+                    styles.stampButtonOther,
+                    stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampButtonSelected,
+                  ]}
+                  onPress={() => {
+                    setShowCustomStampInput(true);
+                    setStamp(null);
+                  }}
+                  activeOpacity={0.7}>
+                  <Text
+                    style={[
+                      styles.stampText,
+                      stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampTextSelected,
+                    ]}>
+                    {stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) ? stamp : 'その他'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.customStampInputRow}>
+                  <TextInput
+                    style={styles.customStampInput}
+                    value={customStamp}
+                    onChangeText={setCustomStamp}
+                    placeholder="評価を入力（例：よくがんばった、もう少し）"
+                    placeholderTextColor="#999"
+                    autoFocus
+                  />
+                  <TouchableOpacity
+                    style={styles.customStampConfirmButton}
+                    onPress={() => {
+                      if (customStamp.trim()) {
+                        setStamp(customStamp.trim());
+                        setShowCustomStampInput(false);
+                      }
+                    }}
+                    activeOpacity={0.7}>
+                    <Text style={styles.customStampConfirmText}>決定</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowCustomStampInput(false);
+                      setCustomStamp('');
+                    }}
+                    activeOpacity={0.7}>
+                    <X size={24} color="#999" />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -965,8 +1025,11 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   stampButtonSelected: {
-    backgroundColor: '#fff',
+    backgroundColor: '#4A90E2',
     borderColor: '#4A90E2',
+  },
+  stampButtonOther: {
+    borderStyle: 'dashed',
   },
   stampText: {
     fontSize: 15,
@@ -974,7 +1037,35 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   stampTextSelected: {
-    color: '#4A90E2',
+    color: '#fff',
+  },
+  customStampInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customStampInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    backgroundColor: '#fff',
+  },
+  customStampConfirmButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  customStampConfirmText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
   },
   dateInput: {
     borderWidth: 1,
