@@ -1,11 +1,14 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
-export const HEADER_HEIGHT = 108;
+export const HEADER_HEIGHT = Platform.select({
+  web: 78,
+  default: 102,
+});
 
 interface AppHeaderProps {
   showBack?: boolean;
@@ -102,7 +105,7 @@ export function AppHeader({
               onPress={() => router.push('/settings')}
               style={styles.settingsButton}
               activeOpacity={0.7}>
-              <Settings size={20} color="#666" />
+              <Settings size={24} color="#666" />
             </TouchableOpacity>
           )}
         </View>
@@ -155,7 +158,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#FFF',
-    paddingTop: 50,
+    paddingTop: Platform.select({
+      web: 20,
+      default: 44,
+    }),
     paddingBottom: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
@@ -183,7 +189,7 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
   title: {
-    fontSize: 17,
+    fontSize: 20,
     fontFamily: 'Nunito-Bold',
     color: '#333',
   },
