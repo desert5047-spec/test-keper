@@ -354,7 +354,7 @@ export default function DetailScreen() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
   };
 
   const getSubjectColor = (subject: string) => {
@@ -598,19 +598,21 @@ export default function DetailScreen() {
 
           <View style={styles.content}>
             <View style={styles.infoCard}>
-              <View style={[styles.subjectChipLarge, { backgroundColor: getSubjectColor(record.subject) }]}>
-                <Text style={styles.subjectChipTextLarge}>{record.subject}</Text>
+              <View style={styles.infoRow}>
+                <View style={[styles.subjectChipCompact, { backgroundColor: getSubjectColor(record.subject) }]}>
+                  <Text style={styles.subjectChipTextCompact}>{record.subject}</Text>
+                </View>
+
+                {record.score !== null ? (
+                  <Text style={styles.scoreDisplayCompact}>
+                    {record.score}点/{record.max_score}点
+                  </Text>
+                ) : (
+                  <Text style={styles.stampDisplayCompact}>{record.stamp}</Text>
+                )}
+
+                <Text style={styles.dateDisplayCompact}>{formatDate(record.date)}</Text>
               </View>
-
-              {record.score !== null ? (
-                <Text style={styles.scoreDisplay}>
-                  {record.score}点（{record.max_score}点中）
-                </Text>
-              ) : (
-                <Text style={styles.stampDisplay}>{record.stamp}</Text>
-              )}
-
-              <Text style={styles.dateDisplay}>{formatDate(record.date)}</Text>
             </View>
 
             {record.memo && (
@@ -755,7 +757,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: 200,
+    height: 300,
     backgroundColor: '#fff',
     overflow: 'hidden',
     justifyContent: 'center',
@@ -777,13 +779,20 @@ const styles = StyleSheet.create({
   infoCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   subjectChipLarge: {
     paddingHorizontal: 18,
@@ -796,11 +805,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-Bold',
   },
+  subjectChipCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  subjectChipTextCompact: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+  },
   scoreDisplay: {
     fontSize: 24,
     color: '#333',
     fontFamily: 'Nunito-Bold',
     marginBottom: 10,
+  },
+  scoreDisplayCompact: {
+    fontSize: 16,
+    color: '#333',
+    fontFamily: 'Nunito-Bold',
   },
   stampDisplay: {
     fontSize: 20,
@@ -808,7 +832,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     marginBottom: 10,
   },
+  stampDisplayCompact: {
+    fontSize: 16,
+    color: '#4A90E2',
+    fontFamily: 'Nunito-Bold',
+  },
   dateDisplay: {
+    fontSize: 14,
+    color: '#999',
+    fontFamily: 'Nunito-Regular',
+  },
+  dateDisplayCompact: {
     fontSize: 14,
     color: '#999',
     fontFamily: 'Nunito-Regular',
@@ -881,7 +915,7 @@ const styles = StyleSheet.create({
   },
   photoWrapper: {
     width: '100%',
-    height: 200,
+    height: 300,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
