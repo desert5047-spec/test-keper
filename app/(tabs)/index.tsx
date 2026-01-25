@@ -98,7 +98,7 @@ export default function HomeScreen() {
         style={styles.card}
         onPress={() => router.push(`/detail?id=${item.id}`)}
         activeOpacity={0.8}>
-        <View style={styles.imageContainer}>
+        <View style={[styles.imageContainer, !hasPhoto && styles.imageContainerNoPhoto]}>
           {hasPhoto ? (
             <>
               <View
@@ -119,12 +119,9 @@ export default function HomeScreen() {
               </View>
             </>
           ) : (
-            <>
-              <View style={styles.placeholderImage} />
-              <View style={styles.dateOverlay}>
-                <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
-              </View>
-            </>
+            <View style={styles.dateOverlay}>
+              <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
+            </View>
           )}
         </View>
         <View style={styles.cardContent}>
@@ -191,6 +188,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  imageContainerNoPhoto: {
+    height: 60,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
   imageWrapper: {
     width: '100%',
     height: '100%',
@@ -200,11 +203,6 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: '100%',
-  },
-  placeholderImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#E8E8E8',
   },
   dateOverlay: {
     position: 'absolute',
