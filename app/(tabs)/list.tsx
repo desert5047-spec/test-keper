@@ -134,7 +134,7 @@ export default function ListScreen() {
               <Image
                 source={{ uri: item.photo_uri! }}
                 style={styles.thumbnail}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             </View>
           ) : (
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#fff',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -233,6 +233,8 @@ const styles = StyleSheet.create({
   thumbnailWrapper: {
     width: '100%',
     height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   thumbnail: {
     width: '100%',

@@ -111,7 +111,7 @@ export default function HomeScreen() {
                 <Image
                   source={{ uri: item.photo_uri! }}
                   style={styles.cardImage}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
               </View>
               <View style={styles.dateOverlay}>
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     height: 240,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#fff',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -194,6 +194,8 @@ const styles = StyleSheet.create({
   imageWrapper: {
     width: '100%',
     height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cardImage: {
     width: '100%',

@@ -584,7 +584,7 @@ export default function DetailScreen() {
                 <Image
                   source={{ uri: record.photo_uri }}
                   style={styles.image}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
               </View>
             </TouchableOpacity>
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     height: 300,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#fff',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -751,6 +751,8 @@ const styles = StyleSheet.create({
   imageWrapper: {
     width: '100%',
     height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   image: {
     width: '100%',
