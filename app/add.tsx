@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Camera, RotateCw, RotateCcw, X } from 'lucide-react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Camera, RotateCw, RotateCcw, X, Calendar as CalendarIcon } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -55,6 +56,8 @@ export default function AddScreen() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
+  const [scoreError, setScoreError] = useState<string>('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     requestPermissions();
@@ -70,6 +73,58 @@ export default function AddScreen() {
     if (Platform.OS !== 'web') {
       const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
       const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+  };
+
+  const validateScore = (scoreValue: string, maxScoreValue: string) => {
+    if (!scoreValue || !maxScoreValue) {
+      setScoreError('');
+      return;
+    }
+
+    const scoreNum = parseInt(scoreValue);
+    const maxScoreNum = parseInt(maxScoreValue);
+
+    if (isNaN(scoreNum) || isNaN(maxScoreNum)) {
+      setScoreError('正しい数字を入力してください');
+      return;
+    }
+
+    if (scoreNum < 0) {
+      setScoreError('点数は0以上で入力してください');
+      return;
+    }
+
+    if (maxScoreNum <= 0) {
+      setScoreError('上限点数は1以上で入力してください');
+      return;
+    }
+
+    if (scoreNum > maxScoreNum) {
+      setScoreError(`点数は${maxScoreNum}点以下で入力してください`);
+      return;
+    }
+
+    setScoreError('');
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+
+    if (selectedDate) {
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      setDate(formattedDate);
+    }
+  };
+
+  const formatDisplayDate = (dateString: string) => {
+    try {
+      const [year, month, day] = dateString.split('-');
+      return `${year}年${parseInt(month)}月${parseInt(day)}日`;
+    } catch {
+      return dateString;
     }
   };
 
@@ -216,6 +271,11 @@ export default function AddScreen() {
       const maxScoreNum = parseInt(maxScore);
       if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
         setErrorMessage('点数は正しい数字で入れてください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+      if (scoreNum > maxScoreNum) {
+        setErrorMessage(`点数は${maxScoreNum}点以下で入力してください`);
         setTimeout(() => setErrorMessage(''), 3000);
         return;
       }
@@ -503,9 +563,15 @@ export default function AddScreen() {
             <View style={styles.scoreInputContainer}>
               <View style={styles.scoreInputRow}>
                 <TextInput
-                  style={styles.scoreInput}
+                  style={[
+                    styles.scoreInput,
+                    scoreError ? styles.scoreInputError : null,
+                  ]}
                   value={score}
-                  onChangeText={setScore}
+                  onChangeText={(value) => {
+                    setScore(value);
+                    validateScore(value, maxScore);
+                  }}
                   placeholder="点数"
                   keyboardType="numeric"
                   placeholderTextColor="#999"
@@ -513,14 +579,32 @@ export default function AddScreen() {
                 <Text style={styles.scoreLabel}>点</Text>
                 <Text style={styles.scoreSeparator}>/</Text>
                 <TextInput
-                  style={styles.maxScoreInput}
+                  style={[
+                    styles.maxScoreInput,
+                    scoreError ? styles.scoreInputError : null,
+                  ]}
                   value={maxScore}
-                  onChangeText={setMaxScore}
+                  onChangeText={(value) => {
+                    setMaxScore(value);
+                    validateScore(score, value);
+                  }}
                   keyboardType="numeric"
                   placeholderTextColor="#999"
                 />
                 <Text style={styles.scoreLabel}>点中</Text>
               </View>
+              {scoreError ? (
+                <View style={styles.scoreErrorContainer}>
+                  <Text style={styles.scoreErrorText}>{scoreError}</Text>
+                </View>
+              ) : null}
+              {score && maxScore && !scoreError ? (
+                <View style={styles.scoreInfoContainer}>
+                  <Text style={styles.scoreInfoText}>
+                    得点率: {Math.round((parseInt(score) / parseInt(maxScore)) * 100)}%
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : (
             <View style={styles.stampContainer}>
@@ -604,13 +688,41 @@ export default function AddScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>日付</Text>
-          <TextInput
-            style={styles.dateInput}
-            value={date}
-            onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#999"
-          />
+          <View style={styles.dateInputContainer}>
+            <TextInput
+              style={styles.dateInput}
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}>
+              <CalendarIcon size={20} color="#4A90E2" />
+            </TouchableOpacity>
+          </View>
+          {date && (
+            <Text style={styles.dateDisplayText}>{formatDisplayDate(date)}</Text>
+          )}
+          {showDatePicker && (
+            <DateTimePicker
+              value={date ? new Date(date) : new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+            />
+          )}
+          {Platform.OS === 'ios' && showDatePicker && (
+            <TouchableOpacity
+              style={styles.datePickerCloseButton}
+              onPress={() => setShowDatePicker(false)}
+              activeOpacity={0.7}>
+              <Text style={styles.datePickerCloseButtonText}>完了</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -637,9 +749,12 @@ export default function AddScreen() {
           </View>
         ) : null}
         <TouchableOpacity
-          style={styles.bottomSaveButton}
+          style={[
+            styles.bottomSaveButton,
+            (isSaving || scoreError) && styles.bottomSaveButtonDisabled,
+          ]}
           onPress={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !!scoreError}
           activeOpacity={0.7}>
           {isSaving ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -927,6 +1042,10 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
   },
+  scoreInputError: {
+    borderColor: '#E74C3C',
+    borderWidth: 2,
+  },
   maxScoreInput: {
     width: 60,
     borderWidth: 1,
@@ -948,6 +1067,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginHorizontal: 4,
+  },
+  scoreErrorContainer: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E74C3C',
+  },
+  scoreErrorText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#E74C3C',
+    textAlign: 'center',
+  },
+  scoreInfoContainer: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  scoreInfoText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#4CAF50',
+    textAlign: 'center',
   },
   stampContainer: {
     gap: 12,
@@ -1003,7 +1152,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
   },
+  dateInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   dateInput: {
+    flex: 1,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
@@ -1012,6 +1167,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  calendarButton: {
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    backgroundColor: '#F0F8FF',
+  },
+  dateDisplayText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#4A90E2',
+    textAlign: 'center',
+  },
+  datePickerCloseButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  datePickerCloseButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: 'Nunito-SemiBold',
   },
   memoInput: {
     borderWidth: 1,
@@ -1047,6 +1228,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bottomSaveButtonDisabled: {
+    backgroundColor: '#CCC',
+    opacity: 0.6,
   },
   bottomSaveButtonText: {
     color: '#fff',
