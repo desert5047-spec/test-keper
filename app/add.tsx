@@ -378,7 +378,6 @@ export default function AddScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingTop: 0 }}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>写真</Text>
