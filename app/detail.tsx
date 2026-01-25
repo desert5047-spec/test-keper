@@ -605,7 +605,7 @@ export default function DetailScreen() {
 
                 {record.score !== null ? (
                   <Text style={styles.scoreDisplayCompact}>
-                    {record.score}点/{record.max_score}点
+                    {record.score}点({record.max_score}点中)
                   </Text>
                 ) : (
                   <Text style={styles.stampDisplayCompact}>{record.stamp}</Text>
@@ -655,7 +655,7 @@ export default function DetailScreen() {
           <>
             <TouchableOpacity
               style={styles.homeButton}
-              onPress={() => router.push('/')}
+              onPress={() => router.push('/(tabs)')}
               activeOpacity={0.7}>
               <Home size={20} color="#fff" />
               <Text style={styles.homeButtonText}>ホーム</Text>
