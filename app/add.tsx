@@ -599,13 +599,6 @@ export default function AddScreen() {
                   <Text style={styles.scoreErrorText}>{scoreError}</Text>
                 </View>
               ) : null}
-              {score && maxScore && !scoreError ? (
-                <View style={styles.scoreInfoContainer}>
-                  <Text style={styles.scoreInfoText}>
-                    得点率: {Math.round((parseInt(score) / parseInt(maxScore)) * 100)}%
-                  </Text>
-                </View>
-              ) : null}
             </View>
           ) : (
             <View style={styles.stampContainer}>
