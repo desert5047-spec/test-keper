@@ -613,7 +613,14 @@ export default function DetailScreen() {
               <Text style={styles.dateDisplay}>{formatDate(record.date)}</Text>
             </View>
 
-            <View style={{ height: 80 }} />
+            {record.memo && (
+              <View style={styles.memoSection}>
+                <Text style={styles.memoLabel}>メモ</Text>
+                <Text style={styles.memoText}>{record.memo}</Text>
+              </View>
+            )}
+
+            <View style={{ height: 100 }} />
           </View>
         </ScrollView>
       )}
@@ -748,7 +755,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: 300,
+    height: 200,
     backgroundColor: '#fff',
     overflow: 'hidden',
     justifyContent: 'center',
@@ -765,12 +772,12 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   content: {
-    padding: 20,
+    padding: 16,
   },
   infoCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 32,
+    padding: 20,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -779,32 +786,44 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   subjectChipLarge: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginBottom: 12,
   },
   subjectChipTextLarge: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: 'Nunito-Bold',
   },
   scoreDisplay: {
-    fontSize: 28,
+    fontSize: 24,
     color: '#333',
     fontFamily: 'Nunito-Bold',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   stampDisplay: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#4A90E2',
     fontFamily: 'Nunito-Bold',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   dateDisplay: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#999',
     fontFamily: 'Nunito-Regular',
+  },
+  memoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+  memoLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 8,
+    fontFamily: 'Nunito-Bold',
   },
   section: {
     backgroundColor: '#fff',
@@ -862,7 +881,7 @@ const styles = StyleSheet.create({
   },
   photoWrapper: {
     width: '100%',
-    height: 300,
+    height: 200,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
