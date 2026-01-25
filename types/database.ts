@@ -1,5 +1,6 @@
 export type RecordType = 'テスト' | 'プリント' | 'ドリル' | '確認';
 export type StampType = '大変よくできました' | 'よくできました' | 'がんばりました';
+export type StampValue = StampType | string;
 
 export interface Child {
   id: string;
@@ -19,7 +20,7 @@ export interface TestRecord {
   type: RecordType;
   score: number | null;
   max_score: number;
-  stamp: StampType | null;
+  stamp: string | null;
   memo: string | null;
   photo_uri: string | null;
   photo_rotation: 0 | 90 | 180 | 270;

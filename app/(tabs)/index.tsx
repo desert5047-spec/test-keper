@@ -14,7 +14,7 @@ import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { isValidImageUri } from '@/utils/imageGuard';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -111,7 +111,7 @@ export default function HomeScreen() {
                 <Image
                   source={{ uri: item.photo_uri! }}
                   style={styles.cardImage}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
               </View>
               <View style={styles.dateOverlay}>
@@ -144,7 +144,7 @@ export default function HomeScreen() {
       <AppHeader showYearMonthNav={true} />
 
       {records.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
           <Text style={styles.emptyText}>まだ記録がありません</Text>
           <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
@@ -153,7 +153,7 @@ export default function HomeScreen() {
           data={records}
           renderItem={renderRecord}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 16 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     height: 240,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#fff',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -194,6 +194,8 @@ const styles = StyleSheet.create({
   imageWrapper: {
     width: '100%',
     height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cardImage: {
     width: '100%',

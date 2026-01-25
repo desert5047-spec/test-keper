@@ -218,17 +218,15 @@ const styles = StyleSheet.create({
   monthButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 10,
+    paddingHorizontal: 6,
     paddingVertical: 4,
-    borderRadius: 14,
     gap: 4,
     marginLeft: 4,
   },
   monthText: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
-    color: '#fff',
+    color: '#333',
   },
   modalOverlay: {
     flex: 1,

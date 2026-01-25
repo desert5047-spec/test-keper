@@ -20,7 +20,7 @@ import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop, ArrowLeft } 
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 import { uploadImage, deleteImage } from '@/utils/imageUpload';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -40,7 +40,9 @@ export default function DetailScreen() {
   const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
   const [score, setScore] = useState<string>('');
   const [maxScore, setMaxScore] = useState<string>('100');
-  const [stamp, setStamp] = useState<StampType | null>(null);
+  const [stamp, setStamp] = useState<string | null>(null);
+  const [customStamp, setCustomStamp] = useState<string>('');
+  const [showCustomStampInput, setShowCustomStampInput] = useState(false);
   const [memo, setMemo] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
@@ -71,6 +73,8 @@ export default function DetailScreen() {
     setScore(data.score?.toString() || '');
     setMaxScore(data.max_score?.toString() || '100');
     setStamp(data.stamp);
+    setCustomStamp('');
+    setShowCustomStampInput(false);
     setMemo(data.memo || '');
   };
 
@@ -354,7 +358,7 @@ export default function DetailScreen() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
   };
 
   const getSubjectColor = (subject: string) => {
@@ -400,15 +404,17 @@ export default function DetailScreen() {
             <>
               <TouchableOpacity
                 onPress={() => setEditMode(true)}
-                style={styles.headerIconButton}
+                style={styles.editButton}
                 activeOpacity={0.7}>
-                <Edit3 size={22} color="#4A90E2" />
+                <Edit3 size={18} color="#4A90E2" />
+                <Text style={styles.editButtonText}>修正</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmDelete}
-                style={styles.headerIconButton}
+                style={styles.deleteButton}
                 activeOpacity={0.7}>
-                <Trash2 size={22} color="#E74C3C" />
+                <Trash2 size={18} color="#E74C3C" />
+                <Text style={styles.deleteButtonText}>削除</Text>
               </TouchableOpacity>
             </>
           )}
@@ -416,7 +422,10 @@ export default function DetailScreen() {
       </View>
 
       {editMode ? (
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
+          showsVerticalScrollIndicator={false}>
           <View style={styles.editSection}>
             <Text style={styles.editSectionTitle}>写真</Text>
             {photoUri ? (
@@ -542,7 +551,11 @@ export default function DetailScreen() {
                       styles.stampButton,
                       stamp === s && styles.stampButtonSelected,
                     ]}
-                    onPress={() => setStamp(s)}
+                    onPress={() => {
+                      setStamp(s);
+                      setShowCustomStampInput(false);
+                      setCustomStamp('');
+                    }}
                     activeOpacity={0.7}>
                     <Text
                       style={[
@@ -553,6 +566,62 @@ export default function DetailScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
+
+                {!showCustomStampInput ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.stampButton,
+                      styles.stampButtonOther,
+                      stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampButtonSelected,
+                    ]}
+                    onPress={() => {
+                      setShowCustomStampInput(true);
+                      if (stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp)) {
+                        setCustomStamp(stamp);
+                      } else {
+                        setStamp(null);
+                      }
+                    }}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.stampText,
+                        stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampTextSelected,
+                      ]}>
+                      {stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) ? stamp : 'その他'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.customStampInputRow}>
+                    <TextInput
+                      style={styles.customStampInput}
+                      value={customStamp}
+                      onChangeText={setCustomStamp}
+                      placeholder="評価を入力（例：よくがんばった、もう少し）"
+                      placeholderTextColor="#999"
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      style={styles.customStampConfirmButton}
+                      onPress={() => {
+                        if (customStamp.trim()) {
+                          setStamp(customStamp.trim());
+                          setShowCustomStampInput(false);
+                        }
+                      }}
+                      activeOpacity={0.7}>
+                      <Text style={styles.customStampConfirmText}>決定</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowCustomStampInput(false);
+                        setCustomStamp('');
+                      }}
+                      activeOpacity={0.7}>
+                      <X size={24} color="#999" />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -574,7 +643,10 @@ export default function DetailScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
       ) : (
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
+          showsVerticalScrollIndicator={false}>
           {record.photo_uri && isValidImageUri(record.photo_uri) && (
             <TouchableOpacity
               onPress={() => setShowImageModal(true)}
@@ -584,7 +656,7 @@ export default function DetailScreen() {
                 <Image
                   source={{ uri: record.photo_uri }}
                   style={styles.image}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
               </View>
             </TouchableOpacity>
@@ -592,22 +664,31 @@ export default function DetailScreen() {
 
           <View style={styles.content}>
             <View style={styles.infoCard}>
-              <View style={[styles.subjectChipLarge, { backgroundColor: getSubjectColor(record.subject) }]}>
-                <Text style={styles.subjectChipTextLarge}>{record.subject}</Text>
+              <View style={styles.infoRow}>
+                <View style={[styles.subjectChipCompact, { backgroundColor: getSubjectColor(record.subject) }]}>
+                  <Text style={styles.subjectChipTextCompact}>{record.subject}</Text>
+                </View>
+
+                {record.score !== null ? (
+                  <Text style={styles.scoreDisplayCompact}>
+                    {record.score}点({record.max_score}点中)
+                  </Text>
+                ) : (
+                  <Text style={styles.stampDisplayCompact}>{record.stamp}</Text>
+                )}
+
+                <Text style={styles.dateDisplayCompact}>{formatDate(record.date)}</Text>
               </View>
-
-              {record.score !== null ? (
-                <Text style={styles.scoreDisplay}>
-                  {record.score}点（{record.max_score}点中）
-                </Text>
-              ) : (
-                <Text style={styles.stampDisplay}>{record.stamp}</Text>
-              )}
-
-              <Text style={styles.dateDisplay}>{formatDate(record.date)}</Text>
             </View>
 
-            <View style={{ height: 80 }} />
+            {record.memo && (
+              <View style={styles.memoSection}>
+                <Text style={styles.memoLabel}>メモ</Text>
+                <Text style={styles.memoText}>{record.memo}</Text>
+              </View>
+            )}
+
+            <View style={{ height: 100 }} />
           </View>
         </ScrollView>
       )}
@@ -640,7 +721,7 @@ export default function DetailScreen() {
           <>
             <TouchableOpacity
               style={styles.homeButton}
-              onPress={() => router.push('/')}
+              onPress={() => router.push('/(tabs)')}
               activeOpacity={0.7}>
               <Home size={20} color="#fff" />
               <Text style={styles.homeButtonText}>ホーム</Text>
@@ -732,10 +813,39 @@ const styles = StyleSheet.create({
   },
   detailHeaderActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
-  headerIconButton: {
-    padding: 4,
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: '#4A90E2',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E74C3C',
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: '#E74C3C',
   },
   scrollView: {
     flex: 1,
@@ -743,7 +853,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     height: 300,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#fff',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -751,18 +861,20 @@ const styles = StyleSheet.create({
   imageWrapper: {
     width: '100%',
     height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   image: {
     width: '100%',
     height: '100%',
   },
   content: {
-    padding: 20,
+    padding: 16,
   },
   infoCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 32,
+    padding: 16,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -770,33 +882,77 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
   subjectChipLarge: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginBottom: 12,
   },
   subjectChipTextLarge: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+  },
+  subjectChipCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  subjectChipTextCompact: {
+    color: '#fff',
+    fontSize: 14,
     fontFamily: 'Nunito-Bold',
   },
   scoreDisplay: {
-    fontSize: 28,
+    fontSize: 24,
     color: '#333',
     fontFamily: 'Nunito-Bold',
-    marginBottom: 16,
+    marginBottom: 10,
+  },
+  scoreDisplayCompact: {
+    fontSize: 16,
+    color: '#333',
+    fontFamily: 'Nunito-Bold',
   },
   stampDisplay: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#4A90E2',
     fontFamily: 'Nunito-Bold',
-    marginBottom: 16,
+    marginBottom: 10,
+  },
+  stampDisplayCompact: {
+    fontSize: 16,
+    color: '#4A90E2',
+    fontFamily: 'Nunito-Bold',
   },
   dateDisplay: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#999',
     fontFamily: 'Nunito-Regular',
+  },
+  dateDisplayCompact: {
+    fontSize: 14,
+    color: '#999',
+    fontFamily: 'Nunito-Regular',
+  },
+  memoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+  memoLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 8,
+    fontFamily: 'Nunito-Bold',
   },
   section: {
     backgroundColor: '#fff',
@@ -1003,8 +1159,11 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   stampButtonSelected: {
-    backgroundColor: '#fff',
+    backgroundColor: '#4A90E2',
     borderColor: '#4A90E2',
+  },
+  stampButtonOther: {
+    borderStyle: 'dashed',
   },
   stampText: {
     fontSize: 15,
@@ -1012,7 +1171,35 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   stampTextSelected: {
-    color: '#4A90E2',
+    color: '#fff',
+  },
+  customStampInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customStampInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    backgroundColor: '#fff',
+  },
+  customStampConfirmButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  customStampConfirmText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
   },
   memoInput: {
     borderWidth: 1,
