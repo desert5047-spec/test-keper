@@ -1,11 +1,14 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
-export const HEADER_HEIGHT = 102;
+export const HEADER_HEIGHT = Platform.select({
+  web: 78,
+  default: 102,
+});
 
 interface AppHeaderProps {
   showBack?: boolean;
@@ -155,7 +158,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#FFF',
-    paddingTop: 44,
+    paddingTop: Platform.select({
+      web: 20,
+      default: 44,
+    }),
     paddingBottom: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
