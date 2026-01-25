@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
 interface MonthSummary {
   year: number;
@@ -183,7 +183,7 @@ export default function MonthlyScreen() {
       <AppHeader showYearMonthNav={true} />
 
       {monthlySummaries.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
           <Text style={styles.emptyText}>まだ記録がありません</Text>
           <Text style={styles.emptySubText}>
             ＋ボタンから記録を残しましょう
@@ -192,7 +192,7 @@ export default function MonthlyScreen() {
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: HEADER_HEIGHT + 16 }]}
           showsVerticalScrollIndicator={false}>
           {visibleSummaries.map((summary, index) => renderMonthCard(summary, index))}
           {hasMore && (
