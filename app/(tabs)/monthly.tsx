@@ -48,38 +48,30 @@ export default function MonthlyScreen() {
       .eq('child_id', selectedChildId)
       .order('date', { ascending: false });
 
-    if (!allRecords || allRecords.length === 0) {
-      setMonthlySummaries([]);
-      return;
-    }
-
     const monthlyData: Record<string, TestRecord[]> = {};
 
-    allRecords.forEach((record) => {
-      const date = new Date(record.date);
-      const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+    if (allRecords && allRecords.length > 0) {
+      allRecords.forEach((record) => {
+        const date = new Date(record.date);
+        const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
 
-      if (!monthlyData[key]) {
-        monthlyData[key] = [];
-      }
-      monthlyData[key].push(record);
-    });
-
-    const currentMonthKey = `${year}-${month}`;
-    const targetDate = new Date(year, month - 1);
-
-    const relevantMonths: string[] = [];
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(targetDate.getFullYear(), targetDate.getMonth() - i);
-      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-      if (monthlyData[key]) {
-        relevantMonths.push(key);
-      }
+        if (!monthlyData[key]) {
+          monthlyData[key] = [];
+        }
+        monthlyData[key].push(record);
+      });
     }
 
-    const summaries: MonthSummary[] = relevantMonths.map((key) => {
-      const [year, month] = key.split('-').map(Number);
-      const records = monthlyData[key];
+    const targetDate = new Date(year, month - 1);
+    const summaries: MonthSummary[] = [];
+
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(targetDate.getFullYear(), targetDate.getMonth() - i);
+      const monthYear = d.getFullYear();
+      const monthMonth = d.getMonth() + 1;
+      const key = `${monthYear}-${monthMonth}`;
+
+      const records = monthlyData[key] || [];
 
       const subjectData: Record<
         string,
@@ -110,13 +102,13 @@ export default function MonthlyScreen() {
         };
       });
 
-      return {
-        year,
-        month,
+      summaries.push({
+        year: monthYear,
+        month: monthMonth,
         totalRecords: records.length,
         subjectStats,
-      };
-    });
+      });
+    }
 
     setMonthlySummaries(summaries);
   };
@@ -141,6 +133,8 @@ export default function MonthlyScreen() {
   };
 
   const renderMonthCard = (summary: MonthSummary, index: number) => {
+    const hasRecords = summary.totalRecords > 0;
+
     return (
       <TouchableOpacity
         key={`${summary.year}-${summary.month}`}
@@ -150,26 +144,33 @@ export default function MonthlyScreen() {
         <Text style={styles.cardTitle}>
           {summary.year}年{summary.month}月の記録
         </Text>
-        <Text style={styles.totalText}>
-          この月は合計{summary.totalRecords}件の記録が残っています
-        </Text>
 
-        {summary.subjectStats.length > 0 && (
-          <View style={styles.subjectStatsContainer}>
-            {summary.subjectStats.map((stat) => (
-              <View key={stat.subject} style={styles.subjectStatRow}>
-                <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(stat.subject) }]}>
-                  <Text style={styles.subjectChipText}>{stat.subject}</Text>
-                </View>
-                <Text style={styles.subjectStatText}>
-                  {stat.averageScore !== null
-                    ? `平均${stat.averageScore}点、`
-                    : ''}
-                  {stat.totalCount}件
-                </Text>
+        {hasRecords ? (
+          <>
+            <Text style={styles.totalText}>
+              この月は合計{summary.totalRecords}件の記録が残っています
+            </Text>
+
+            {summary.subjectStats.length > 0 && (
+              <View style={styles.subjectStatsContainer}>
+                {summary.subjectStats.map((stat) => (
+                  <View key={stat.subject} style={styles.subjectStatRow}>
+                    <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(stat.subject) }]}>
+                      <Text style={styles.subjectChipText}>{stat.subject}</Text>
+                    </View>
+                    <Text style={styles.subjectStatText}>
+                      {stat.averageScore !== null
+                        ? `平均${stat.averageScore}点、`
+                        : ''}
+                      {stat.totalCount}件
+                    </Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            )}
+          </>
+        ) : (
+          <Text style={styles.noRecordsText}>記録がありません</Text>
         )}
       </TouchableOpacity>
     );
@@ -242,6 +243,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 16,
+  },
+  noRecordsText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
   },
   subjectStatsContainer: {
     marginTop: 16,
