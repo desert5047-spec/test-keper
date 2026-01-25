@@ -15,8 +15,9 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Camera, RotateCw, RotateCcw, X } from 'lucide-react-native';
+import { Camera, RotateCw, RotateCcw, X, Calendar as CalendarIcon, Check } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { CalendarPicker } from '@/components/CalendarPicker';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
@@ -55,6 +56,8 @@ export default function AddScreen() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
+  const [scoreError, setScoreError] = useState<string>('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     requestPermissions();
@@ -70,6 +73,47 @@ export default function AddScreen() {
     if (Platform.OS !== 'web') {
       const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
       const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+  };
+
+  const validateScore = (scoreValue: string, maxScoreValue: string) => {
+    if (!scoreValue || !maxScoreValue) {
+      setScoreError('');
+      return;
+    }
+
+    const scoreNum = parseInt(scoreValue);
+    const maxScoreNum = parseInt(maxScoreValue);
+
+    if (isNaN(scoreNum) || isNaN(maxScoreNum)) {
+      setScoreError('正しい数字を入力してください');
+      return;
+    }
+
+    if (scoreNum < 0) {
+      setScoreError('点数は0以上で入力してください');
+      return;
+    }
+
+    if (maxScoreNum <= 0) {
+      setScoreError('満点は1以上で入力してください');
+      return;
+    }
+
+    if (scoreNum > maxScoreNum) {
+      setScoreError(`エラー: 得点(${scoreNum}点)が満点(${maxScoreNum}点)を超えています`);
+      return;
+    }
+
+    setScoreError('');
+  };
+
+  const formatDisplayDate = (dateString: string) => {
+    try {
+      const [year, month, day] = dateString.split('-');
+      return `${year}年${parseInt(month)}月${parseInt(day)}日`;
+    } catch {
+      return dateString;
     }
   };
 
@@ -177,11 +221,11 @@ export default function AddScreen() {
     );
   };
 
-  const handleAddOtherSubject = () => {
-    if (!newSubject.trim()) return;
-    setSelectedSubject(newSubject.trim());
-    setNewSubject('');
-    setShowSubjectInput(false);
+  const handleOtherSubjectChange = (value: string) => {
+    setNewSubject(value);
+    if (value.trim().length >= 2) {
+      setSelectedSubject(value.trim());
+    }
   };
 
   const canSave = () => {
@@ -216,6 +260,11 @@ export default function AddScreen() {
       const maxScoreNum = parseInt(maxScore);
       if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
         setErrorMessage('点数は正しい数字で入れてください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+      if (scoreNum > maxScoreNum) {
+        setErrorMessage(`点数は${maxScoreNum}点以下で入力してください`);
         setTimeout(() => setErrorMessage(''), 3000);
         return;
       }
@@ -440,18 +489,21 @@ export default function AddScreen() {
           ) : (
             <View style={styles.inputRow}>
               <TextInput
-                style={styles.textInput}
+                style={[
+                  styles.textInput,
+                  newSubject.trim().length >= 2 && styles.textInputValid,
+                ]}
                 value={newSubject}
-                onChangeText={setNewSubject}
+                onChangeText={handleOtherSubjectChange}
                 placeholder="教科名を入力（例：生活、図工、音楽、体育）"
                 placeholderTextColor="#999"
+                autoFocus
               />
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={handleAddOtherSubject}
-                activeOpacity={0.7}>
-                <Text style={styles.addButtonText}>決定</Text>
-              </TouchableOpacity>
+              {newSubject.trim().length >= 2 && (
+                <View style={styles.checkIconContainer}>
+                  <Check size={20} color="#4CAF50" />
+                </View>
+              )}
               <TouchableOpacity
                 onPress={() => {
                   setShowSubjectInput(false);
@@ -502,25 +554,51 @@ export default function AddScreen() {
           {evaluationType === 'score' ? (
             <View style={styles.scoreInputContainer}>
               <View style={styles.scoreInputRow}>
-                <TextInput
-                  style={styles.scoreInput}
-                  value={score}
-                  onChangeText={setScore}
-                  placeholder="点数"
-                  keyboardType="numeric"
-                  placeholderTextColor="#999"
-                />
+                <View style={styles.scoreInputWrapper}>
+                  <TextInput
+                    style={[
+                      styles.scoreInput,
+                      scoreError ? styles.scoreInputError : null,
+                      !scoreError && score && maxScore && styles.scoreInputValid,
+                    ]}
+                    value={score}
+                    onChangeText={(value) => {
+                      setScore(value);
+                      validateScore(value, maxScore);
+                    }}
+                    placeholder="点数"
+                    keyboardType="numeric"
+                    placeholderTextColor="#999"
+                  />
+                  {!scoreError && score && maxScore && (
+                    <View style={styles.scoreCheckIcon}>
+                      <Check size={16} color="#4CAF50" />
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.scoreLabel}>点</Text>
                 <Text style={styles.scoreSeparator}>/</Text>
                 <TextInput
-                  style={styles.maxScoreInput}
+                  style={[
+                    styles.maxScoreInput,
+                    scoreError ? styles.scoreInputError : null,
+                    !scoreError && score && maxScore && styles.scoreInputValid,
+                  ]}
                   value={maxScore}
-                  onChangeText={setMaxScore}
+                  onChangeText={(value) => {
+                    setMaxScore(value);
+                    validateScore(score, value);
+                  }}
                   keyboardType="numeric"
                   placeholderTextColor="#999"
                 />
                 <Text style={styles.scoreLabel}>点中</Text>
               </View>
+              {scoreError ? (
+                <View style={styles.scoreErrorContainer}>
+                  <Text style={styles.scoreErrorText}>{scoreError}</Text>
+                </View>
+              ) : null}
             </View>
           ) : (
             <View style={styles.stampContainer}>
@@ -570,24 +648,26 @@ export default function AddScreen() {
               ) : (
                 <View style={styles.customStampInputRow}>
                   <TextInput
-                    style={styles.customStampInput}
+                    style={[
+                      styles.customStampInput,
+                      customStamp.trim().length >= 2 && styles.textInputValid,
+                    ]}
                     value={customStamp}
-                    onChangeText={setCustomStamp}
+                    onChangeText={(value) => {
+                      setCustomStamp(value);
+                      if (value.trim().length >= 2) {
+                        setStamp(value.trim());
+                      }
+                    }}
                     placeholder="評価を入力（例：よくがんばった、もう少し）"
                     placeholderTextColor="#999"
                     autoFocus
                   />
-                  <TouchableOpacity
-                    style={styles.customStampConfirmButton}
-                    onPress={() => {
-                      if (customStamp.trim()) {
-                        setStamp(customStamp.trim());
-                        setShowCustomStampInput(false);
-                      }
-                    }}
-                    activeOpacity={0.7}>
-                    <Text style={styles.customStampConfirmText}>決定</Text>
-                  </TouchableOpacity>
+                  {customStamp.trim().length >= 2 && (
+                    <View style={styles.checkIconContainer}>
+                      <Check size={20} color="#4CAF50" />
+                    </View>
+                  )}
                   <TouchableOpacity
                     onPress={() => {
                       setShowCustomStampInput(false);
@@ -604,14 +684,33 @@ export default function AddScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>日付</Text>
-          <TextInput
-            style={styles.dateInput}
-            value={date}
-            onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#999"
-          />
+          <View style={styles.dateInputContainer}>
+            <TextInput
+              style={styles.dateInput}
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}>
+              <CalendarIcon size={20} color="#4A90E2" />
+            </TouchableOpacity>
+          </View>
+          {date && (
+            <Text style={styles.dateDisplayText}>{formatDisplayDate(date)}</Text>
+          )}
         </View>
+
+        <CalendarPicker
+          visible={showDatePicker}
+          selectedDate={date}
+          onDateSelect={setDate}
+          onClose={() => setShowDatePicker(false)}
+          maxDate={new Date()}
+        />
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>メモ</Text>
@@ -637,9 +736,12 @@ export default function AddScreen() {
           </View>
         ) : null}
         <TouchableOpacity
-          style={styles.bottomSaveButton}
+          style={[
+            styles.bottomSaveButton,
+            (isSaving || scoreError) && styles.bottomSaveButtonDisabled,
+          ]}
           onPress={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !!scoreError}
           activeOpacity={0.7}>
           {isSaving ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -873,16 +975,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#333',
   },
-  addButton: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+  textInputValid: {
+    borderColor: '#4CAF50',
+    borderWidth: 2,
+    backgroundColor: '#F1F8F4',
   },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
+  checkIconContainer: {
+    marginLeft: -36,
+    marginRight: 8,
   },
   evaluationTypeContainer: {
     flexDirection: 'row',
@@ -915,6 +1015,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  scoreInputWrapper: {
+    position: 'relative',
+  },
   scoreInput: {
     width: 80,
     borderWidth: 1,
@@ -926,6 +1029,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-SemiBold',
     color: '#333',
     textAlign: 'center',
+  },
+  scoreInputError: {
+    borderColor: '#E74C3C',
+    borderWidth: 2,
+    backgroundColor: '#FFEBEE',
+  },
+  scoreInputValid: {
+    borderColor: '#4CAF50',
+    borderWidth: 2,
+    backgroundColor: '#F1F8F4',
+  },
+  scoreCheckIcon: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    transform: [{ translateY: -8 }],
   },
   maxScoreInput: {
     width: 60,
@@ -948,6 +1067,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginHorizontal: 4,
+  },
+  scoreErrorContainer: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E74C3C',
+  },
+  scoreErrorText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#E74C3C',
+    textAlign: 'center',
+  },
+  scoreInfoContainer: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  scoreInfoText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#4CAF50',
+    textAlign: 'center',
   },
   stampContainer: {
     gap: 12,
@@ -992,18 +1141,13 @@ const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: '#fff',
   },
-  customStampConfirmButton: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  customStampConfirmText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
+  dateInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   dateInput: {
+    flex: 1,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
@@ -1012,6 +1156,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  calendarButton: {
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    backgroundColor: '#F0F8FF',
+  },
+  dateDisplayText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#4A90E2',
+    textAlign: 'center',
   },
   memoInput: {
     borderWidth: 1,
@@ -1047,6 +1205,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bottomSaveButtonDisabled: {
+    backgroundColor: '#CCC',
+    opacity: 0.6,
   },
   bottomSaveButtonText: {
     color: '#fff',
