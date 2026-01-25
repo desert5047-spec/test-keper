@@ -400,15 +400,17 @@ export default function DetailScreen() {
             <>
               <TouchableOpacity
                 onPress={() => setEditMode(true)}
-                style={styles.headerIconButton}
+                style={styles.editButton}
                 activeOpacity={0.7}>
-                <Edit3 size={22} color="#4A90E2" />
+                <Edit3 size={18} color="#4A90E2" />
+                <Text style={styles.editButtonText}>修正</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmDelete}
-                style={styles.headerIconButton}
+                style={styles.deleteButton}
                 activeOpacity={0.7}>
-                <Trash2 size={22} color="#E74C3C" />
+                <Trash2 size={18} color="#E74C3C" />
+                <Text style={styles.deleteButtonText}>削除</Text>
               </TouchableOpacity>
             </>
           )}
@@ -747,10 +749,39 @@ const styles = StyleSheet.create({
   },
   detailHeaderActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
-  headerIconButton: {
-    padding: 4,
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: '#4A90E2',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E74C3C',
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: '#E74C3C',
   },
   scrollView: {
     flex: 1,
