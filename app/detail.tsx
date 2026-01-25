@@ -20,7 +20,7 @@ import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, Crop, ArrowLeft } 
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 import { uploadImage, deleteImage } from '@/utils/imageUpload';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -416,7 +416,10 @@ export default function DetailScreen() {
       </View>
 
       {editMode ? (
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
+          showsVerticalScrollIndicator={false}>
           <View style={styles.editSection}>
             <Text style={styles.editSectionTitle}>写真</Text>
             {photoUri ? (
@@ -574,7 +577,10 @@ export default function DetailScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
       ) : (
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
+          showsVerticalScrollIndicator={false}>
           {record.photo_uri && isValidImageUri(record.photo_uri) && (
             <TouchableOpacity
               onPress={() => setShowImageModal(true)}
