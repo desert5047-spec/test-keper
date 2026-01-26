@@ -3,7 +3,6 @@ import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
-import { Text, TextInput } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
@@ -24,24 +23,6 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
-
-  useEffect(() => {
-    if (fontsLoaded) {
-      const TextRender = Text.render;
-      const initialTextDefaultProps = Text.defaultProps;
-      Text.defaultProps = {
-        ...initialTextDefaultProps,
-        style: { fontFamily: 'Nunito-Regular' },
-      };
-
-      const TextInputRender = TextInput.render;
-      const initialTextInputDefaultProps = TextInput.defaultProps;
-      TextInput.defaultProps = {
-        ...initialTextInputDefaultProps,
-        style: { fontFamily: 'Nunito-Regular' },
-      };
-    }
-  }, [fontsLoaded]);
 
   if (!fontsLoaded && !fontError) {
     return null;
