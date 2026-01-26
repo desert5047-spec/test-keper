@@ -391,29 +391,15 @@ export default function DetailScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader showBack={true} showChildSwitcher={false} />
-      <View style={styles.detailHeader}>
-        <View style={styles.detailHeaderActions}>
-          {!editMode && (
-            <>
-              <TouchableOpacity
-                onPress={() => setEditMode(true)}
-                style={styles.editButton}
-                activeOpacity={0.7}>
-                <Edit3 size={18} color="#4A90E2" />
-                <Text style={styles.editButtonText}>修正</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={confirmDelete}
-                style={styles.deleteButton}
-                activeOpacity={0.7}>
-                <Trash2 size={18} color="#E74C3C" />
-                <Text style={styles.deleteButtonText}>削除</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </View>
+      <AppHeader
+        showBack={true}
+        showChildSwitcher={false}
+        showSettings={false}
+        showEdit={!editMode}
+        showDelete={!editMode}
+        onEdit={() => setEditMode(true)}
+        onDelete={confirmDelete}
+      />
 
       {editMode ? (
         <ScrollView
@@ -854,52 +840,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
-  },
-  detailHeader: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  detailHeaderActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-  },
-  editButtonText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
-    color: '#4A90E2',
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#FFEBEE',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E74C3C',
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
-    color: '#E74C3C',
   },
   scrollView: {
     flex: 1,
