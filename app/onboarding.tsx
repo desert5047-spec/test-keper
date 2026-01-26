@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 const slides = [
   {
-    title: '学校のテストを、ちゃんと残すだけのアプリです。',
+    title: '学校のテストを、\nちゃんと残すだけのアプリです。',
     description: '捨てられないテストを、画像に残しておけます。',
   },
   {
@@ -23,6 +24,7 @@ const slides = [
 export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const router = useRouter();
+  const { user } = useAuth();
 
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
@@ -31,7 +33,13 @@ export default function OnboardingScreen() {
   };
 
   const handleStart = async () => {
-    await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
+    if (!user) {
+      router.replace('/(auth)/login');
+      return;
+    }
+
+    const onboardingKey = `hasCompletedOnboarding_${user.id}`;
+    await AsyncStorage.setItem(onboardingKey, 'true');
     router.replace('/register-child');
   };
 

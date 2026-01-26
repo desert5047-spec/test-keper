@@ -201,7 +201,7 @@ export default function DetailScreen() {
       const result = await ImageManipulator.manipulateAsync(
         photoUri,
         [{ rotate: rotation }],
-        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       validateImageUri(result.uri);
@@ -317,16 +317,18 @@ export default function DetailScreen() {
   };
 
   const confirmDelete = () => {
+    if (Platform.OS === 'web') {
+      const ok = window.confirm('この記録を削除しますか？\n\nこの操作は取り消せません。');
+      if (ok) handleDelete();
+      return;
+    }
+
     Alert.alert(
       '記録を削除',
       'この記録を削除しますか？\nこの操作は取り消せません。',
       [
         { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除',
-          style: 'destructive',
-          onPress: handleDelete
-        },
+        { text: '削除', style: 'destructive', onPress: handleDelete },
       ]
     );
   };
@@ -334,19 +336,31 @@ export default function DetailScreen() {
   const handleDelete = async () => {
     if (!record) return;
 
-    if (record.photo_uri) {
-      await deleteImage(record.photo_uri);
-    }
+    try {
+      if (record.photo_uri) {
+        await deleteImage(record.photo_uri);
+      }
 
-    const { error } = await supabase
-      .from('records')
-      .delete()
-      .eq('id', record.id);
+      const { error } = await supabase
+        .from('records')
+        .delete()
+        .eq('id', record.id);
 
-    if (error) {
-      Alert.alert('エラー', '削除に失敗しました');
-    } else {
+      if (error) {
+        if (Platform.OS === 'web') {
+          window.alert('エラー: 削除に失敗しました');
+        } else {
+          Alert.alert('エラー', '削除に失敗しました');
+        }
+        return;
+      }
       router.push('/(tabs)');
+    } catch (e: any) {
+      if (Platform.OS === 'web') {
+        window.alert('エラー: ' + (e?.message || '削除に失敗しました'));
+      } else {
+        Alert.alert('エラー', e?.message || '削除に失敗しました');
+      }
     }
   };
 
@@ -917,13 +931,13 @@ const styles = StyleSheet.create({
   },
   stampDisplay: {
     fontSize: 20,
-    color: '#4A90E2',
+    color: '#333',
     fontFamily: 'Nunito-Bold',
     marginBottom: 10,
   },
   stampDisplayCompact: {
     fontSize: 16,
-    color: '#4A90E2',
+    color: '#333',
     fontFamily: 'Nunito-Bold',
   },
   dateDisplay: {

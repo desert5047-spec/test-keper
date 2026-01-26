@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Platform } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -29,20 +30,36 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <ChildProvider>
-        <DateProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="add" />
-            <Stack.Screen name="detail" />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-          <StatusBar style="auto" />
-        </DateProvider>
-      </ChildProvider>
-    </AuthProvider>
+    <>
+      {Platform.OS === 'web' && (
+        <style>{`
+          button:focus,
+          button:focus-visible,
+          [role="button"]:focus,
+          [role="button"]:focus-visible {
+            outline: none !important;
+            outline-width: 0 !important;
+          }
+          button::-moz-focus-inner {
+            border: 0 !important;
+          }
+        `}</style>
+      )}
+      <AuthProvider>
+        <ChildProvider>
+          <DateProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="onboarding" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="add" />
+              <Stack.Screen name="detail" />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+          </DateProvider>
+        </ChildProvider>
+      </AuthProvider>
+    </>
   );
 }
