@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut } from 'lucide-react-native';
+import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '@/components/AppHeader';
@@ -169,6 +169,42 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>法的情報</Text>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/privacy-policy')}
+            activeOpacity={0.7}>
+            <View style={styles.menuItemLeft}>
+              <View style={styles.iconContainer}>
+                <Shield size={22} color="#4A90E2" />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>プライバシーポリシー</Text>
+                <Text style={styles.menuItemSubtext}>個人情報の取り扱いについて</Text>
+              </View>
+            </View>
+            <ChevronRight size={20} color="#999" style={styles.chevron} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.menuItem, styles.menuItemSpacing]}
+            onPress={() => router.push('/terms-of-service')}
+            activeOpacity={0.7}>
+            <View style={styles.menuItemLeft}>
+              <View style={styles.iconContainer}>
+                <FileText size={22} color="#4A90E2" />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>利用規約</Text>
+                <Text style={styles.menuItemSubtext}>アプリの利用条件</Text>
+              </View>
+            </View>
+            <ChevronRight size={20} color="#999" style={styles.chevron} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>データ管理</Text>
           <View style={styles.dangerZone}>
             <View style={styles.dangerHeader}>
@@ -266,6 +302,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+  },
+  menuItemSpacing: {
+    marginTop: 12,
   },
   menuItemLeft: {
     flexDirection: 'row',
