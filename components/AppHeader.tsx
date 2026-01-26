@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
+import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ChildSwitcher } from './ChildSwitcher';
@@ -16,6 +16,10 @@ interface AppHeaderProps {
   showChildSwitcher?: boolean;
   showYearMonthNav?: boolean;
   title?: string;
+  showEdit?: boolean;
+  showDelete?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export function AppHeader({
@@ -23,7 +27,11 @@ export function AppHeader({
   showSettings = true,
   showChildSwitcher = true,
   showYearMonthNav = false,
-  title
+  title,
+  showEdit = false,
+  showDelete = false,
+  onEdit,
+  onDelete
 }: AppHeaderProps) {
   const router = useRouter();
   const { year, month, setYearMonth } = useDateContext();
@@ -100,10 +108,26 @@ export function AppHeader({
         )}
 
         <View style={styles.right}>
+          {showEdit && onEdit && (
+            <TouchableOpacity
+              onPress={onEdit}
+              style={styles.iconButton}
+              activeOpacity={0.7}>
+              <Edit3 size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+          {showDelete && onDelete && (
+            <TouchableOpacity
+              onPress={onDelete}
+              style={styles.iconButton}
+              activeOpacity={0.7}>
+              <Trash2 size={20} color="#666" />
+            </TouchableOpacity>
+          )}
           {showSettings && (
             <TouchableOpacity
               onPress={() => router.push('/settings')}
-              style={styles.settingsButton}
+              style={styles.iconButton}
               activeOpacity={0.7}>
               <Settings size={24} color="#666" />
             </TouchableOpacity>
@@ -194,7 +218,9 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   right: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   backButton: {
     padding: 6,
@@ -203,7 +229,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  settingsButton: {
+  iconButton: {
     padding: 6,
     minWidth: 36,
     minHeight: 36,
