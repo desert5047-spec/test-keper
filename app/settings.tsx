@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -25,127 +26,120 @@ export default function SettingsScreen() {
   const [isResetting, setIsResetting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const performResetData = async () => {
+    setIsResetting(true);
+    try {
+      if (!user?.id) {
+        throw new Error('ユーザー情報が見つかりません');
+      }
+
+      const { data: records } = await supabase
+        .from('records')
+        .select('photo_uri')
+        .eq('user_id', user.id)
+        .not('photo_uri', 'is', null);
+
+      if (records && records.length > 0) {
+        const { data: listData } = await supabase.storage
+          .from('test-images')
+          .list(user.id);
+
+        if (listData && listData.length > 0) {
+          const allUserFiles = listData.map(file => `${user.id}/${file.name}`);
+          await supabase.storage.from('test-images').remove(allUserFiles);
+        }
+      }
+
+      await supabase
+        .from('subjects')
+        .delete()
+        .eq('user_id', user.id);
+
+      const { error: childrenError } = await supabase
+        .from('children')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (childrenError) {
+        throw new Error('初期化に失敗しました: ' + childrenError.message);
+      }
+
+      await AsyncStorage.removeItem('hasCompletedOnboarding');
+      await loadChildren();
+
+      if (Platform.OS === 'web') {
+        window.alert('すべてのデータを削除しました');
+        router.replace('/onboarding');
+      } else {
+        Alert.alert('初期化完了', 'すべてのデータを削除しました', [
+          { text: 'OK', onPress: () => router.replace('/onboarding') },
+        ]);
+      }
+    } catch (err: any) {
+      const msg = err?.message || '不明なエラー';
+      if (Platform.OS === 'web') {
+        window.alert('エラー: ' + msg);
+      } else {
+        Alert.alert('エラー', msg);
+      }
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleResetData = () => {
+    if (Platform.OS === 'web') {
+      const ok = window.confirm(
+        '初期化しますか？\n\n子ども・記録・写真の情報がすべて削除され、元に戻せません。'
+      );
+      if (ok) performResetData();
+      return;
+    }
+
     Alert.alert(
       '初期化しますか？',
       '子ども・記録・写真の情報がすべて削除され、元に戻せません。',
       [
-        {
-          text: 'キャンセル',
-          style: 'cancel',
-        },
-        {
-          text: '初期化する',
-          style: 'destructive',
-          onPress: async () => {
-            setIsResetting(true);
-
-            try {
-              if (!user?.id) {
-                Alert.alert('エラー', 'ユーザー情報が見つかりません');
-                setIsResetting(false);
-                return;
-              }
-
-              // 1. ユーザーの記録に紐づく画像URLを取得
-              const { data: records } = await supabase
-                .from('records')
-                .select('photo_uri')
-                .eq('user_id', user.id)
-                .not('photo_uri', 'is', null);
-
-              // 2. Supabase Storageから画像を削除
-              if (records && records.length > 0) {
-                const imagePaths = records
-                  .map(record => {
-                    if (!record.photo_uri) return null;
-                    const urlParts = record.photo_uri.split('/test-images/');
-                    return urlParts.length >= 2 ? urlParts[1] : null;
-                  })
-                  .filter((path): path is string => path !== null);
-
-                if (imagePaths.length > 0) {
-                  // ユーザーのフォルダ全体を削除（より効率的）
-                  const { data: listData } = await supabase.storage
-                    .from('test-images')
-                    .list(user.id);
-
-                  if (listData && listData.length > 0) {
-                    const allUserFiles = listData.map(file => `${user.id}/${file.name}`);
-                    await supabase.storage.from('test-images').remove(allUserFiles);
-                  }
-                }
-              }
-
-              // 3. ユーザーのカスタム教科を削除
-              await supabase
-                .from('subjects')
-                .delete()
-                .eq('user_id', user.id);
-
-              // 4. ユーザーの子供を削除（recordsはCASCADEで自動削除される）
-              const { error: childrenError } = await supabase
-                .from('children')
-                .delete()
-                .eq('user_id', user.id);
-
-              if (childrenError) {
-                Alert.alert('エラー', '初期化に失敗しました: ' + childrenError.message);
-                setIsResetting(false);
-                return;
-              }
-
-              // 5. AsyncStorageからオンボーディング情報を削除
-              await AsyncStorage.removeItem('hasCompletedOnboarding');
-
-              // 6. 子供リストを再読み込み
-              await loadChildren();
-
-              Alert.alert('初期化完了', 'すべてのデータを削除しました', [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    router.replace('/onboarding');
-                  },
-                },
-              ]);
-            } catch (err: any) {
-              console.error('初期化エラー:', err);
-              Alert.alert('エラー', '初期化中にエラーが発生しました: ' + (err.message || '不明なエラー'));
-            } finally {
-              setIsResetting(false);
-            }
-          },
-        },
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '初期化する', style: 'destructive', onPress: performResetData },
       ]
     );
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'ログアウト',
-      'ログアウトしますか？',
-      [
-        {
-          text: 'キャンセル',
-          style: 'cancel',
+    if (Platform.OS === 'web') {
+      const ok = window.confirm('ログアウトしますか？');
+      if (!ok) return;
+      setIsLoggingOut(true);
+      (async () => {
+        try {
+          await signOut();
+        } catch {
+          window.alert('エラー: ログアウトに失敗しました');
+        } finally {
+          setIsLoggingOut(false);
+        }
+      })();
+      return;
+    }
+
+    Alert.alert('ログアウト', 'ログアウトしますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: 'ログアウト',
+        style: 'destructive',
+        onPress: async () => {
+          setIsLoggingOut(true);
+          try {
+            await signOut();
+          } catch {
+            Alert.alert('エラー', 'ログアウトに失敗しました');
+          } finally {
+            setIsLoggingOut(false);
+          }
         },
-        {
-          text: 'ログアウト',
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              await signOut();
-            } catch (error) {
-              Alert.alert('エラー', 'ログアウトに失敗しました');
-            } finally {
-              setIsLoggingOut(false);
-            }
-          },
-        },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
@@ -480,6 +474,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E74C3C',
+    ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
   },
   dangerButtonDisabled: {
     opacity: 0.6,

@@ -235,6 +235,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
   },
   placeholder: {
     width: 36,

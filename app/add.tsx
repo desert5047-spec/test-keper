@@ -194,7 +194,7 @@ export default function AddScreen() {
       const result = await ImageManipulator.manipulateAsync(
         photoUri,
         [{ rotate: rotation }],
-        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       validateImageUri(result.uri);

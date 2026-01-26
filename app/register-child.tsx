@@ -4,14 +4,17 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useChild } from '@/contexts/ChildContext';
 import { useFonts, Nunito_400Regular, Nunito_700Bold, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
 
 const GRADES = [
@@ -27,6 +30,7 @@ export default function RegisterChildScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { loadChildren } = useChild();
   const [name, setName] = useState('');
   const [grade, setGrade] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -80,6 +84,9 @@ export default function RegisterChildScreen() {
       return;
     }
 
+    // 子供リストを更新
+    await loadChildren();
+
     router.replace('/(tabs)');
   };
 
@@ -98,7 +105,8 @@ export default function RegisterChildScreen() {
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="例：真央"
+              placeholder="例：太郎"
+              placeholderTextColor="#CCCCCC"
               value={name}
               onChangeText={setName}
               autoCapitalize="none"
@@ -114,14 +122,15 @@ export default function RegisterChildScreen() {
             </Text>
             <View style={styles.gradeGrid}>
               {GRADES.map((gradeOption) => (
-                <TouchableOpacity
+                <Pressable
                   key={gradeOption.value}
-                  style={[
+                  style={({ pressed }) => [
                     styles.gradeButton,
                     grade === gradeOption.value && styles.gradeButtonSelected,
+                    pressed && styles.gradeButtonPressed,
                   ]}
                   onPress={() => setGrade(gradeOption.value)}
-                  activeOpacity={0.7}>
+                  android_ripple={{ color: 'transparent' }}>
                   <Text
                     style={[
                       styles.gradeButtonText,
@@ -129,7 +138,10 @@ export default function RegisterChildScreen() {
                     ]}>
                     {gradeOption.label}
                   </Text>
-                </TouchableOpacity>
+                  {grade === gradeOption.value && (
+                    <View style={styles.gradeIndicator} />
+                  )}
+                </Pressable>
               ))}
             </View>
           </View>
@@ -207,21 +219,40 @@ const styles = StyleSheet.create({
   gradeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   gradeButton: {
     flex: 1,
-    minWidth: '45%',
+    minWidth: '47%',
     backgroundColor: '#FFF',
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
     borderWidth: 2,
-    borderColor: '#E5E5E5',
+    borderColor: '#999999',
+    flexDirection: 'row',
+    gap: 8,
+    ...(Platform.OS === 'web' && {
+      outline: 'none',
+      outlineWidth: 0,
+      cursor: 'pointer',
+      WebkitTapHighlightColor: 'transparent',
+    }),
   },
   gradeButtonSelected: {
-    backgroundColor: '#4A90E2',
     borderColor: '#4A90E2',
+  },
+  gradeButtonPressed: {
+    opacity: 0.7,
+  },
+  gradeIndicator: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(211, 211, 211, 1)',
   },
   gradeButtonText: {
     fontSize: 16,
@@ -229,7 +260,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   gradeButtonTextSelected: {
-    color: '#FFF',
+    color: '#4A90E2',
   },
   saveButton: {
     backgroundColor: '#4A90E2',
