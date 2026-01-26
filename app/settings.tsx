@@ -41,22 +41,67 @@ export default function SettingsScreen() {
             setIsResetting(true);
 
             try {
-              const { error } = await supabase
-                .from('children')
-                .delete()
-                .neq('id', '00000000-0000-0000-0000-000000000000');
-
-              if (error) {
-                Alert.alert('エラー', '初期化に失敗しました');
+              if (!user?.id) {
+                Alert.alert('エラー', 'ユーザー情報が見つかりません');
                 setIsResetting(false);
                 return;
               }
 
+              // 1. ユーザーの記録に紐づく画像URLを取得
+              const { data: records } = await supabase
+                .from('records')
+                .select('photo_uri')
+                .eq('user_id', user.id)
+                .not('photo_uri', 'is', null);
+
+              // 2. Supabase Storageから画像を削除
+              if (records && records.length > 0) {
+                const imagePaths = records
+                  .map(record => {
+                    if (!record.photo_uri) return null;
+                    const urlParts = record.photo_uri.split('/test-images/');
+                    return urlParts.length >= 2 ? urlParts[1] : null;
+                  })
+                  .filter((path): path is string => path !== null);
+
+                if (imagePaths.length > 0) {
+                  // ユーザーのフォルダ全体を削除（より効率的）
+                  const { data: listData } = await supabase.storage
+                    .from('test-images')
+                    .list(user.id);
+
+                  if (listData && listData.length > 0) {
+                    const allUserFiles = listData.map(file => `${user.id}/${file.name}`);
+                    await supabase.storage.from('test-images').remove(allUserFiles);
+                  }
+                }
+              }
+
+              // 3. ユーザーのカスタム教科を削除
+              await supabase
+                .from('subjects')
+                .delete()
+                .eq('user_id', user.id);
+
+              // 4. ユーザーの子供を削除（recordsはCASCADEで自動削除される）
+              const { error: childrenError } = await supabase
+                .from('children')
+                .delete()
+                .eq('user_id', user.id);
+
+              if (childrenError) {
+                Alert.alert('エラー', '初期化に失敗しました: ' + childrenError.message);
+                setIsResetting(false);
+                return;
+              }
+
+              // 5. AsyncStorageからオンボーディング情報を削除
               await AsyncStorage.removeItem('hasCompletedOnboarding');
 
+              // 6. 子供リストを再読み込み
               await loadChildren();
 
-              Alert.alert('初期化完了', '初期化しました', [
+              Alert.alert('初期化完了', 'すべてのデータを削除しました', [
                 {
                   text: 'OK',
                   onPress: () => {
@@ -64,8 +109,9 @@ export default function SettingsScreen() {
                   },
                 },
               ]);
-            } catch (err) {
-              Alert.alert('エラー', '初期化中にエラーが発生しました');
+            } catch (err: any) {
+              console.error('初期化エラー:', err);
+              Alert.alert('エラー', '初期化中にエラーが発生しました: ' + (err.message || '不明なエラー'));
             } finally {
               setIsResetting(false);
             }
