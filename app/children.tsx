@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Plus, Edit3, Trash2, Home, List, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useChild } from '@/contexts/ChildContext';
 import { supabase } from '@/lib/supabase';
 
 interface Child {
@@ -42,6 +43,7 @@ export default function ChildrenScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { loadChildren: loadContextChildren } = useChild();
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -55,10 +57,16 @@ export default function ChildrenScreen() {
   }, []);
 
   const loadChildren = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const { data } = await supabase
       .from('children')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at');
 
     if (data) {
@@ -120,7 +128,8 @@ export default function ChildrenScreen() {
         Alert.alert('エラー', '更新に失敗しました');
       } else {
         setShowModal(false);
-        loadChildren();
+        await loadChildren();
+        await loadContextChildren();
       }
     } else {
       if (!user) {
@@ -142,7 +151,8 @@ export default function ChildrenScreen() {
         Alert.alert('エラー', '追加に失敗しました');
       } else {
         setShowModal(false);
-        loadChildren();
+        await loadChildren();
+        await loadContextChildren();
       }
     }
   };
@@ -175,7 +185,8 @@ export default function ChildrenScreen() {
             if (error) {
               Alert.alert('エラー', '削除に失敗しました');
             } else {
-              loadChildren();
+              await loadChildren();
+              await loadContextChildren();
             }
           }
         },

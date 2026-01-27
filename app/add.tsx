@@ -58,6 +58,7 @@ export default function AddScreen() {
   const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
   const [scoreError, setScoreError] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [photoRotation, setPhotoRotation] = useState<number>(0);
 
   useEffect(() => {
     requestPermissions();
@@ -155,6 +156,7 @@ export default function AddScreen() {
           return;
         }
         setPhotoUri(uri);
+        setPhotoRotation(0);
       }
     } catch (error: any) {
       Alert.alert('エラー', error.message || '画像の読み込みに失敗しました');
@@ -177,6 +179,7 @@ export default function AddScreen() {
           return;
         }
         setPhotoUri(uri);
+        setPhotoRotation(0);
       }
     } catch (error: any) {
       Alert.alert('エラー', error.message || '画像の撮影に失敗しました');
@@ -191,6 +194,7 @@ export default function AddScreen() {
       validateImageUri(photoUri);
 
       const rotation = direction === 'right' ? 90 : -90;
+      const newRotation = (photoRotation + rotation + 360) % 360;
       const result = await ImageManipulator.manipulateAsync(
         photoUri,
         [{ rotate: rotation }],
@@ -203,6 +207,7 @@ export default function AddScreen() {
       }
 
       setPhotoUri(result.uri);
+      setPhotoRotation(newRotation);
     } catch (error: any) {
       Alert.alert('エラー', error.message || '画像の回転に失敗しました');
     } finally {
@@ -216,7 +221,10 @@ export default function AddScreen() {
       '写真を削除しますか？',
       [
         { text: 'キャンセル', style: 'cancel' },
-        { text: '削除', style: 'destructive', onPress: () => setPhotoUri(null) },
+        { text: '削除', style: 'destructive', onPress: () => {
+          setPhotoUri(null);
+          setPhotoRotation(0);
+        }},
       ]
     );
   };
@@ -302,6 +310,20 @@ export default function AddScreen() {
       return;
     }
 
+    // child_idの妥当性チェック
+    if (selectedChildId) {
+      // selectedChildIdがcontextChildrenに存在するか確認
+      const childExists = contextChildren.some(child => child.id === selectedChildId);
+      if (!childExists) {
+        Alert.alert('エラー', '選択された子供が見つかりません。ページを再読み込みしてください。');
+        return;
+      }
+    } else if (contextChildren.length > 0) {
+      // 子供が登録されているのにselectedChildIdがnullの場合
+      Alert.alert('エラー', '子供を選択してください');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -309,18 +331,31 @@ export default function AddScreen() {
 
       if (photoUri) {
         try {
+          console.log('[記録保存] 画像アップロード開始', { photoUri: photoUri.substring(0, 50) });
           uploadedImageUrl = await uploadImage(photoUri, user.id);
+          console.log('[記録保存] 画像アップロード成功', { uploadedImageUrl });
+          
+          if (!uploadedImageUrl) {
+            throw new Error('画像のアップロードに失敗しました（URLが取得できませんでした）');
+          }
         } catch (uploadError: any) {
+          console.error('[記録保存] 画像アップロードエラー', uploadError);
           Alert.alert('エラー', uploadError.message || '画像のアップロードに失敗しました');
           setIsSaving(false);
           return;
         }
       }
 
+      console.log('[記録保存] データベースに保存開始', {
+        child_id: selectedChildId,
+        photo_uri: uploadedImageUrl ? uploadedImageUrl.substring(0, 50) : null,
+        photo_rotation: photoRotation,
+      });
+
       const { error } = await supabase
         .from('records')
         .insert({
-          child_id: selectedChildId,
+          child_id: selectedChildId || null,
           date,
           subject: selectedSubject,
           type,
@@ -329,9 +364,16 @@ export default function AddScreen() {
           stamp: evaluationType === 'stamp' ? stamp : null,
           memo: memo.trim() || null,
           photo_uri: uploadedImageUrl,
-          photo_rotation: 0,
+          photo_rotation: photoRotation,
           user_id: user.id,
         });
+
+      if (error) {
+        console.error('[記録保存] データベース保存エラー', error);
+        throw error;
+      }
+
+      console.log('[記録保存] データベース保存成功');
 
       if (error) throw error;
 
@@ -350,6 +392,7 @@ export default function AddScreen() {
 
   const resetForm = () => {
     setPhotoUri(null);
+    setPhotoRotation(0);
     setScore('');
     setMaxScore('100');
     setStamp(null);

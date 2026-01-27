@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -40,6 +40,25 @@ export default function RegisterChildScreen() {
     'Nunito-SemiBold': Nunito_600SemiBold,
     'Nunito-Bold': Nunito_700Bold,
   });
+
+  // お子様が既に登録されている場合はタブページにリダイレクト
+  useEffect(() => {
+    const checkExistingChildren = async () => {
+      if (!user || !fontsLoaded) return;
+
+      const { data: childrenData } = await supabase
+        .from('children')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (childrenData && childrenData.length > 0) {
+        router.replace('/(tabs)');
+      }
+    };
+
+    checkExistingChildren();
+  }, [user, fontsLoaded, router]);
 
   if (!fontsLoaded) {
     return null;

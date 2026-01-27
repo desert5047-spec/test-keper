@@ -16,12 +16,16 @@ export default function Index() {
   }, [user]);
 
   const checkOnboardingStatus = async () => {
-    const hasCompleted = await AsyncStorage.getItem('hasCompletedOnboarding');
+    if (!user) return;
+
+    const onboardingKey = `hasCompletedOnboarding_${user.id}`;
+    const hasCompleted = await AsyncStorage.getItem(onboardingKey);
 
     if (hasCompleted) {
       const { data: children } = await supabase
         .from('children')
         .select('id')
+        .eq('user_id', user.id)
         .limit(1);
 
       if (children && children.length > 0) {
