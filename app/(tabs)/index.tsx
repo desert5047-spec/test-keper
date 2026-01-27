@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +21,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [imageAspectRatios, setImageAspectRatios] = useState<{ [key: string]: number }>({});
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
 
@@ -30,6 +32,56 @@ export default function HomeScreen() {
       }
     }, [year, month, selectedChildId])
   );
+
+  // 画像のアスペクト比を事前に取得
+  useEffect(() => {
+    const loadImageAspectRatios = async () => {
+      const newAspectRatios: { [key: string]: number } = {};
+      const recordsToLoad = records.filter(
+        (record) => record.photo_uri && isValidImageUri(record.photo_uri) && !imageAspectRatios[record.id]
+      );
+
+      if (recordsToLoad.length === 0) return;
+
+      console.log(`[画像アスペクト比] ${recordsToLoad.length}件の画像サイズを取得中...`);
+
+      // 並列で画像サイズを取得
+      const promises = recordsToLoad.map((record) => {
+        return new Promise<void>((resolve) => {
+          Image.getSize(
+            record.photo_uri!,
+            (width, height) => {
+              if (width && height) {
+                const aspectRatio = width / height;
+                newAspectRatios[record.id] = aspectRatio;
+                console.log(`[画像アスペクト比] ${record.id}: ${width}x${height} = ${aspectRatio.toFixed(2)}`);
+              }
+              resolve();
+            },
+            (error) => {
+              console.warn(`[画像サイズ取得エラー] ${record.id}:`, error);
+              resolve();
+            }
+          );
+        });
+      });
+
+      await Promise.all(promises);
+
+      if (Object.keys(newAspectRatios).length > 0) {
+        console.log(`[画像アスペクト比] ${Object.keys(newAspectRatios).length}件のアスペクト比を更新`);
+        setImageAspectRatios((prev) => ({
+          ...prev,
+          ...newAspectRatios,
+        }));
+      }
+    };
+
+    if (records.length > 0) {
+      loadImageAspectRatios();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records]);
 
   const loadRecords = async () => {
     if (!selectedChildId) return;
@@ -88,26 +140,57 @@ export default function HomeScreen() {
   const renderRecord = ({ item }: { item: TestRecord }) => {
     const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
     const subjectColor = getSubjectColor(item.subject);
+    const imageAspectRatio = imageAspectRatios[item.id];
 
     if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
       console.warn('[画像警告] 無効な画像URIが検出されました:', item.photo_uri);
     }
+
+    // コンテナの高さは元のアスペクト比で計算（回転は画像の表示にのみ影響）
+    // 詳細画面と同じ表示にするため、回転を考慮しない
+    const isLandscape = imageAspectRatio ? imageAspectRatio > 1 : null;
+
+    // アスペクト比に応じてコンテナの高さを動的に計算
+    const getImageContainerHeight = () => {
+      if (!hasPhoto) return 80;
+      if (!imageAspectRatio) {
+        // アスペクト比が取得できていない場合はデフォルト
+        return 240;
+      }
+      
+      // 実際の画面幅を取得（カードの幅 = 画面幅 - パディング32px）
+      const screenWidth = Dimensions.get('window').width;
+      const cardWidth = screenWidth - 32; // 左右のパディング16px × 2
+      
+      // 元のアスペクト比に基づいて高さを計算（回転を考慮しない）
+      // 横長の画像: 高さを小さく
+      // 縦長の画像: 高さを大きく
+      const calculatedHeight = cardWidth / imageAspectRatio;
+      
+      // 高さの範囲を制限
+      // 横長の画像（imageAspectRatio > 1）: 最小150px、最大300px
+      // 縦長の画像（imageAspectRatio <= 1）: 最小200px、最大500px
+      const height = imageAspectRatio > 1
+        ? Math.max(150, Math.min(300, calculatedHeight))
+        : Math.max(200, Math.min(500, calculatedHeight));
+      
+      console.log(`[画像コンテナ高さ] ${item.id}: アスペクト比=${imageAspectRatio.toFixed(2)}, 横長=${isLandscape}, 回転=${item.photo_rotation || 0}度, 計算高さ=${calculatedHeight.toFixed(0)}px, 最終高さ=${height}px`);
+      return height;
+    };
 
     return (
       <TouchableOpacity
         style={styles.card}
         onPress={() => router.push(`/detail?id=${item.id}`)}
         activeOpacity={0.8}>
-        <View style={[styles.imageContainer, !hasPhoto && styles.imageContainerNoPhoto]}>
+        <View style={[
+          styles.imageContainer, 
+          !hasPhoto && styles.imageContainerNoPhoto,
+          { height: getImageContainerHeight() }
+        ]}>
           {hasPhoto ? (
             <>
-              <View
-                style={[
-                  styles.imageWrapper,
-                  {
-                    transform: [{ rotate: `${item.photo_rotation}deg` }],
-                  },
-                ]}>
+              <View style={styles.imageWrapper}>
                 <Image
                   source={{ uri: item.photo_uri! }}
                   style={styles.cardImage}

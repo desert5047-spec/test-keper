@@ -30,6 +30,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
     const { data } = await supabase
       .from('children')
       .select('id, name, grade, color')
+      .eq('user_id', user.id)
       .order('created_at');
 
     if (data && data.length > 0) {
@@ -37,6 +38,8 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
       if (!selectedChildId) {
         setSelectedChildIdState(data[0].id);
       }
+    } else {
+      setChildren([]);
     }
   };
 
