@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen } from 'lucide-react-native';
+import { BookOpen, Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
 export default function LoginScreen() {
@@ -21,6 +21,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { signIn, signInWithGoogle } = useAuth();
@@ -76,8 +77,8 @@ export default function LoginScreen() {
           <View style={styles.iconContainer}>
             <BookOpen size={48} color="#4A90E2" strokeWidth={2} />
           </View>
-          <Text style={styles.title}>テストキーパー</Text>
-          <Text style={styles.subtitle}>子供の頑張りを記録しよう</Text>
+          <Text style={styles.title}>テストアルバム</Text>
+          <Text style={styles.subtitle}>写真でかんたん、テスト記録アプリ</Text>
         </View>
 
         <View style={styles.form}>
@@ -138,17 +139,36 @@ export default function LoginScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>パスワード</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="パスワード"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="password"
-              editable={!loading}
-            />
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="パスワード"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="password"
+                editable={!loading}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+                activeOpacity={0.7}>
+                {showPassword ? (
+                  <EyeOff size={20} color="#999" />
+                ) : (
+                  <Eye size={20} color="#999" />
+                )}
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/(auth)/forgot-password')}
+              disabled={loading}
+              style={styles.forgotPasswordLink}
+              activeOpacity={0.7}>
+              <Text style={styles.forgotPasswordText}>パスワードを忘れた場合</Text>
+            </TouchableOpacity>
           </View>
 
           {error ? (
@@ -335,5 +355,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-SemiBold',
     color: '#333',
+  },
+  forgotPasswordLink: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#4A90E2',
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+  },
+  eyeIcon: {
+    padding: 12,
   },
 });

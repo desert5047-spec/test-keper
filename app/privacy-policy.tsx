@@ -14,7 +14,7 @@ export default function PrivacyPolicyScreen() {
           <Text style={styles.lastUpdate}>最終更新日: 2026年1月26日</Text>
 
           <Text style={styles.paragraph}>
-            テストキーパー（以下「本アプリ」）は、ユーザーの皆様のプライバシーを尊重し、個人情報の保護に努めています。本プライバシーポリシーは、本アプリにおける個人情報の取り扱いについて説明するものです。
+            テストアルバム（以下「本アプリ」）は、ユーザーの皆様のプライバシーを尊重し、個人情報の保護に努めています。本プライバシーポリシーは、本アプリにおける個人情報の取り扱いについて説明するものです。
           </Text>
 
           <Text style={styles.heading}>1. 収集する情報</Text>

@@ -51,6 +51,26 @@ export default function AuthCallbackScreen() {
           console.log('[コールバック] URLがありません。セッションを確認します。');
         }
 
+        // リセットパスワードのケースをチェック
+        const type = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.hash.substring(1)).get('type')
+          : url
+          ? (Linking.parse(url).queryParams?.type as string || null)
+          : null;
+
+        if (type === 'recovery' && accessToken) {
+          console.log('[コールバック] パスワードリセットフローを検出');
+          // パスワードリセット画面にリダイレクト
+          router.replace({
+            pathname: '/(auth)/reset-password',
+            params: {
+              access_token: accessToken,
+              type: 'recovery',
+            },
+          });
+          return;
+        }
+
         if (accessToken && refreshToken) {
           console.log('[コールバック] セッションを設定中...');
           // セッションを設定

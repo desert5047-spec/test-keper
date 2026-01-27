@@ -17,6 +17,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -27,6 +29,8 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signInWithGoogle: async () => ({ error: null }),
+  resetPassword: async () => ({ error: null }),
+  updatePassword: async () => ({ error: null }),
   signOut: async () => {},
 });
 
@@ -417,6 +421,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace('/(auth)/login');
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      let redirectUrl: string | undefined;
+
+      if (Platform.OS === 'web') {
+        redirectUrl = typeof window !== 'undefined' 
+          ? `${window.location.origin}/(auth)/reset-password`
+          : undefined;
+      } else {
+        // ネイティブ環境では、deep linkを使用
+        const scheme = 'myapp';
+        redirectUrl = `${scheme}://reset-password`;
+      }
+
+      console.log('[パスワードリセット] リクエスト開始:', { email, redirectUrl, platform: Platform.OS });
+
+      const { error, data } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) {
+        console.error('[パスワードリセット] Supabaseエラー:', error);
+        return { error };
+      }
+
+      console.log('[パスワードリセット] 成功:', data);
+      // セキュリティ上の理由で、Supabaseは存在しないメールアドレスでもエラーを返さない場合がある
+      // そのため、常に成功メッセージを表示する
+      return { error: null };
+    } catch (err: any) {
+      console.error('[パスワードリセット] 予期しないエラー:', err);
+      return { error: err instanceof Error ? err : new Error('パスワードリセット中にエラーが発生しました') };
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      return { error };
+    }
+
+    return { error: null };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -426,6 +478,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signInWithGoogle,
+        resetPassword,
+        updatePassword,
         signOut,
       }}>
       {children}

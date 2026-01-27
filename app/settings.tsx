@@ -199,7 +199,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>アプリについて</Text>
           <View style={styles.infoCard}>
-            <Text style={styles.appName}>テストキーパー</Text>
+            <Text style={styles.appName}>テストアルバム</Text>
             <Text style={styles.appVersion}>Version 1.0.0</Text>
             <Text style={styles.appDescription}>
               子供のテストや成績を記録して、{'\n'}
