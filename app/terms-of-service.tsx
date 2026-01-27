@@ -14,7 +14,7 @@ export default function TermsOfServiceScreen() {
           <Text style={styles.lastUpdate}>最終更新日: 2026年1月26日</Text>
 
           <Text style={styles.paragraph}>
-            この利用規約（以下「本規約」）は、テストキーパー（以下「本アプリ」）の利用条件を定めるものです。本アプリをご利用いただく際には、本規約にご同意いただいたものとみなします。
+            この利用規約（以下「本規約」）は、テストアルバム（以下「本アプリ」）の利用条件を定めるものです。本アプリをご利用いただく際には、本規約にご同意いただいたものとみなします。
           </Text>
 
           <Text style={styles.heading}>第1条（適用）</Text>
