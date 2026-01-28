@@ -195,6 +195,9 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
     backgroundColor: '#fff',
     ...Platform.select({
+      web: {
+        boxShadow: '0px -1px 3px rgba(0, 0, 0, 0.1)',
+      },
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -1 },
@@ -224,10 +227,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#4A90E2',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 4px rgba(74, 144, 226, 0.3)',
+      },
+      default: {
+        shadowColor: '#4A90E2',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 6,
+      },
+    }),
   },
 });

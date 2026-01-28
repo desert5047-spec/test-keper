@@ -8,6 +8,7 @@ import {
   Image,
   RefreshControl,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -22,6 +23,7 @@ export default function HomeScreen() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [imageAspectRatios, setImageAspectRatios] = useState<{ [key: string]: number }>({});
+  const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
 
@@ -54,12 +56,16 @@ export default function HomeScreen() {
               if (width && height) {
                 const aspectRatio = width / height;
                 newAspectRatios[record.id] = aspectRatio;
-                console.log(`[画像アスペクト比] ${record.id}: ${width}x${height} = ${aspectRatio.toFixed(2)}`);
+                console.log(`[画像アスペクト比] ${record.id}: ${width}x${height} = ${aspectRatio.toFixed(2)}, URI: ${record.photo_uri?.substring(0, 80)}`);
               }
               resolve();
             },
             (error) => {
-              console.warn(`[画像サイズ取得エラー] ${record.id}:`, error);
+              console.error(`[画像サイズ取得エラー] ${record.id}:`, error);
+              console.error(`[画像サイズ取得エラー] URI: ${record.photo_uri}`);
+              console.error(`[画像サイズ取得エラー] Platform: ${Platform.OS}`);
+              // エラーを記録
+              setImageErrors((prev) => ({ ...prev, [record.id]: true }));
               resolve();
             }
           );
@@ -90,7 +96,7 @@ export default function HomeScreen() {
     const endDate = new Date(year, month, 0);
     const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('records')
       .select('*')
       .eq('child_id', selectedChildId)
@@ -99,8 +105,26 @@ export default function HomeScreen() {
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
 
+    if (error) {
+      console.error('[記録読み込みエラー]', error);
+      return;
+    }
+
     if (data) {
+      console.log(`[記録読み込み] ${data.length}件の記録を取得`, { platform: Platform.OS });
+      // 写真がある記録のURIをログに出力
+      data.forEach((record) => {
+        if (record.photo_uri) {
+          console.log(`[記録読み込み] 写真URI: ${record.id}`, {
+            photo_uri: record.photo_uri,
+            isValid: isValidImageUri(record.photo_uri),
+            platform: Platform.OS,
+          });
+        }
+      });
       setRecords(data);
+      // エラー状態をリセット
+      setImageErrors({});
     }
   };
 
@@ -141,10 +165,15 @@ export default function HomeScreen() {
     const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
     const subjectColor = getSubjectColor(item.subject);
     const imageAspectRatio = imageAspectRatios[item.id];
+    const hasImageError = imageErrors[item.id];
 
     if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
       console.warn('[画像警告] 無効な画像URIが検出されました:', item.photo_uri);
+      console.warn('[画像警告] Platform:', Platform.OS);
     }
+
+    // 画像エラーがある場合は写真なしとして扱う
+    const shouldShowPhoto = hasPhoto && !hasImageError;
 
     // コンテナの高さは元のアスペクト比で計算（回転は画像の表示にのみ影響）
     // 詳細画面と同じ表示にするため、回転を考慮しない
@@ -152,7 +181,7 @@ export default function HomeScreen() {
 
     // アスペクト比に応じてコンテナの高さを動的に計算
     const getImageContainerHeight = () => {
-      if (!hasPhoto) return 80;
+      if (!shouldShowPhoto) return 80;
       if (!imageAspectRatio) {
         // アスペクト比が取得できていない場合はデフォルト
         return 240;
@@ -185,16 +214,34 @@ export default function HomeScreen() {
         activeOpacity={0.8}>
         <View style={[
           styles.imageContainer, 
-          !hasPhoto && styles.imageContainerNoPhoto,
+          !shouldShowPhoto && styles.imageContainerNoPhoto,
           { height: getImageContainerHeight() }
         ]}>
-          {hasPhoto ? (
+          {shouldShowPhoto ? (
             <>
               <View style={styles.imageWrapper}>
                 <Image
                   source={{ uri: item.photo_uri! }}
                   style={styles.cardImage}
                   resizeMode="contain"
+                  onLoad={() => {
+                    console.log(`[画像読み込み成功] ${item.id}: ${item.photo_uri?.substring(0, 80)}`);
+                    // エラー状態をクリア
+                    if (imageErrors[item.id]) {
+                      setImageErrors((prev) => {
+                        const newErrors = { ...prev };
+                        delete newErrors[item.id];
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  onError={(error) => {
+                    console.error(`[画像読み込みエラー] ${item.id}:`, error);
+                    console.error(`[画像読み込みエラー] URI: ${item.photo_uri}`);
+                    console.error(`[画像読み込みエラー] Platform: ${Platform.OS}`);
+                    // エラーを記録
+                    setImageErrors((prev) => ({ ...prev, [item.id]: true }));
+                  }}
                 />
               </View>
               <View style={styles.dateOverlay}>
@@ -203,7 +250,9 @@ export default function HomeScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.noPhotoText}>写真なし</Text>
+              <Text style={styles.noPhotoText}>
+                {hasImageError ? '写真の読み込みに失敗しました' : '写真なし'}
+              </Text>
               <View style={styles.dateOverlay}>
                 <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
               </View>
@@ -260,11 +309,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.08)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+      },
+    }),
   },
   imageContainer: {
     position: 'relative',

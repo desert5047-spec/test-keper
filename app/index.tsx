@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
@@ -7,13 +7,30 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      checkOnboardingStatus();
+    // loadingが完了するまで待つ
+    if (loading) {
+      console.log('[Index] 認証状態を読み込み中...', { platform: Platform.OS });
+      return;
     }
-  }, [user]);
+
+    // 未ログインの場合はログイン画面にリダイレクト
+    if (!user) {
+      console.log('[Index] 未ログイン、ログイン画面にリダイレクト', { platform: Platform.OS });
+      try {
+        router.replace('/(auth)/login');
+      } catch (error) {
+        console.error('[Index] リダイレクトエラー:', error);
+      }
+      return;
+    }
+
+    // ログイン済みの場合はオンボーディング状態をチェック
+    console.log('[Index] ログイン済み、オンボーディング状態をチェック', { userId: user.id, platform: Platform.OS });
+    checkOnboardingStatus();
+  }, [user, loading]);
 
   const checkOnboardingStatus = async () => {
     if (!user) return;
@@ -29,11 +46,14 @@ export default function Index() {
         .limit(1);
 
       if (children && children.length > 0) {
+        console.log('[Index] オンボーディング完了、タブ画面にリダイレクト');
         router.replace('/(tabs)');
       } else {
+        console.log('[Index] 子供未登録、子供登録画面にリダイレクト');
         router.replace('/register-child');
       }
     } else {
+      console.log('[Index] オンボーディング未完了、オンボーディング画面にリダイレクト');
       router.replace('/onboarding');
     }
   };

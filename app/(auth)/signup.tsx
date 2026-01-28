@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { signInWithGoogleExpoGo } from '@/lib/auth';
 import { BookOpen, ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -75,15 +76,27 @@ export default function SignupScreen() {
     setGoogleLoading(true);
     setError('');
 
-    const { error: googleError } = await signInWithGoogle();
-
-    if (googleError) {
+    try {
+      // Platform.OS で必ず分岐
+      if (Platform.OS === 'web') {
+        // Webのときだけ window.location.origin を使った signInWithOAuth を実行
+        const { error: googleError } = await signInWithGoogle();
+        if (googleError) {
+          setError('Google認証に失敗しました。もう一度お試しください。');
+        }
+        // Web環境では、リダイレクト後にonAuthStateChangeが自動的に発火する
+      } else {
+        // iOS/Android のときは必ず signInWithGoogleExpoGo() を呼ぶ
+        await signInWithGoogleExpoGo();
+        // 認証成功時は、AuthContextのonAuthStateChangeが自動的に処理するため
+        // ここでは何もしない
+      }
+    } catch (googleError: any) {
+      console.error('[Google認証] エラー:', googleError);
       setError('Google認証に失敗しました。もう一度お試しください。');
+    } finally {
       setGoogleLoading(false);
-      return;
     }
-
-    setGoogleLoading(false);
   };
 
   return (
@@ -379,11 +392,18 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 8px rgba(74, 144, 226, 0.3)',
+      },
+      default: {
+        shadowColor: '#4A90E2',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
     minHeight: 56,
     marginTop: 16,
   },
@@ -398,10 +418,17 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 8px rgba(74, 144, 226, 0.3)',
+      },
+      default: {
+        shadowColor: '#4A90E2',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
     elevation: 4,
     minHeight: 56,
   },

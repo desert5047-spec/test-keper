@@ -8,12 +8,15 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen, Eye, EyeOff } from 'lucide-react-native';
+import { signInWithGoogleExpoGo } from '@/lib/auth';
+import { getLastAuthProvider } from '@/lib/auth/lastProvider';
+import { Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
 export default function LoginScreen() {
@@ -26,6 +29,27 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { signIn, signInWithGoogle } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [lastLoginMethod, setLastLoginMethod] = useState<string | null>(null);
+
+  // 前回のログイン手段を確認
+  useEffect(() => {
+    const checkLastLogin = async () => {
+      const provider = await getLastAuthProvider();
+      if (provider === 'google') {
+        setLastLoginMethod('Google');
+        console.log('[認証手段] ログイン画面: 前回はGoogleでログイン');
+        return;
+      }
+      if (provider === 'email') {
+        setLastLoginMethod('Email');
+        console.log('[認証手段] ログイン画面: 前回はEmailでログイン');
+        return;
+      }
+      setLastLoginMethod(null);
+      console.log('[認証手段] ログイン画面: 前回のログイン手段なし');
+    };
+    checkLastLogin();
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -51,15 +75,27 @@ export default function LoginScreen() {
     setGoogleLoading(true);
     setError('');
 
-    const { error: googleError } = await signInWithGoogle();
-
-    if (googleError) {
+    try {
+      // Platform.OS で必ず分岐
+      if (Platform.OS === 'web') {
+        // Webのときだけ window.location.origin を使った signInWithOAuth を実行
+        const { error: googleError } = await signInWithGoogle();
+        if (googleError) {
+          setError('Google認証に失敗しました。もう一度お試しください。');
+        }
+        // Web環境では、リダイレクト後にonAuthStateChangeが自動的に発火する
+      } else {
+        // iOS/Android のときは必ず signInWithGoogleExpoGo() を呼ぶ
+        await signInWithGoogleExpoGo();
+        // 認証成功時は、AuthContextのonAuthStateChangeが自動的に処理するため
+        // ここでは何もしない
+      }
+    } catch (googleError: any) {
+      console.error('[Google認証] エラー:', googleError);
       setError('Google認証に失敗しました。もう一度お試しください。');
+    } finally {
       setGoogleLoading(false);
-      return;
     }
-
-    setGoogleLoading(false);
   };
 
   return (
@@ -75,10 +111,17 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
-            <BookOpen size={48} color="#4A90E2" strokeWidth={2} />
+            <Image
+              source={require('@/assets/images/app-icon.png')}
+              style={styles.appIcon}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.title}>テストアルバム</Text>
           <Text style={styles.subtitle}>写真でかんたん、テスト記録アプリ</Text>
+          {lastLoginMethod ? (
+            <Text style={styles.lastLoginText}>前回のログイン: {lastLoginMethod}</Text>
+          ) : null}
         </View>
 
         <View style={styles.form}>
@@ -215,16 +258,31 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 15,
   },
   iconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+      },
+    }),
+  },
+  appIcon: {
+    width: 96,
+    height: 96,
   },
   title: {
     fontSize: 32,
@@ -236,6 +294,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
     color: '#666',
+  },
+  lastLoginText: {
+    marginTop: 30,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#4A90E2',
   },
   form: {
     flex: 1,
@@ -280,11 +344,18 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 8px rgba(74, 144, 226, 0.3)',
+      },
+      default: {
+        shadowColor: '#4A90E2',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
     minHeight: 56,
   },
   loginButtonDisabled: {
@@ -315,7 +386,8 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginTop: 24,
+    marginBottom: 8,
   },
   dividerLine: {
     flex: 1,

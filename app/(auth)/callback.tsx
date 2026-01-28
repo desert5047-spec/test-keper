@@ -26,7 +26,7 @@ export default function AuthCallbackScreen() {
         } else if (url) {
           console.log('[コールバック] ネイティブ環境でURLを処理中:', url);
           // iOS/Android環境での深いリンク処理
-          // カスタムスキーム（myapp://）のURLを処理
+          // カスタムスキーム（myapp://、exp://）のURLを処理
           const parsedUrl = Linking.parse(url);
           console.log('[コールバック] パースされたURL:', parsedUrl);
           
@@ -46,6 +46,19 @@ export default function AuthCallbackScreen() {
             accessToken = hashParams.get('access_token');
             refreshToken = hashParams.get('refresh_token');
             console.log('[コールバック] フラグメントから取得:', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken });
+          }
+          
+          // exp://スキームの場合、パスからもトークンを検索
+          if (!accessToken && url.startsWith('exp://')) {
+            console.log('[コールバック] exp://スキーム検出、パスからも検索');
+            // exp://host/path#fragment の形式を処理
+            const urlParts = url.split('#');
+            if (urlParts.length > 1) {
+              const hashParams = new URLSearchParams(urlParts[1]);
+              accessToken = hashParams.get('access_token');
+              refreshToken = hashParams.get('refresh_token');
+              console.log('[コールバック] exp://フラグメントから取得:', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken });
+            }
           }
         } else {
           console.log('[コールバック] URLがありません。セッションを確認します。');
