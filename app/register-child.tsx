@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     ...(Platform.OS === 'web' && {
-      outline: 'none',
+      outlineStyle: 'none',
       outlineWidth: 0,
       cursor: 'pointer',
       WebkitTapHighlightColor: 'transparent',
@@ -286,11 +286,18 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 18,
     alignItems: 'center',
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 8px rgba(74, 144, 226, 0.3)',
+      },
+      default: {
+        shadowColor: '#4A90E2',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
   },
   saveButtonDisabled: {
     backgroundColor: '#CCC',

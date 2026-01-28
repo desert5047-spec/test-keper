@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSegments } from 'expo-router';
@@ -6,6 +6,8 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
+import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
 
 // OAuthリダイレクト後の処理を完了させる
 WebBrowser.maybeCompleteAuthSession();
@@ -35,31 +37,37 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  console.log('[AuthProvider] 初期化開始', { platform: Platform.OS });
+  
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const router = useRouter();
   const segments = useSegments();
+  
+  // 前回のログイン手段を追跡
+  useTrackLastAuthProvider();
+  
+  console.log('[AuthProvider] 状態初期化完了', { 
+    hasRouter: !!router, 
+    segmentsCount: segments.length,
+    platform: Platform.OS 
+  });
 
   // オンボーディング完了フラグと子供数をチェックして適切な画面にリダイレクト
   const checkAndRedirect = useCallback(async (currentUser: User) => {
-    if (checkingOnboarding) return;
+    if (checkingOnboarding) {
+      console.log('[AuthContext] checkAndRedirect: 既にチェック中です');
+      return;
+    }
     setCheckingOnboarding(true);
 
     try {
+      const currentPath = segments.join('/');
       const onboardingKey = `hasCompletedOnboarding_${currentUser.id}`;
       const hasCompletedOnboarding = await AsyncStorage.getItem(onboardingKey);
-      const currentPath = segments.join('/');
-
-      // オンボーディング未完了の場合
-      if (!hasCompletedOnboarding) {
-        if (currentPath !== 'onboarding') {
-          router.replace('/onboarding');
-        }
-        setCheckingOnboarding(false);
-        return;
-      }
+      console.log('[AuthContext] checkAndRedirect: オンボーディング完了状態:', { hasCompletedOnboarding, userId: currentUser.id, currentPath });
 
       // 子供の数をチェック
       const { data: childrenData, error } = await supabase
@@ -68,47 +76,138 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('user_id', currentUser.id);
 
       if (error) {
-        console.error('Error checking children:', error);
+        console.error('[AuthContext] checkAndRedirect: 子供データ取得エラー:', error);
         setCheckingOnboarding(false);
         return;
       }
 
       const childrenCount = childrenData?.length || 0;
+      console.log('[AuthContext] checkAndRedirect: 子供の数:', childrenCount);
 
-      // 子供が0人の場合、子供登録ページへ
-      if (childrenCount === 0) {
-        if (currentPath !== 'register-child') {
-          router.replace('/register-child');
+      // 子供がいる場合、オンボーディングは完了しているとみなす（子供を登録するにはオンボーディングを完了している必要があるため）
+      if (childrenCount > 0) {
+        // オンボーディング完了フラグが設定されていない場合は設定する
+        if (!hasCompletedOnboarding) {
+          console.log('[AuthContext] checkAndRedirect: 子供がいるがオンボーディングフラグがないため、フラグを設定します');
+          await AsyncStorage.setItem(onboardingKey, 'true');
         }
-      } else {
-        // 子供がいる場合、オンボーディングや認証グループ内にいる場合はタブページへ
+        
+        const isTabs = segments[0] === '(tabs)';
         const inAuthGroup = segments[0] === '(auth)';
         const isOnboarding = currentPath === 'onboarding';
-        if ((inAuthGroup || isOnboarding) && currentPath !== '(tabs)') {
+        const isRegisterChild = currentPath === 'register-child';
+        
+        // オンボーディングページ、認証グループ、子供登録ページにいる場合はタブページへリダイレクト
+        if (isOnboarding || inAuthGroup || isRegisterChild) {
+          console.log('[AuthContext] checkAndRedirect: 子供がいる、タブページへ');
           router.replace('/(tabs)');
+        } else if (!isTabs) {
+          // タブページ以外（settings, children, detail, addなど）にいる場合はリダイレクトしない
+          console.log('[AuthContext] checkAndRedirect: 既に適切なページにいます:', currentPath);
+        }
+        setCheckingOnboarding(false);
+        return;
+      }
+
+      // オンボーディング未完了の場合
+      if (!hasCompletedOnboarding) {
+        if (currentPath !== 'onboarding') {
+          console.log('[AuthContext] checkAndRedirect: オンボーディング未完了、オンボーディングページへ');
+          router.replace('/onboarding');
+        }
+        setCheckingOnboarding(false);
+        return;
+      }
+
+      // オンボーディング完了だが子供が0人の場合、子供登録ページへ
+      if (childrenCount === 0) {
+        if (currentPath !== 'register-child') {
+          console.log('[AuthContext] checkAndRedirect: 子供が0人、子供登録ページへ');
+          router.replace('/register-child');
         }
       }
     } catch (error) {
-      console.error('Error in checkAndRedirect:', error);
+      console.error('[AuthContext] checkAndRedirect: エラー:', error);
     } finally {
       setCheckingOnboarding(false);
     }
-  }, [checkingOnboarding, segments, router]);
+  }, [checkingOnboarding, router, segments]);
+
+  // checkAndRedirectの最新の参照を保持するためのref
+  const checkAndRedirectRef = useRef(checkAndRedirect);
+  useEffect(() => {
+    checkAndRedirectRef.current = checkAndRedirect;
+  }, [checkAndRedirect]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    console.log('[AuthContext] セッション取得開始', { platform: Platform.OS });
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('[AuthContext] セッション取得エラー:', error);
+        setLoading(false);
+        return;
+      }
+      console.log('[AuthContext] セッション取得完了', { 
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        platform: Platform.OS 
+      });
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+    }).catch((error) => {
+      console.error('[AuthContext] セッション取得例外:', error);
+      setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[AuthContext] 認証状態変更:', { event, userId: session?.user?.id });
-      (async () => {
-        setSession(session);
-        setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[AuthContext] 認証状態変更:', { event, userId: session?.user?.id, platform: Platform.OS });
+      
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      // INITIAL_SESSIONイベントの場合は、getSession()の結果を待つため、loadingをfalseにしない
+      // 他のイベントの場合は、loadingをfalseにする
+      if (event !== 'INITIAL_SESSION') {
         setLoading(false);
-      })();
+      }
+      
+      // SIGNED_INイベントの場合は、オンボーディング/子供登録チェックを実行
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('[AuthContext] ログイン検出、オンボーディングチェックを実行', { platform: Platform.OS, userId: session.user.id });
+        setLoading(false);
+        // 少し遅延を入れて、segmentsが更新されるのを待つ
+        setTimeout(() => {
+          checkAndRedirectRef.current(session.user);
+        }, 200);
+      }
+      
+      // SIGNED_OUTイベントの場合は、ログイン画面にリダイレクト
+      if (event === 'SIGNED_OUT') {
+        console.log('[AuthContext] ログアウト検出、ログイン画面にリダイレクト', { platform: Platform.OS });
+        setLoading(false);
+        // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
+        const delay = Platform.OS === 'android' ? 300 : 100;
+        setTimeout(() => {
+          console.log('[AuthContext] リダイレクト実行:', { platform: Platform.OS });
+          router.replace('/(auth)/login');
+        }, delay);
+      }
+      
+      // INITIAL_SESSIONイベントの場合は、getSession()の結果を待つ
+      // getSession()が完了したら、loadingをfalseにする
+      if (event === 'INITIAL_SESSION') {
+        // getSession()の結果を待つ（既に実行されているが、念のため）
+        supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          setLoading(false);
+          console.log('[AuthContext] INITIAL_SESSION処理完了:', { 
+            hasUser: !!currentSession?.user,
+            platform: Platform.OS 
+          });
+        });
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -150,6 +249,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error };
     }
 
+    // メール認証でログインした場合は明示的に保存する
+    await saveLastAuthProvider('email');
     return { error: null };
   };
 
@@ -172,8 +273,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  // Web専用のGoogle認証関数
+  // iOS/Androidでは signInWithGoogleExpoGo() を使用すること
   const signInWithGoogle = async () => {
     try {
+      // Web専用の処理
+      if (Platform.OS !== 'web') {
+        console.error('[Google認証] signInWithGoogle はWeb専用です。モバイルでは signInWithGoogleExpoGo を使用してください。');
+        return { error: new Error('この関数はWeb専用です') };
+      }
+
       // リダイレクトURLを構築
       // Supabase DashboardでこのURLを許可済みリダイレクトURLに追加する必要があります
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
@@ -182,21 +291,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: new Error('Supabase URLが設定されていません') };
       }
 
-      // iOS/Androidではカスタムスキームを使用
-      // Expo Routerでは、ルートグループの括弧は深いリンクでは含まれない
-      const customScheme = 'myapp';
-      const redirectUrl = Platform.select({
-        web: typeof window !== 'undefined' ? `${window.location.origin}/(auth)/callback` : `${supabaseUrl}/auth/v1/callback`,
-        ios: `${customScheme}://auth/callback`,
-        android: `${customScheme}://auth/callback`,
-        default: `${supabaseUrl}/auth/v1/callback`,
-      });
+      // Web環境では window.location.origin を使用
+      const redirectUrl = typeof window !== 'undefined' 
+        ? `${window.location.origin}/(auth)/callback` 
+        : `${supabaseUrl}/auth/v1/callback`;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: Platform.OS !== 'web',
+          skipBrowserRedirect: false, // Web環境では false（ブラウザが自動的にリダイレクト）
         },
       });
 
@@ -205,210 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Web環境では、ブラウザが自動的にリダイレクトするため、ここで処理終了
-      if (Platform.OS === 'web') {
-        // Web環境では、リダイレクト後にonAuthStateChangeが自動的に発火する
-        return { error: null };
-      }
-
-      // ネイティブプラットフォームでは、expo-web-browserでOAuthフローを開く
-      if (!data?.url) {
-        return { error: new Error('OAuth URLの取得に失敗しました') };
-      }
-
-      console.log('[Google認証] OAuth URLを開きます:', data.url);
-      console.log('[Google認証] リダイレクトURL:', redirectUrl);
-
-      const result = await WebBrowser.openAuthSessionAsync(
-        data.url,
-        redirectUrl
-      );
-
-      console.log('[Google認証] WebBrowser結果:', {
-        type: result.type,
-        url: result.url,
-        errorCode: (result as any).errorCode,
-        errorMessage: (result as any).errorMessage,
-      });
-
-      if (result.type === 'success' && result.url) {
-        try {
-          console.log('[Google認証] コールバックURLを受信:', result.url);
-          let accessToken: string | null = null;
-          let refreshToken: string | null = null;
-
-          // カスタムスキーム（myapp://）のURLを処理
-          if (result.url.startsWith('myapp://') || result.url.startsWith('com.googleusercontent.apps.')) {
-            console.log('[Google認証] カスタムスキームURLを処理中');
-            // expo-linkingでパース
-            const parsedUrl = Linking.parse(result.url);
-            console.log('[Google認証] パースされたURL:', parsedUrl);
-            
-            // クエリパラメータからトークンを取得
-            if (parsedUrl.queryParams) {
-              accessToken = parsedUrl.queryParams.access_token as string || null;
-              refreshToken = parsedUrl.queryParams.refresh_token as string || null;
-              console.log('[Google認証] クエリパラメータから取得:', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken });
-            }
-            
-            // URL文字列から直接フラグメント（#）を検索（Supabaseのデフォルト形式）
-            if (!accessToken && result.url.includes('#')) {
-              console.log('[Google認証] フラグメントからトークンを検索中');
-              const hashIndex = result.url.indexOf('#');
-              const hashPart = result.url.substring(hashIndex + 1);
-              const hashParams = new URLSearchParams(hashPart);
-              accessToken = hashParams.get('access_token');
-              refreshToken = hashParams.get('refresh_token');
-              console.log('[Google認証] フラグメントから取得:', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken });
-            }
-          } else {
-            // 通常のHTTP/HTTPS URLの場合
-            console.log('[Google認証] HTTP/HTTPS URLを処理中');
-            const url = new URL(result.url);
-            const hashParams = new URLSearchParams(url.hash.substring(1));
-            accessToken = hashParams.get('access_token') || url.searchParams.get('access_token');
-            refreshToken = hashParams.get('refresh_token') || url.searchParams.get('refresh_token');
-            console.log('[Google認証] URLから取得:', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken });
-          }
-
-          if (accessToken && refreshToken) {
-            console.log('[Google認証] セッションを設定中...');
-            const { error: sessionError, data: sessionData } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-
-            if (sessionError) {
-              console.error('[Google認証] セッション設定エラー:', sessionError);
-              return { error: sessionError };
-            }
-            console.log('[Google認証] セッション設定成功:', { userId: sessionData?.user?.id });
-          } else {
-            // トークンが見つからない場合、URL全体をSupabaseに処理させる
-            // Supabaseは自動的にURLからセッションを復元する
-            console.log('[Google認証] トークンが見つからないため、セッションを確認中...');
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError) {
-              console.error('[Google認証] セッション取得エラー:', sessionError);
-              return { error: sessionError };
-            }
-            if (session) {
-              console.log('[Google認証] 既存セッションを確認:', { userId: session.user?.id });
-            } else {
-              console.warn('[Google認証] セッションが見つかりませんでした');
-            }
-          }
-        } catch (urlError: any) {
-          console.error('[Google認証] URL解析エラー:', urlError);
-          // エラーが発生しても、Supabaseが自動的にセッションを復元できる場合がある
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          if (!session || sessionError) {
-            console.error('[Google認証] セッション復元失敗:', sessionError);
-            return { error: new Error('認証URLの処理に失敗しました') };
-          }
-          console.log('[Google認証] エラー後もセッションを確認:', { userId: session.user?.id });
-        }
-      } else if (result.type === 'cancel') {
-        console.log('[Google認証] ユーザーがキャンセルしました');
-        return { error: new Error('Google認証がキャンセルされました') };
-      } else if (result.type === 'dismiss') {
-        // Expo Goでは、深いリンクが動作しない場合、ブラウザが閉じられてdismissになることがある
-        // しかし、認証自体は成功している可能性があるため、セッションを確認する
-        console.warn('[Google認証] ブラウザが閉じられました（dismiss）。セッションを確認します...');
-        
-        // onAuthStateChangeイベントを監視してセッションが設定されるのを待つ
-        return new Promise((resolve) => {
-          let resolved = false;
-          const timeout = setTimeout(() => {
-            if (!resolved) {
-              resolved = true;
-              console.warn('[Google認証] ⚠️ タイムアウト: セッションが見つかりませんでした。');
-              resolve({ error: new Error('認証が完了しませんでした。もう一度お試しください。') });
-            }
-          }, 20000); // 20秒でタイムアウト
-
-          // onAuthStateChangeイベントを監視
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            console.log('[Google認証] onAuthStateChangeイベント:', { event, hasSession: !!session, userId: session?.user?.id });
-            
-            if (event === 'SIGNED_IN' && session && !resolved) {
-              resolved = true;
-              clearTimeout(timeout);
-              subscription.unsubscribe();
-              console.log('[Google認証] ✅ セッションが見つかりました（onAuthStateChange経由）:', { 
-                userId: session.user?.id,
-                email: session.user?.email 
-              });
-              resolve({ error: null });
-            } else if (event === 'TOKEN_REFRESHED' && session && !resolved) {
-              // 既にログイン済みの場合
-              resolved = true;
-              clearTimeout(timeout);
-              subscription.unsubscribe();
-              console.log('[Google認証] ✅ セッションが更新されました:', { 
-                userId: session.user?.id,
-                email: session.user?.email 
-              });
-              resolve({ error: null });
-            }
-          });
-
-          // 並行して定期的にセッションを確認（フォールバック）
-          let checkCount = 0;
-          const maxChecks = 15;
-          const checkInterval = setInterval(async () => {
-            if (resolved) {
-              clearInterval(checkInterval);
-              return;
-            }
-
-            checkCount++;
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            
-            if (session && !sessionError && !resolved) {
-              resolved = true;
-              clearTimeout(timeout);
-              clearInterval(checkInterval);
-              subscription.unsubscribe();
-              console.log('[Google認証] ✅ セッションが見つかりました（定期的な確認）:', { 
-                userId: session.user?.id,
-                email: session.user?.email,
-                attempt: checkCount 
-              });
-              resolve({ error: null });
-            } else if (checkCount >= maxChecks) {
-              clearInterval(checkInterval);
-              if (!resolved) {
-                console.log(`[Google認証] セッション確認試行 ${checkCount}/${maxChecks}...`);
-              }
-            } else {
-              console.log(`[Google認証] セッション確認試行 ${checkCount}/${maxChecks}...`);
-            }
-          }, 1500);
-        });
-      } else {
-        console.warn('[Google認証] WebBrowser結果が予期しないタイプ:', result);
-        // その他の場合もセッションを確認
-        console.log('[Google認証] セッションを再確認中（3秒待機後）...');
-        
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        for (let i = 0; i < 5; i++) {
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          if (session && !sessionError) {
-            console.log('[Google認証] セッションが見つかりました（フォールバック）:', { 
-              userId: session.user?.id,
-              attempt: i + 1 
-            });
-            return { error: null };
-          }
-          console.log(`[Google認証] セッション確認試行 ${i + 1}/5...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        
-        console.error('[Google認証] セッションが見つかりませんでした');
-        return { error: new Error('Google認証に失敗しました。セッションを取得できませんでした。') };
-      }
-
+      // リダイレクト後にonAuthStateChangeが自動的に発火する
       return { error: null };
     } catch (err: any) {
       console.error('Google認証エラー:', err);
@@ -417,8 +318,122 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    router.replace('/(auth)/login');
+    try {
+      console.log('[AuthContext] ログアウト開始');
+      
+      // まず、ローカルの状態をクリア
+      setSession(null);
+      setUser(null);
+      
+      // SupabaseのsignOutを試みる（エラーが発生しても続行）
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          console.warn('[AuthContext] Supabase signOutエラー（無視して続行）:', error);
+          // AuthSessionMissingError などのエラーは無視して続行
+        } else {
+          console.log('[AuthContext] Supabase signOut成功');
+        }
+      } catch (signOutError: any) {
+        // AuthSessionMissingError などのエラーは無視して続行
+        console.warn('[AuthContext] Supabase signOut例外（無視して続行）:', signOutError?.message || signOutError);
+      }
+      
+      // ストレージのクリア
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Web環境では、セッションストレージもクリア
+        try {
+          // Supabaseのセッション関連のストレージをクリア
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+          if (supabaseUrl) {
+            const projectId = supabaseUrl.split('//')[1]?.split('.')[0];
+            if (projectId) {
+              localStorage.removeItem(`sb-${projectId}-auth-token`);
+            }
+          }
+          
+          // その他のSupabase関連のストレージもクリア
+          Object.keys(localStorage).forEach(key => {
+            if (key.includes('supabase') || key.includes('sb-') || key.startsWith('supabase.')) {
+              localStorage.removeItem(key);
+            }
+          });
+          
+          // sessionStorageもクリア
+          try {
+            sessionStorage.clear();
+          } catch (e) {
+            // sessionStorageが使えない環境では無視
+          }
+        } catch (storageError) {
+          console.warn('[AuthContext] Webストレージクリアエラー:', storageError);
+        }
+      } else {
+        // Android/iOS環境では、AsyncStorageをクリア
+        try {
+          // オンボーディング関連のキーをクリア
+          const allKeys = await AsyncStorage.getAllKeys();
+          const supabaseKeys = allKeys.filter(key => 
+            key.includes('supabase') || 
+            key.includes('sb-') || 
+            key.startsWith('supabase.') ||
+            key.startsWith('hasCompletedOnboarding')
+          );
+          
+          if (supabaseKeys.length > 0) {
+            await AsyncStorage.multiRemove(supabaseKeys);
+            console.log('[AuthContext] AsyncStorageから削除:', supabaseKeys);
+          }
+          
+          // ユーザーIDに関連するオンボーディングキーも削除
+          if (user?.id) {
+            const onboardingKey = `hasCompletedOnboarding_${user.id}`;
+            await AsyncStorage.removeItem(onboardingKey);
+          }
+        } catch (storageError) {
+          console.warn('[AuthContext] AsyncStorageクリアエラー:', storageError);
+        }
+      }
+      
+      console.log('[AuthContext] ログアウト処理完了、ログイン画面にリダイレクト', { platform: Platform.OS });
+      
+      // ログイン画面にリダイレクト
+      // Web環境では、window.locationを使う方が確実
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // 少し遅延を入れて、状態更新と認証プロバイダー情報の削除を確実にする
+        setTimeout(() => {
+          console.log('[AuthContext] ログイン画面にリダイレクト実行', { platform: Platform.OS });
+          window.location.href = '/(auth)/login';
+        }, 200);
+      } else {
+        // Android/iOS環境では、router.replaceを使用
+        // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
+        const delay = Platform.OS === 'android' ? 300 : 100;
+        setTimeout(() => {
+          console.log('[AuthContext] Android/iOSリダイレクト実行:', { platform: Platform.OS });
+          // Androidでは、複数回試行する
+          if (Platform.OS === 'android') {
+            router.replace('/(auth)/login');
+            // 念のため、もう一度試行
+            setTimeout(() => {
+              router.replace('/(auth)/login');
+            }, 200);
+          } else {
+            router.replace('/(auth)/login');
+          }
+        }, delay);
+      }
+    } catch (error) {
+      console.error('[AuthContext] ログアウト処理中に予期しないエラー:', error);
+      // エラーが発生しても、ローカルの状態をクリアしてリダイレクト
+      setSession(null);
+      setUser(null);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = '/(auth)/login';
+      } else {
+        router.replace('/(auth)/login');
+      }
+    }
   };
 
   const resetPassword = async (email: string) => {
