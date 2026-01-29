@@ -33,3 +33,7 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Supabase CLI temp
+supabase/.temp/
+
