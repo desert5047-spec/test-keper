@@ -26,7 +26,9 @@ interface Child {
   is_default: boolean;
 }
 
+const DEFAULT_CHILD_COLOR = '#98D8C8';
 const COLORS = [
+  DEFAULT_CHILD_COLOR,
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
   '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B195', '#C06C84'
 ];
@@ -51,7 +53,7 @@ export default function ChildrenScreen() {
   const [editingChild, setEditingChild] = useState<Child | null>(null);
   const [name, setName] = useState('');
   const [grade, setGrade] = useState<number | null>(null);
-  const [selectedColor, setSelectedColor] = useState(COLORS[0]);
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_CHILD_COLOR);
 
   useEffect(() => {
     loadChildren();
@@ -87,7 +89,7 @@ export default function ChildrenScreen() {
     setEditingChild(null);
     setName('');
     setGrade(null);
-    setSelectedColor(COLORS[0]);
+    setSelectedColor(DEFAULT_CHILD_COLOR);
     setShowModal(true);
   };
 

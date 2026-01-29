@@ -214,7 +214,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#333',
   },
   right: {
@@ -245,7 +246,8 @@ const styles = StyleSheet.create({
   },
   yearText: {
     fontSize: 15,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#333',
   },
   monthButton: {
@@ -258,7 +260,8 @@ const styles = StyleSheet.create({
   },
   monthText: {
     fontSize: 14,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#333',
   },
   modalOverlay: {
@@ -276,7 +279,8 @@ const styles = StyleSheet.create({
   },
   monthPickerTitle: {
     fontSize: 18,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#333',
     textAlign: 'center',
     paddingVertical: 20,
@@ -304,7 +308,8 @@ const styles = StyleSheet.create({
   },
   monthPickerItemText: {
     fontSize: 15,
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#666',
   },
   monthPickerItemTextSelected: {

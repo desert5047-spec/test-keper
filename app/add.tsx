@@ -67,6 +67,43 @@ export default function AddScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [photoRotation, setPhotoRotation] = useState<number>(0);
 
+  const normalizeAndroidImage = async (uri: string) => {
+    if (Platform.OS !== 'android') return uri;
+    try {
+      const { width, height } = await ImageManipulator.manipulateAsync(
+        uri,
+        [],
+        { format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      const maxDimension = 1024;
+      let newWidth = width;
+      let newHeight = height;
+
+      if (width > height) {
+        if (width > maxDimension) {
+          newHeight = Math.round((height * maxDimension) / width);
+          newWidth = maxDimension;
+        }
+      } else {
+        if (height > maxDimension) {
+          newWidth = Math.round((width * maxDimension) / height);
+          newHeight = maxDimension;
+        }
+      }
+
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: newWidth, height: newHeight } }],
+        { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      return result.uri || uri;
+    } catch (error) {
+      return uri;
+    }
+  };
+
   useEffect(() => {
     requestPermissions();
   }, []);
@@ -300,12 +337,54 @@ export default function AddScreen() {
     }
 
     try {
+      if (Platform.OS === 'web') {
+        const pickImageFromWeb = () =>
+          new Promise<string>((resolve, reject) => {
+            if (typeof document === 'undefined') {
+              reject(new Error('Webのファイル選択が利用できません'));
+              return;
+            }
+
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = () => {
+              const file = input.files?.[0];
+              if (!file) {
+                reject(new Error('画像が選択されていません'));
+                return;
+              }
+
+              const isImageType = file.type?.startsWith('image/');
+              const hasValidExt = /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || '');
+              if (!isImageType && !hasValidExt) {
+                reject(new Error('画像ファイルのみ選択してください'));
+                return;
+              }
+
+              const uri = URL.createObjectURL(file);
+              resolve(uri);
+            };
+            input.onerror = () => reject(new Error('ファイル選択に失敗しました'));
+            input.click();
+          });
+
+        const uri = await pickImageFromWeb();
+        validateImageUri(uri);
+        if (!isValidImageUri(uri)) {
+          throw new Error('画像の形式が正しくありません');
+        }
+        setPhotoUri(uri);
+        setPhotoRotation(0);
+        return;
+      }
+
       console.log('[画像選択] 画像ライブラリを起動中...', { platform: Platform.OS });
       
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 1.0,
+        quality: Platform.OS === 'android' ? 0.6 : 1.0,
       });
 
       console.log('[画像選択] ライブラリ結果:', { 
@@ -316,30 +395,31 @@ export default function AddScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
+        const normalizedUri = await normalizeAndroidImage(uri);
         
-        if (!uri || typeof uri !== 'string') {
-          console.error('[画像選択] URIが無効:', uri);
+        if (!normalizedUri || typeof normalizedUri !== 'string') {
+          console.error('[画像選択] URIが無効:', normalizedUri);
           throw new Error('画像のURIが取得できませんでした');
         }
 
-        console.log('[画像選択] URI取得:', { uri: uri.substring(0, 50), platform: Platform.OS });
+        console.log('[画像選択] URI取得:', { uri: normalizedUri.substring(0, 50), platform: Platform.OS });
 
         try {
-          validateImageUri(uri);
+          validateImageUri(normalizedUri);
         } catch (validateError: any) {
           console.error('[画像選択] URI検証エラー:', validateError);
           throw new Error(`画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         }
 
-        if (!isValidImageUri(uri)) {
-          console.error('[画像選択] 無効なURI:', uri);
+        if (!isValidImageUri(normalizedUri)) {
+          console.error('[画像選択] 無効なURI:', normalizedUri);
           throw new Error('画像の形式が正しくありません');
         }
 
         console.log('[画像選択] 画像URIを設定中...', { platform: Platform.OS });
         
         try {
-          setPhotoUri(uri);
+          setPhotoUri(normalizedUri);
           setPhotoRotation(0);
           console.log('[画像選択] 画像URI設定完了', { platform: Platform.OS });
         } catch (setUriError: any) {
@@ -361,6 +441,12 @@ export default function AddScreen() {
       // エラーメッセージを表示（アプリをクラッシュさせない）
       setTimeout(() => {
         try {
+          if (Platform.OS === 'web') {
+            if (typeof window !== 'undefined') {
+              window.alert(error?.message || '画像の読み込みに失敗しました。もう一度お試しください。');
+            }
+            return;
+          }
           Alert.alert(
             'エラー',
             error?.message || '画像の読み込みに失敗しました。もう一度お試しください。',
@@ -380,6 +466,11 @@ export default function AddScreen() {
       setShowPhotoOptions(false);
     } catch (setStateError) {
       console.error('[写真撮影] setStateエラー:', setStateError);
+    }
+
+    if (Platform.OS === 'web') {
+      await pickImage();
+      return;
     }
 
     // Androidではexpo-cameraを使用（Expo Goで再起動する問題を回避）
@@ -484,8 +575,9 @@ export default function AddScreen() {
         return;
       }
 
+      const normalizedUri = await normalizeAndroidImage(uri);
       console.log('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
-      setPhotoUri(uri);
+      setPhotoUri(normalizedUri);
       setPhotoRotation(0);
       console.log('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
     } catch (error: any) {
@@ -512,7 +604,10 @@ export default function AddScreen() {
       const result = await ImageManipulator.manipulateAsync(
         photoUri,
         [{ rotate: rotation }],
-        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+        {
+          compress: Platform.OS === 'android' ? 0.4 : 0.5,
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
       );
 
       validateImageUri(result.uri);
@@ -574,12 +669,25 @@ export default function AddScreen() {
         return;
       }
 
-      if (evaluationType === 'score') {
-        if (!score.trim()) {
-          setErrorMessage('点数を入れてください');
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
-        }
+      if (!date.trim()) {
+        setErrorMessage('日付を入れてください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+
+      // 写真または記録（点数/スタンプ）のどちらかが必要
+      const hasPhoto = !!photoUri && isValidImageUri(photoUri);
+      const hasScore = evaluationType === 'score' && score.trim() !== '';
+      const hasStamp = evaluationType === 'stamp' && !!stamp;
+
+      if (!hasPhoto && !hasScore && !hasStamp) {
+        setErrorMessage('写真または記録（点数/スタンプ）のどちらかを入力してください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+
+      // 記録がある場合、その妥当性をチェック
+      if (hasScore) {
         const scoreNum = parseInt(score);
         const maxScoreNum = parseInt(maxScore);
         if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
@@ -592,18 +700,6 @@ export default function AddScreen() {
           setTimeout(() => setErrorMessage(''), 3000);
           return;
         }
-      } else {
-        if (!stamp) {
-          setErrorMessage('スタンプを選んでください');
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
-        }
-      }
-
-      if (!date.trim()) {
-        setErrorMessage('日付を入れてください');
-        setTimeout(() => setErrorMessage(''), 3000);
-        return;
       }
 
       if (photoUri) {
@@ -731,9 +827,9 @@ export default function AddScreen() {
             date,
             subject: selectedSubject,
             type,
-            score: evaluationType === 'score' ? parseInt(score) : null,
-            max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
-            stamp: evaluationType === 'stamp' ? stamp : null,
+            score: hasScore ? parseInt(score) : null,
+            max_score: hasScore ? parseInt(maxScore) : 100,
+            stamp: hasStamp ? stamp : null,
             memo: memo.trim() || null,
             photo_uri: uploadedImageUrl,
             photo_rotation: photoRotation,

@@ -15,6 +15,7 @@ export function ChildSwitcher() {
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const displayColor = selectedChild?.color || '#98D8C8';
 
   const handleSelectChild = (childId: string) => {
     setSelectedChildId(childId);
@@ -32,7 +33,7 @@ export function ChildSwitcher() {
   return (
     <>
       <TouchableOpacity
-        style={[styles.container, { backgroundColor: selectedChild.color }]}
+        style={[styles.container, { backgroundColor: displayColor }]}
         onPress={() => showChevron && setShowModal(true)}
         activeOpacity={showChevron ? 0.7 : 1}
         disabled={!showChevron}>
@@ -103,7 +104,8 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#FFF',
     maxWidth: 80,
   },
@@ -130,7 +132,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#333',
     marginBottom: 16,
   },
@@ -163,19 +166,22 @@ const styles = StyleSheet.create({
   childBadgeText: {
     color: '#FFF',
     fontSize: 16,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
   },
   childInfo: {
     flex: 1,
   },
   childName: {
     fontSize: 16,
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#333',
   },
   childGrade: {
     fontSize: 13,
-    fontFamily: 'Nunito-Regular',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     color: '#666',
     marginTop: 2,
   },
@@ -190,6 +196,7 @@ const styles = StyleSheet.create({
   checkmarkText: {
     color: '#FFF',
     fontSize: 14,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
   },
 });

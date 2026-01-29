@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useFonts, Nunito_400Regular, Nunito_700Bold, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
 
+const DEFAULT_CHILD_COLOR = '#98D8C8';
 const GRADES = [
   { label: '小学1年', value: 1 },
   { label: '小学2年', value: 2 },
@@ -90,7 +91,7 @@ export default function RegisterChildScreen() {
     const { error } = await supabase.from('children').insert({
       name: trimmedName,
       grade: grade.toString(),
-      color: '#4A90E2',
+      color: DEFAULT_CHILD_COLOR,
       is_default: false,
       user_id: user.id,
     });

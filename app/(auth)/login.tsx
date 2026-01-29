@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Switch,
 } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -27,7 +28,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, rememberMe, setRememberMe } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [lastLoginMethod, setLastLoginMethod] = useState<string | null>(null);
 
@@ -212,6 +213,14 @@ export default function LoginScreen() {
               activeOpacity={0.7}>
               <Text style={styles.forgotPasswordText}>パスワードを忘れた場合</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.rememberMeRow}>
+            <Text style={styles.rememberMeLabel}>次回から自動ログイン</Text>
+            <Switch
+              value={rememberMe}
+              onValueChange={(value) => setRememberMe(value)}
+            />
           </View>
 
           {error ? (
@@ -455,5 +464,16 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 12,
+  },
+  rememberMeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  rememberMeLabel: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
   },
 });

@@ -191,18 +191,13 @@ export default function HomeScreen() {
       const screenWidth = Dimensions.get('window').width;
       const cardWidth = screenWidth - 32; // 左右のパディング16px × 2
       
-      // 元のアスペクト比に基づいて高さを計算（回転を考慮しない）
-      // 横長の画像: 高さを小さく
-      // 縦長の画像: 高さを大きく
-      const calculatedHeight = cardWidth / imageAspectRatio;
-      
-      // 高さの範囲を制限
-      // 横長の画像（imageAspectRatio > 1）: 最小150px、最大300px
-      // 縦長の画像（imageAspectRatio <= 1）: 最小200px、最大500px
-      const height = imageAspectRatio > 1
-        ? Math.max(150, Math.min(300, calculatedHeight))
-        : Math.max(200, Math.min(500, calculatedHeight));
-      
+      // 縦長でも横長と同じサイズ感に揃えるため、縦長はアスペクト比を反転して扱う
+      const effectiveRatio = imageAspectRatio >= 1 ? imageAspectRatio : 1 / imageAspectRatio;
+      const calculatedHeight = cardWidth / effectiveRatio;
+
+      // 横長の基準に合わせて高さを制限（縦長でも同じ範囲に収める）
+      const height = Math.max(150, Math.min(300, calculatedHeight));
+
       console.log(`[画像コンテナ高さ] ${item.id}: アスペクト比=${imageAspectRatio.toFixed(2)}, 横長=${isLandscape}, 回転=${item.photo_rotation || 0}度, 計算高さ=${calculatedHeight.toFixed(0)}px, 最終高さ=${height}px`);
       return height;
     };
@@ -342,7 +337,8 @@ const styles = StyleSheet.create({
   noPhotoText: {
     fontSize: 14,
     color: '#999',
-    fontFamily: 'Nunito-Regular',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
   },
   imageWrapper: {
     width: '100%',
@@ -366,7 +362,8 @@ const styles = StyleSheet.create({
   dateOverlayText: {
     color: '#fff',
     fontSize: 13,
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
   },
   cardContent: {
     padding: 16,
@@ -387,13 +384,15 @@ const styles = StyleSheet.create({
   subjectChipText: {
     color: '#fff',
     fontSize: 13,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     lineHeight: 16,
   },
   evaluationText: {
     fontSize: 16,
     color: '#333',
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     marginLeft: 12,
     lineHeight: 20,
   },
@@ -407,11 +406,13 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: '#666',
     marginBottom: 8,
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
   },
   emptySubText: {
     fontSize: 14,
     color: '#999',
-    fontFamily: 'Nunito-Regular',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
   },
 });

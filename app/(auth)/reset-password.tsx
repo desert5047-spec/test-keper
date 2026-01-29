@@ -36,8 +36,15 @@ export default function ResetPasswordScreen() {
     const checkResetToken = async () => {
       try {
         // URLパラメータからトークンを取得
-        const accessToken = params.access_token as string | undefined;
-        const type = params.type as string | undefined;
+        let accessToken = params.access_token as string | undefined;
+        let type = params.type as string | undefined;
+
+        // Webのhash (#access_token=...) をフォールバックで読む
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          accessToken = accessToken || hashParams.get('access_token') || undefined;
+          type = type || hashParams.get('type') || undefined;
+        }
 
         if (type === 'recovery' && accessToken) {
           // セッションを設定してトークンを検証

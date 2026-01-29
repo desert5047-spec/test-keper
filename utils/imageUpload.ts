@@ -181,8 +181,8 @@ const compressImage = async (imageUri: string): Promise<string> => {
         { format: ImageManipulator.SaveFormat.JPEG }
       );
 
-      // 長辺を1600pxにリサイズ
-      const maxDimension = 1600;
+      // Androidはメモリ不足になりやすいので、さらに小さめに圧縮
+      const maxDimension = Platform.OS === 'android' ? 1024 : 1600;
       let newWidth = width;
       let newHeight = height;
 
@@ -203,7 +203,7 @@ const compressImage = async (imageUri: string): Promise<string> => {
         imageUri,
         [{ resize: { width: newWidth, height: newHeight } }],
         {
-          compress: 0.5,
+          compress: Platform.OS === 'android' ? 0.35 : 0.5,
           format: ImageManipulator.SaveFormat.JPEG,
         }
       );

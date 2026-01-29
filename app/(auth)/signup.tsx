@@ -56,7 +56,14 @@ export default function SignupScreen() {
     const { error: signUpError } = await signUp(email, password);
 
     if (signUpError) {
-      setError('登録に失敗しました。別のメールアドレスをお試しください。');
+      const message = signUpError.message || '';
+      if (message === 'ACCOUNT_ALREADY_REGISTERED' ||
+          message.toLowerCase().includes('already') ||
+          message.toLowerCase().includes('registered')) {
+        setError('このアカウントは既に登録済みです');
+      } else {
+        setError('登録に失敗しました。別のメールアドレスをお試しください。');
+      }
       setLoading(false);
       return;
     }

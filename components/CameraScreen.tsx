@@ -59,7 +59,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
       console.log('[CameraScreen] 写真を撮影中...', { platform: Platform.OS });
       
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: Platform.OS === 'android' ? 0.6 : 0.8,
         base64: false, // base64はメモリを消費するため、falseに
         skipProcessing: false,
       });

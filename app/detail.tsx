@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Image,
+  Animated,
   TouchableOpacity,
   Modal,
   ActivityIndicator,
@@ -13,18 +14,22 @@ import {
   Platform,
   ActionSheetIOS,
 } from 'react-native';
+import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Calendar as CalendarIcon, Check } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CalendarPicker } from '@/components/CalendarPicker';
+import { CameraScreen } from '@/components/CameraScreen';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 import { uploadImage, deleteImage } from '@/utils/imageUpload';
 import { useAuth } from '@/contexts/AuthContext';
+
+const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 
 export default function DetailScreen() {
   const router = useRouter();
@@ -36,8 +41,15 @@ export default function DetailScreen() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [scoreError, setScoreError] = useState<string>('');
+  const baseScale = useRef(new Animated.Value(1)).current;
+  const pinchScale = useRef(new Animated.Value(1)).current;
+  const scale = Animated.multiply(baseScale, pinchScale);
+  const lastScale = useRef(1);
+  const MIN_SCALE = 1;
+  const MAX_SCALE = 3;
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Edit form states
@@ -50,12 +62,75 @@ export default function DetailScreen() {
   const [showCustomStampInput, setShowCustomStampInput] = useState(false);
   const [memo, setMemo] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [newSubject, setNewSubject] = useState<string>('');
+  const [showSubjectInput, setShowSubjectInput] = useState(false);
+
+  const normalizeAndroidImage = async (uri: string) => {
+    if (Platform.OS !== 'android') return uri;
+    try {
+      const { width, height } = await ImageManipulator.manipulateAsync(
+        uri,
+        [],
+        { format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      const maxDimension = 1024;
+      let newWidth = width;
+      let newHeight = height;
+
+      if (width > height) {
+        if (width > maxDimension) {
+          newHeight = Math.round((height * maxDimension) / width);
+          newWidth = maxDimension;
+        }
+      } else {
+        if (height > maxDimension) {
+          newWidth = Math.round((width * maxDimension) / height);
+          newHeight = maxDimension;
+        }
+      }
+
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: newWidth, height: newHeight } }],
+        { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      return result.uri || uri;
+    } catch (error) {
+      return uri;
+    }
+  };
 
   useEffect(() => {
     if (params.id) {
       loadRecord(params.id as string);
     }
   }, [params.id]);
+
+  useEffect(() => {
+    if (!showImageModal) {
+      lastScale.current = 1;
+      baseScale.setValue(1);
+      pinchScale.setValue(1);
+    }
+  }, [showImageModal, baseScale, pinchScale]);
+
+  const onPinchGestureEvent = Animated.event(
+    [{ nativeEvent: { scale: pinchScale } }],
+    { useNativeDriver: true }
+  );
+
+  const onPinchHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.END || event.nativeEvent.oldState === State.ACTIVE) {
+      let nextScale = lastScale.current * event.nativeEvent.scale;
+      nextScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
+      lastScale.current = nextScale;
+      baseScale.setValue(nextScale);
+      pinchScale.setValue(1);
+    }
+  };
 
   const loadRecord = async (id: string) => {
     setLoading(true);
@@ -74,6 +149,14 @@ export default function DetailScreen() {
 
   const initializeEditForm = (data: TestRecord) => {
     setPhotoUri(data.photo_uri);
+    setSelectedSubject(data.subject || '');
+    if (data.subject && !MAIN_SUBJECTS.includes(data.subject)) {
+      setShowSubjectInput(true);
+      setNewSubject(data.subject);
+    } else {
+      setShowSubjectInput(false);
+      setNewSubject('');
+    }
     setEvaluationType(data.score !== null ? 'score' : 'stamp');
     setScore(data.score?.toString() || '');
     setMaxScore(data.max_score?.toString() || '100');
@@ -125,6 +208,13 @@ export default function DetailScreen() {
     }
   };
 
+  const handleOtherSubjectChange = (value: string) => {
+    setNewSubject(value);
+    if (value.trim().length >= 2) {
+      setSelectedSubject(value.trim());
+    }
+  };
+
   const showPhotoActionSheet = () => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -148,22 +238,70 @@ export default function DetailScreen() {
   const pickImage = async () => {
     setShowPhotoOptions(false);
     try {
+      if (Platform.OS === 'web') {
+        const pickImageFromWeb = () =>
+          new Promise<string>((resolve, reject) => {
+            if (typeof document === 'undefined') {
+              reject(new Error('Webのファイル選択が利用できません'));
+              return;
+            }
+
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = () => {
+              const file = input.files?.[0];
+              if (!file) {
+                reject(new Error('画像が選択されていません'));
+                return;
+              }
+
+              const isImageType = file.type?.startsWith('image/');
+              const hasValidExt = /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || '');
+              if (!isImageType && !hasValidExt) {
+                reject(new Error('画像ファイルのみ選択してください'));
+                return;
+              }
+
+              const uri = URL.createObjectURL(file);
+              resolve(uri);
+            };
+            input.onerror = () => reject(new Error('ファイル選択に失敗しました'));
+            input.click();
+          });
+
+        const uri = await pickImageFromWeb();
+        validateImageUri(uri);
+        if (!isValidImageUri(uri)) {
+          throw new Error('画像の形式が正しくありません');
+        }
+        setPhotoUri(uri);
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 1.0,
+        quality: Platform.OS === 'android' ? 0.6 : 1.0,
       });
 
       if (!result.canceled) {
         const uri = result.assets[0].uri;
-        validateImageUri(uri);
-        if (!isValidImageUri(uri)) {
+        const normalizedUri = await normalizeAndroidImage(uri);
+        validateImageUri(normalizedUri);
+        if (!isValidImageUri(normalizedUri)) {
           Alert.alert('エラー', '画像の読み込みに失敗しました。もう一度選択してください。');
           return;
         }
-        setPhotoUri(uri);
+        setPhotoUri(normalizedUri);
       }
     } catch (error: any) {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.alert(error?.message || '画像の読み込みに失敗しました');
+        }
+        return;
+      }
       Alert.alert('エラー', error.message || '画像の読み込みに失敗しました');
     }
   };
@@ -171,23 +309,52 @@ export default function DetailScreen() {
   const takePhoto = async () => {
     setShowPhotoOptions(false);
     try {
+      if (Platform.OS === 'web') {
+        await pickImage();
+        return;
+      }
+      if (Platform.OS === 'android') {
+        setShowCamera(true);
+        return;
+      }
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
-        quality: 1.0,
+        quality: Platform.OS === 'android' ? 0.6 : 1.0,
       });
 
       if (!result.canceled) {
         const uri = result.assets[0].uri;
-        validateImageUri(uri);
-        if (!isValidImageUri(uri)) {
+        const normalizedUri = await normalizeAndroidImage(uri);
+        validateImageUri(normalizedUri);
+        if (!isValidImageUri(normalizedUri)) {
           Alert.alert('エラー', '画像の読み込みに失敗しました。もう一度選択してください。');
           return;
         }
-        setPhotoUri(uri);
+        setPhotoUri(normalizedUri);
       }
     } catch (error: any) {
       Alert.alert('エラー', error.message || '画像の撮影に失敗しました');
     }
+  };
+
+  const handleCameraCapture = async (uri: string) => {
+    try {
+      setShowCamera(false);
+      const normalizedUri = await normalizeAndroidImage(uri);
+      validateImageUri(normalizedUri);
+      if (!isValidImageUri(normalizedUri)) {
+        Alert.alert('エラー', '画像の形式が正しくありません');
+        return;
+      }
+      setPhotoUri(normalizedUri);
+    } catch (error: any) {
+      setShowCamera(false);
+      Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
+    }
+  };
+
+  const handleCameraCancel = () => {
+    setShowCamera(false);
   };
 
   const rotatePhoto = async (direction: 'right' | 'left') => {
@@ -201,7 +368,10 @@ export default function DetailScreen() {
       const result = await ImageManipulator.manipulateAsync(
         photoUri,
         [{ rotate: rotation }],
-        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+        {
+          compress: Platform.OS === 'android' ? 0.4 : 0.5,
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
       );
 
       validateImageUri(result.uri);
@@ -218,6 +388,15 @@ export default function DetailScreen() {
   };
 
   const confirmRemovePhoto = () => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        const confirmed = window.confirm('写真を削除しますか？');
+        if (confirmed) {
+          setPhotoUri(null);
+        }
+      }
+      return;
+    }
     Alert.alert(
       '写真を削除',
       '写真を削除しますか？',
@@ -230,6 +409,11 @@ export default function DetailScreen() {
 
   const handleSave = async () => {
     if (!record) return;
+
+    if (!selectedSubject.trim()) {
+      Alert.alert('エラー', '教科を選んでください');
+      return;
+    }
 
     if (evaluationType === 'score') {
       if (!score.trim()) {
@@ -269,20 +453,27 @@ export default function DetailScreen() {
     setIsSaving(true);
 
     try {
+      if (!user) {
+        Alert.alert('エラー', 'ログインが必要です');
+        setIsSaving(false);
+        return;
+      }
+
       let uploadedImageUrl: string | null = photoUri;
 
       if (photoUri && photoUri !== record.photo_uri) {
         if (!photoUri.startsWith('http')) {
           try {
-            if (!user) {
-              Alert.alert('エラー', 'ログインが必要です');
-              setIsSaving(false);
-              return;
-            }
-            uploadedImageUrl = await uploadImage(photoUri, user.id);
+            // タイムアウトを設定（60秒）
+            const uploadPromise = uploadImage(photoUri, user.id);
+            const timeoutPromise = new Promise<string>((_, reject) => {
+              setTimeout(() => reject(new Error('画像のアップロードがタイムアウトしました（60秒）')), 60000);
+            });
 
-            if (record.photo_uri) {
-              await deleteImage(record.photo_uri);
+            uploadedImageUrl = await Promise.race([uploadPromise, timeoutPromise]);
+
+            if (!uploadedImageUrl || uploadedImageUrl.trim() === '') {
+              throw new Error('画像のアップロードに失敗しました（URLが取得できませんでした）');
             }
           } catch (uploadError: any) {
             Alert.alert('エラー', uploadError.message || '画像のアップロードに失敗しました');
@@ -295,6 +486,7 @@ export default function DetailScreen() {
       const { error } = await supabase
         .from('records')
         .update({
+          subject: selectedSubject.trim(),
           score: evaluationType === 'score' ? parseInt(score) : null,
           max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
           stamp: evaluationType === 'stamp' ? stamp : null,
@@ -305,6 +497,14 @@ export default function DetailScreen() {
         .eq('id', record.id);
 
       if (error) throw error;
+
+      if (record.photo_uri && record.photo_uri !== uploadedImageUrl) {
+        try {
+          await deleteImage(record.photo_uri);
+        } catch (deleteError) {
+          // 失敗しても保存自体は成功しているので無視
+        }
+      }
 
       await loadRecord(record.id);
       setEditMode(false);
@@ -403,6 +603,10 @@ export default function DetailScreen() {
     );
   }
 
+  const subjectOptions = selectedSubject && !MAIN_SUBJECTS.includes(selectedSubject)
+    ? [selectedSubject, ...MAIN_SUBJECTS]
+    : MAIN_SUBJECTS;
+
   return (
     <View style={styles.container}>
       <AppHeader
@@ -468,6 +672,65 @@ export default function DetailScreen() {
                 <Camera size={32} color="#4A90E2" />
                 <Text style={styles.photoPickerText}>写真を追加</Text>
               </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.editSection}>
+            <Text style={styles.editSectionTitle}>教科</Text>
+            {!showSubjectInput ? (
+              <View style={styles.chipContainer}>
+                {subjectOptions.map((subject) => (
+                  <TouchableOpacity
+                    key={subject}
+                    style={[
+                      styles.chip,
+                      selectedSubject === subject && styles.chipSelected,
+                    ]}
+                    onPress={() => setSelectedSubject(subject)}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.chipText,
+                        selectedSubject === subject && styles.chipTextSelected,
+                      ]}>
+                      {subject}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={styles.chipAdd}
+                  onPress={() => setShowSubjectInput(true)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.chipAddText}>+ その他</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    newSubject.trim().length >= 2 && styles.textInputValid,
+                  ]}
+                  value={newSubject}
+                  onChangeText={handleOtherSubjectChange}
+                  placeholder="教科名を入力（例：生活、図工、音楽、体育）"
+                  placeholderTextColor="#999"
+                  autoFocus
+                />
+                {newSubject.trim().length >= 2 && (
+                  <View style={styles.checkIconContainer}>
+                    <Check size={20} color="#4CAF50" />
+                  </View>
+                )}
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowSubjectInput(false);
+                    setNewSubject('');
+                  }}
+                  activeOpacity={0.7}>
+                  <X size={24} color="#999" />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
 
@@ -796,23 +1059,29 @@ export default function DetailScreen() {
         transparent={true}
         animationType="fade"
         onRequestClose={() => setShowImageModal(false)}>
-        <View style={styles.modalContainer}>
-          <TouchableOpacity
-            style={styles.modalCloseButton}
-            onPress={() => setShowImageModal(false)}
-            activeOpacity={0.7}>
-            <X size={28} color="#fff" />
-          </TouchableOpacity>
-          {record.photo_uri && isValidImageUri(record.photo_uri) && (
-            <View style={styles.modalImageWrapper}>
-              <Image
-                source={{ uri: record.photo_uri }}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
-            </View>
-          )}
-        </View>
+        <GestureHandlerRootView style={styles.modalRoot}>
+          <View style={styles.modalContainer}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowImageModal(false)}
+              activeOpacity={0.7}>
+              <X size={28} color="#fff" />
+            </TouchableOpacity>
+            {record.photo_uri && isValidImageUri(record.photo_uri) && (
+              <PinchGestureHandler
+                onGestureEvent={onPinchGestureEvent}
+                onHandlerStateChange={onPinchHandlerStateChange}>
+                <Animated.View style={styles.modalImageWrapper}>
+                  <Animated.Image
+                    source={{ uri: record.photo_uri }}
+                    style={[styles.modalImage, { transform: [{ scale }] }]}
+                    resizeMode="contain"
+                  />
+                </Animated.View>
+              </PinchGestureHandler>
+            )}
+          </View>
+        </GestureHandlerRootView>
       </Modal>
 
       <Modal
@@ -845,6 +1114,16 @@ export default function DetailScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={showCamera}
+        animationType="slide"
+        onRequestClose={handleCameraCancel}>
+        <CameraScreen
+          onCapture={handleCameraCapture}
+          onCancel={handleCameraCancel}
+        />
       </Modal>
     </View>
   );
@@ -1017,6 +1296,59 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 12,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: '#f0f0f0',
+  },
+  chipSelected: {
+    backgroundColor: '#4A90E2',
+  },
+  chipText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  chipTextSelected: {
+    color: '#fff',
+  },
+  chipAdd: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: '#e8e8e8',
+  },
+  chipAddText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    backgroundColor: '#fff',
+  },
+  checkIconContainer: {
+    paddingHorizontal: 6,
   },
   photoContainer: {
     borderRadius: 12,
@@ -1325,6 +1657,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalRoot: {
+    flex: 1,
   },
   modalCloseButton: {
     position: 'absolute',

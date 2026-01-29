@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -25,6 +26,7 @@ export default function SettingsScreen() {
   const { signOut, user } = useAuth();
   const [isResetting, setIsResetting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [bottomNavHeight, setBottomNavHeight] = useState(0);
 
   const performResetData = async () => {
     setIsResetting(true);
@@ -148,7 +150,13 @@ export default function SettingsScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: (bottomNavHeight || 88) + 24,
+            minHeight: Dimensions.get('window').height - 108 - (bottomNavHeight || 88),
+          },
+        ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>機能</Text>
@@ -269,7 +277,14 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
+      <View
+        style={[styles.bottomNav, { paddingBottom: insets.bottom }]}
+        onLayout={(event) => {
+          const nextHeight = event.nativeEvent.layout.height;
+          if (nextHeight !== bottomNavHeight) {
+            setBottomNavHeight(nextHeight);
+          }
+        }}>
         <TouchableOpacity
           style={styles.tabButton}
           onPress={() => router.push('/(tabs)')}

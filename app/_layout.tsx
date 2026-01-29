@@ -2,11 +2,16 @@ import { useEffect } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
+import { useFonts, Nunito_400Regular, Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
+
+if (__DEV__) {
+  console.log = () => {};
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,6 +24,7 @@ export default function RootLayout() {
 
   const [fontsLoaded, fontError] = useFonts({
     'Nunito-Regular': Nunito_400Regular,
+    'Nunito-Medium': Nunito_500Medium,
     'Nunito-SemiBold': Nunito_600SemiBold,
     'Nunito-Bold': Nunito_700Bold,
   });
@@ -51,7 +57,7 @@ export default function RootLayout() {
   console.log('[RootLayout] レンダリング開始', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       {Platform.OS === 'web' && (
         <style>{`
           button:focus,
@@ -86,6 +92,6 @@ export default function RootLayout() {
           </DateProvider>
         </ChildProvider>
       </AuthProvider>
-    </>
+    </GestureHandlerRootView>
   );
 }

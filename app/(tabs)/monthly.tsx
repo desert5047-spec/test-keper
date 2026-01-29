@@ -13,6 +13,7 @@ import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { colors, textStyles, cardStyles } from '@/theme/uiTokens';
 
 interface MonthSummary {
   year: number;
@@ -142,28 +143,39 @@ export default function MonthlyScreen() {
         style={styles.card}
         onPress={() => handleMonthCardPress(summary.year, summary.month)}
         activeOpacity={0.7}>
-        <Text style={styles.cardTitle}>
-          {summary.year}年{summary.month}月の記録
-        </Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>
+            {summary.year}年{summary.month}月のテスト（平均点）
+          </Text>
+          {hasRecords && summary.subjectStats.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>
+                {summary.subjectStats.reduce((sum, stat) => sum + stat.totalCount, 0)}件
+              </Text>
+            </View>
+          )}
+        </View>
 
         {hasRecords ? (
           <>
-            <Text style={styles.totalText}>
-              この月は合計{summary.totalRecords}件の記録が残っています
-            </Text>
-
             {summary.subjectStats.length > 0 && (
               <View style={styles.subjectStatsContainer}>
                 {summary.subjectStats.map((stat) => (
                   <View key={stat.subject} style={styles.subjectStatRow}>
-                    <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(stat.subject) }]}>
-                      <Text style={styles.subjectChipText}>{stat.subject}</Text>
-                    </View>
+                    <Text style={styles.subjectLabel}>
+                      {stat.subject}テスト
+                    </Text>
                     <Text style={styles.subjectStatText}>
-                      {stat.averageScore !== null
-                        ? `平均${stat.averageScore}点、`
-                        : ''}
-                      {stat.totalCount}件
+                      {stat.averageScore !== null ? (
+                        <>
+                          <Text style={styles.scoreText}>
+                            {stat.averageScore}点
+                          </Text>
+                          <Text>（{stat.totalCount}件）</Text>
+                        </>
+                      ) : (
+                        `${stat.totalCount}件`
+                      )}
                     </Text>
                   </View>
                 ))}
@@ -230,56 +242,76 @@ const styles = StyleSheet.create({
     padding: 20,
     ...Platform.select({
       web: {
-        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
       },
       default: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.05,
         shadowRadius: 4,
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
-  cardTitle: {
-    fontSize: 18,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-    marginBottom: 8,
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  totalText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
+  cardTitle: {
+    ...textStyles.heading,
+    fontSize: 16,
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
+    flex: 1,
+  },
+  countBadge: {
+    backgroundColor: colors.blue200,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  countBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
+    color: colors.blue700,
   },
   noRecordsText: {
-    fontSize: 14,
-    color: '#999',
+    ...textStyles.body,
+    color: colors.gray500,
     fontStyle: 'italic',
   },
   subjectStatsContainer: {
-    marginTop: 16,
+    marginTop: 8,
     gap: 10,
   },
   subjectStatRow: {
     flexDirection: 'row',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    gap: 10,
+    backgroundColor: '#EEF6FF',
+    paddingLeft: 32,
+    paddingRight: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 16,
   },
-  subjectChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  subjectChipText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Nunito-Bold',
+  subjectLabel: {
+    ...textStyles.bodyMedium,
+    color: colors.gray900,
   },
   subjectStatText: {
-    fontSize: 14,
-    color: '#555',
-    fontFamily: 'Nunito-Regular',
+    ...textStyles.bodyMedium,
+    color: colors.gray900,
+    marginLeft: 0,
+  },
+  scoreText: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
+    color: colors.blue600,
   },
   emptyContainer: {
     flex: 1,
@@ -288,26 +320,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: {
+    ...textStyles.body,
     fontSize: 16,
-    color: '#666',
+    color: colors.gray600,
     marginBottom: 8,
   },
   emptySubText: {
-    fontSize: 14,
-    color: '#999',
+    ...textStyles.small,
+    color: colors.gray500,
   },
   showMoreButton: {
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
   },
   showMoreText: {
+    ...textStyles.heading,
     fontSize: 15,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#4A90E2',
+    color: colors.blue600,
   },
 });

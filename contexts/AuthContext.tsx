@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { clearSupabaseSessionStorage, supabase } from '@/lib/supabase';
 import { useRouter, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
 import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
+import * as SecureStore from 'expo-secure-store';
 
 // OAuthリダイレクト後の処理を完了させる
 WebBrowser.maybeCompleteAuthSession();
@@ -16,6 +17,9 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  initializing: boolean;
+  rememberMe: boolean;
+  setRememberMe: (value: boolean) => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -28,6 +32,9 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  initializing: true,
+  rememberMe: true,
+  setRememberMe: async () => {},
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signInWithGoogle: async () => ({ error: null }),
@@ -42,12 +49,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
+  const [rememberMe, setRememberMeState] = useState(true);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const router = useRouter();
   const segments = useSegments();
   
   // 前回のログイン手段を追跡
   useTrackLastAuthProvider();
+
+  const REMEMBER_ME_KEY = 'remember_me';
+  const rememberMeRef = useRef(rememberMe);
+  useEffect(() => {
+    rememberMeRef.current = rememberMe;
+  }, [rememberMe]);
+
+  const loadRememberMe = useCallback(async () => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window === 'undefined') return;
+        const saved = window.localStorage.getItem(REMEMBER_ME_KEY);
+        if (saved !== null) {
+          setRememberMeState(saved === 'true');
+        }
+        return;
+      }
+      const saved = await SecureStore.getItemAsync(REMEMBER_ME_KEY);
+      if (saved !== null) {
+        setRememberMeState(saved === 'true');
+      }
+    } catch (error) {
+      console.warn('[AuthContext] rememberMeの読み込みに失敗:', error);
+    }
+  }, []);
+
+  const setRememberMe = useCallback(async (value: boolean) => {
+    try {
+      setRememberMeState(value);
+      if (Platform.OS === 'web') {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(REMEMBER_ME_KEY, value ? 'true' : 'false');
+        return;
+      }
+      await SecureStore.setItemAsync(REMEMBER_ME_KEY, value ? 'true' : 'false');
+    } catch (error) {
+      console.warn('[AuthContext] rememberMeの保存に失敗:', error);
+    }
+  }, []);
   
   console.log('[AuthProvider] 状態初期化完了', { 
     hasRouter: !!router, 
@@ -65,9 +113,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const currentPath = segments.join('/');
+      const isResetPassword = currentPath === '(auth)/reset-password' || currentPath === 'reset-password';
       const onboardingKey = `hasCompletedOnboarding_${currentUser.id}`;
       const hasCompletedOnboarding = await AsyncStorage.getItem(onboardingKey);
       console.log('[AuthContext] checkAndRedirect: オンボーディング完了状態:', { hasCompletedOnboarding, userId: currentUser.id, currentPath });
+
+      // パスワードリセット中は自動リダイレクトしない
+      if (isResetPassword) {
+        console.log('[AuthContext] checkAndRedirect: パスワードリセット中のためリダイレクトしません');
+        setCheckingOnboarding(false);
+        return;
+      }
 
       // 子供の数をチェック
       const { data: childrenData, error } = await supabase
@@ -140,11 +196,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkAndRedirect]);
 
   useEffect(() => {
+    loadRememberMe();
     console.log('[AuthContext] セッション取得開始', { platform: Platform.OS });
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
         console.error('[AuthContext] セッション取得エラー:', error);
         setLoading(false);
+        setInitializing(false);
         return;
       }
       console.log('[AuthContext] セッション取得完了', { 
@@ -155,9 +213,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      setInitializing(false);
     }).catch((error) => {
       console.error('[AuthContext] セッション取得例外:', error);
       setLoading(false);
+      setInitializing(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -176,10 +236,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('[AuthContext] ログイン検出、オンボーディングチェックを実行', { platform: Platform.OS, userId: session.user.id });
         setLoading(false);
-        // 少し遅延を入れて、segmentsが更新されるのを待つ
-        setTimeout(() => {
-          checkAndRedirectRef.current(session.user);
-        }, 200);
+        // パスワードリセット中は自動リダイレクトしない
+        const currentPath = segments.join('/');
+        const isResetPassword = currentPath === '(auth)/reset-password' || currentPath === 'reset-password';
+        if (!isResetPassword) {
+          // 少し遅延を入れて、segmentsが更新されるのを待つ
+          setTimeout(() => {
+            checkAndRedirectRef.current(session.user);
+          }, 200);
+        } else {
+          console.log('[AuthContext] ログイン検出: パスワードリセット中のためリダイレクトしません');
+        }
+      }
+
+      // rememberMe が OFF の場合、セッション保存キーを削除して次回起動で復元しない
+      if (
+        (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') &&
+        session?.user &&
+        !rememberMeRef.current
+      ) {
+        try {
+          await clearSupabaseSessionStorage();
+        } catch (clearError) {
+          console.warn('[AuthContext] セッション保存削除エラー:', clearError);
+        }
       }
       
       // SIGNED_OUTイベントの場合は、ログイン画面にリダイレクト
@@ -202,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           setLoading(false);
+          setInitializing(false);
           console.log('[AuthContext] INITIAL_SESSION処理完了:', { 
             hasUser: !!currentSession?.user,
             platform: Platform.OS 
@@ -211,7 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [loadRememberMe, segments]);
 
   useEffect(() => {
     if (loading || checkingOnboarding) return;
@@ -251,11 +332,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // メール認証でログインした場合は明示的に保存する
     await saveLastAuthProvider('email');
+
+    if (!rememberMeRef.current) {
+      await clearSupabaseSessionStorage();
+    }
     return { error: null };
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -268,6 +353,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       return { error };
+    }
+
+    // Supabaseは既存メールでもエラーを返さず、identitiesが空になる場合がある
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return { error: new Error('ACCOUNT_ALREADY_REGISTERED') };
     }
 
     return { error: null };
@@ -337,6 +427,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (signOutError: any) {
         // AuthSessionMissingError などのエラーは無視して続行
         console.warn('[AuthContext] Supabase signOut例外（無視して続行）:', signOutError?.message || signOutError);
+      }
+
+      // セッション保存キーも必ず削除
+      try {
+        await clearSupabaseSessionStorage();
+      } catch (clearError) {
+        console.warn('[AuthContext] セッション保存削除エラー:', clearError);
       }
       
       // ストレージのクリア
@@ -438,17 +535,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string) => {
     try {
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
       let redirectUrl: string | undefined;
 
       if (Platform.OS === 'web') {
-        redirectUrl = typeof window !== 'undefined' 
-          ? `${window.location.origin}/(auth)/reset-password`
+        redirectUrl = typeof window !== 'undefined'
+          ? `${window.location.origin}/reset-password`
           : undefined;
       } else {
-        // ネイティブ環境では、deep linkを使用
-        const scheme = 'myapp';
-        redirectUrl = `${scheme}://reset-password`;
+        // ネイティブ環境では、deep linkを使用（app.jsonのschemeに一致）
+        redirectUrl = Linking.createURL('reset-password');
       }
 
       console.log('[パスワードリセット] リクエスト開始:', { email, redirectUrl, platform: Platform.OS });
@@ -490,6 +585,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         loading,
+        initializing,
+        rememberMe,
+        setRememberMe,
         signIn,
         signUp,
         signInWithGoogle,

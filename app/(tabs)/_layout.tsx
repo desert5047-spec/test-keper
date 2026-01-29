@@ -216,8 +216,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   tabLabel: {
-    fontSize: 11,
-    fontFamily: 'Nunito-Bold',
+    fontSize: 14,
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     marginTop: 4,
   },
   addButtonContainer: {

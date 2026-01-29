@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  SectionList,
+  FlatList,
   TouchableOpacity,
   Image,
   Platform,
@@ -15,6 +15,7 @@ import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { colors, textStyles } from '@/theme/uiTokens';
 
 interface Section {
   title: string;
@@ -110,54 +111,56 @@ export default function ListScreen() {
     return colors[subject] || '#95A5A6';
   };
 
-  const renderItem = ({ item }: { item: TestRecord }) => {
-    const subjectColor = getSubjectColor(item.subject);
-    const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
-
-    if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
-      console.warn('[画像警告] 無効な画像URIが検出されました:', item.photo_uri);
-    }
-
+  const renderSection = ({ item: section }: { item: Section }) => {
     return (
-      <TouchableOpacity
-        style={styles.recordItem}
-        onPress={() => router.push(`/detail?id=${item.id}`)}
-        activeOpacity={0.8}>
-        <View style={styles.thumbnailContainer}>
-          {hasPhoto ? (
-            <View
-              style={[
-                styles.thumbnailWrapper,
-                {
-                  transform: [{ rotate: `${item.photo_rotation}deg` }],
-                },
-              ]}>
-              <Image
-                source={{ uri: item.photo_uri! }}
-                style={styles.thumbnail}
-                resizeMode="contain"
-              />
-            </View>
-          ) : (
-            <View style={styles.placeholderThumbnail} />
-          )}
+      <View style={styles.dateCard}>
+        <View style={styles.dateCardHeader}>
+          <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>
         </View>
-        <View style={styles.recordContent}>
-          <View style={styles.recordFirstRow}>
-            <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
-              <Text style={styles.subjectChipText}>{item.subject}</Text>
-            </View>
-            <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
-          </View>
+        <View style={styles.dateCardContent}>
+          {section.data.map((record) => (
+            <TouchableOpacity
+              key={record.id}
+              style={styles.recordItem}
+              onPress={() => router.push(`/detail?id=${record.id}`)}
+              activeOpacity={0.8}>
+              <View style={styles.recordContent}>
+                <View style={styles.recordFirstRow}>
+                  <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(record.subject) }]}>
+                    <Text style={styles.subjectChipText}>{record.subject}</Text>
+                  </View>
+                  {record.score !== null ? (
+                    <Text style={styles.evaluationText}>
+                      <Text style={styles.scoreText}>{record.score}点</Text>
+                      <Text>（{record.max_score}点中）</Text>
+                    </Text>
+                  ) : (
+                    <Text style={styles.evaluationText}>{record.stamp || ''}</Text>
+                  )}
+                </View>
+              </View>
+              <View style={styles.thumbnailContainer}>
+                {record.photo_uri && isValidImageUri(record.photo_uri) ? (
+                  <View
+                    style={[
+                      styles.thumbnailWrapper,
+                      {
+                        transform: [{ rotate: `${record.photo_rotation}deg` }],
+                      },
+                    ]}>
+                    <Image
+                      source={{ uri: record.photo_uri }}
+                      style={styles.thumbnail}
+                      resizeMode="contain"
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.placeholderThumbnail} />
+                )}
+              </View>
+            </TouchableOpacity>
+          ))}
         </View>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderSectionHeader = ({ section }: { section: Section }) => {
-    return (
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>
       </View>
     );
   };
@@ -173,14 +176,12 @@ export default function ListScreen() {
           </Text>
         </View>
       ) : (
-        <SectionList
-          sections={sections}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          keyExtractor={(item) => item.id}
+        <FlatList
+          data={sections}
+          renderItem={renderSection}
+          keyExtractor={(section) => section.title}
           contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 12 }]}
           showsVerticalScrollIndicator={false}
-          stickySectionHeadersEnabled={true}
         />
       )}
     </View>
@@ -194,38 +195,52 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 20,
+    paddingHorizontal: 16,
   },
-  sectionHeader: {
-    backgroundColor: '#f8f8f8',
+  dateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+      },
+    }),
+  },
+  dateCardHeader: {
+    backgroundColor: '#fff',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-    marginTop: 8,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   sectionHeaderText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
-    color: '#666',
+    ...textStyles.heading,
+    fontSize: 16,
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
+    color: colors.blue900,
+  },
+  dateCardContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   recordItem: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
+    backgroundColor: '#EEF6FF',
     marginVertical: 6,
     borderRadius: 10,
     flexDirection: 'row',
     overflow: 'hidden',
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.08)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 2,
-        elevation: 2,
-      },
-    }),
     minHeight: 80,
   },
   thumbnailContainer: {
@@ -274,15 +289,23 @@ const styles = StyleSheet.create({
   subjectChipText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     lineHeight: 14,
   },
   evaluationText: {
     fontSize: 15,
     color: '#333',
-    fontFamily: 'Nunito-Bold',
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
     marginLeft: 10,
     lineHeight: 18,
+  },
+  scoreText: {
+    fontSize: 15,
+    color: colors.blue600,
+    fontFamily: 'Nunito-Medium',
+    fontWeight: 500,
   },
   emptyContainer: {
     flex: 1,
