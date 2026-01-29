@@ -16,6 +16,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  familyId: string | null;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  familyId: null,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signInWithGoogle: async () => ({ error: null }),
@@ -43,8 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
+  const [familyId, setFamilyId] = useState<string | null>(null);
   const router = useRouter();
   const segments = useSegments();
+  const ensureFamilyInFlightRef = useRef(false);
+  const ensuredUserIdRef = useRef<string | null>(null);
   
   // 前回のログイン手段を追跡
   useTrackLastAuthProvider();
@@ -133,6 +138,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [checkingOnboarding, router, segments]);
 
+  const ensureFamilyForUser = useCallback(async (userId: string) => {
+    try {
+      const { data: membership, error: membershipError } = await supabase
+        .from('family_members')
+        .select('family_id')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (membershipError) {
+        console.error('[AuthContext] family_members 取得エラー:', membershipError);
+        return null;
+      }
+
+      if (membership?.family_id) {
+        return membership.family_id as string;
+      }
+
+      const { data: family, error: familyError } = await supabase
+        .from('families')
+        .insert({ owner_id: userId })
+        .select('id')
+        .single();
+
+      if (familyError || !family?.id) {
+        console.error('[AuthContext] families 作成エラー:', familyError);
+        return null;
+      }
+
+      const { error: memberError } = await supabase
+        .from('family_members')
+        .insert({
+          family_id: family.id,
+          user_id: userId,
+          role: 'owner',
+        });
+
+      if (memberError) {
+        console.error('[AuthContext] family_members 作成エラー:', memberError);
+        return null;
+      }
+
+      return family.id as string;
+    } catch (error) {
+      console.error('[AuthContext] family ensure 例外:', error);
+      return null;
+    }
+  }, []);
+
   // checkAndRedirectの最新の参照を保持するためのref
   const checkAndRedirectRef = useRef(checkAndRedirect);
   useEffect(() => {
@@ -186,6 +240,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         console.log('[AuthContext] ログアウト検出、ログイン画面にリダイレクト', { platform: Platform.OS });
         setLoading(false);
+        setFamilyId(null);
+        ensuredUserIdRef.current = null;
+        ensureFamilyInFlightRef.current = false;
         // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
         const delay = Platform.OS === 'android' ? 300 : 100;
         setTimeout(() => {
@@ -238,6 +295,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [user, segments, loading, checkingOnboarding, checkAndRedirect]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (ensureFamilyInFlightRef.current) return;
+    if (ensuredUserIdRef.current === user.id) return;
+
+    ensureFamilyInFlightRef.current = true;
+    ensureFamilyForUser(user.id)
+      .then((id) => {
+        if (id) {
+          setFamilyId(id);
+          ensuredUserIdRef.current = user.id;
+        } else {
+          ensuredUserIdRef.current = null;
+        }
+      })
+      .catch((error) => {
+        console.error('[AuthContext] family ensure 実行エラー:', error);
+        ensuredUserIdRef.current = null;
+      })
+      .finally(() => {
+        ensureFamilyInFlightRef.current = false;
+      });
+  }, [user?.id, ensureFamilyForUser]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -324,6 +405,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // まず、ローカルの状態をクリア
       setSession(null);
       setUser(null);
+      setFamilyId(null);
+      ensuredUserIdRef.current = null;
+      ensureFamilyInFlightRef.current = false;
       
       // SupabaseのsignOutを試みる（エラーが発生しても続行）
       try {
@@ -490,6 +574,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         loading,
+        familyId,
         signIn,
         signUp,
         signInWithGoogle,
