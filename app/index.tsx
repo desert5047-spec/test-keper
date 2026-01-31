@@ -1,13 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const {
+    user,
+    loading,
+    familyId,
+    isFamilyReady,
+    isSetupReady,
+    needsDisplayName,
+    needsChildSetup,
+    refreshSetupStatus,
+  } = useAuth();
+  const refreshInFlightRef = useRef(false);
 
   useEffect(() => {
     // loadingが完了するまで待つ
@@ -27,36 +35,41 @@ export default function Index() {
       return;
     }
 
-    // ログイン済みの場合はオンボーディング状態をチェック
-    console.log('[Index] ログイン済み、オンボーディング状態をチェック', { userId: user.id, platform: Platform.OS });
-    checkOnboardingStatus();
-  }, [user, loading]);
-
-  const checkOnboardingStatus = async () => {
-    if (!user) return;
-
-    const onboardingKey = `hasCompletedOnboarding_${user.id}`;
-    const hasCompleted = await AsyncStorage.getItem(onboardingKey);
-
-    if (hasCompleted) {
-      const { data: children } = await supabase
-        .from('children')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1);
-
-      if (children && children.length > 0) {
-        console.log('[Index] オンボーディング完了、タブ画面にリダイレクト');
-        router.replace('/(tabs)');
-      } else {
-        console.log('[Index] 子供未登録、子供登録画面にリダイレクト');
-        router.replace('/register-child');
-      }
-    } else {
-      console.log('[Index] オンボーディング未完了、オンボーディング画面にリダイレクト');
-      router.replace('/onboarding');
+    if (!isFamilyReady || !familyId) {
+      console.log('[Index] familyId 未確定のため待機', { platform: Platform.OS });
+      return;
     }
-  };
+
+    if (!isSetupReady) {
+      if (!refreshInFlightRef.current) {
+        refreshInFlightRef.current = true;
+        console.log('[Index] セットアップ状態を確認中...', { userId: user.id, platform: Platform.OS });
+        refreshSetupStatus().finally(() => {
+          refreshInFlightRef.current = false;
+        });
+      }
+      return;
+    }
+
+    if (needsDisplayName || needsChildSetup) {
+      console.log('[Index] セットアップ未完了、オンボーディング画面へ');
+      router.replace('/onboarding');
+      return;
+    }
+
+    console.log('[Index] セットアップ完了、タブ画面へ');
+    router.replace('/(tabs)');
+  }, [
+    user,
+    loading,
+    isFamilyReady,
+    familyId,
+    isSetupReady,
+    needsDisplayName,
+    needsChildSetup,
+    refreshSetupStatus,
+    router,
+  ]);
 
   return (
     <View style={styles.container}>

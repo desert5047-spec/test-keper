@@ -17,6 +17,14 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   familyId: string | null;
+  isFamilyReady: boolean;
+  familyDisplayName: string | null;
+  refreshFamilyDisplayName: () => Promise<void>;
+  isSetupReady: boolean;
+  needsDisplayName: boolean;
+  needsChildSetup: boolean;
+  refreshSetupStatus: () => Promise<void>;
+  setActiveFamilyId: (familyId: string | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -30,6 +38,14 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   familyId: null,
+  isFamilyReady: false,
+  familyDisplayName: null,
+  refreshFamilyDisplayName: async () => {},
+  isSetupReady: false,
+  needsDisplayName: false,
+  needsChildSetup: false,
+  refreshSetupStatus: async () => {},
+  setActiveFamilyId: () => {},
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signInWithGoogle: async () => ({ error: null }),
@@ -46,6 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [familyId, setFamilyId] = useState<string | null>(null);
+  const [isFamilyReady, setIsFamilyReady] = useState(false);
+  const [familyDisplayName, setFamilyDisplayName] = useState<string | null>(null);
+  const [isSetupReady, setIsSetupReady] = useState(false);
+  const [needsDisplayName, setNeedsDisplayName] = useState(false);
+  const [needsChildSetup, setNeedsChildSetup] = useState(false);
   const router = useRouter();
   const segments = useSegments();
   const ensureFamilyInFlightRef = useRef(false);
@@ -60,83 +81,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     platform: Platform.OS 
   });
 
-  // オンボーディング完了フラグと子供数をチェックして適切な画面にリダイレクト
+  // 初期セットアップ状態を確認して適切な画面にリダイレクト
   const checkAndRedirect = useCallback(async (currentUser: User) => {
     if (checkingOnboarding) {
       console.log('[AuthContext] checkAndRedirect: 既にチェック中です');
+      return;
+    }
+    if (!isFamilyReady || !familyId) {
+      console.log('[AuthContext] checkAndRedirect: familyId 未確定のため待機', {
+        userId: currentUser.id,
+        isFamilyReady,
+      });
+      return;
+    }
+    if (!isSetupReady) {
+      console.log('[AuthContext] checkAndRedirect: setup 判定中のため待機', {
+        userId: currentUser.id,
+      });
+      await refreshSetupStatus();
       return;
     }
     setCheckingOnboarding(true);
 
     try {
       const currentPath = segments.join('/');
-      const onboardingKey = `hasCompletedOnboarding_${currentUser.id}`;
-      const hasCompletedOnboarding = await AsyncStorage.getItem(onboardingKey);
-      console.log('[AuthContext] checkAndRedirect: オンボーディング完了状態:', { hasCompletedOnboarding, userId: currentUser.id, currentPath });
+      const isTabs = segments[0] === '(tabs)';
+      const inAuthGroup = segments[0] === '(auth)';
+      const isOnboarding = currentPath === 'onboarding';
+      const isRegisterChild = currentPath === 'register-child';
 
-      // 子供の数をチェック
-      const { data: childrenData, error } = await supabase
-        .from('children')
-        .select('id')
-        .eq('user_id', currentUser.id);
-
-      if (error) {
-        console.error('[AuthContext] checkAndRedirect: 子供データ取得エラー:', error);
-        setCheckingOnboarding(false);
-        return;
-      }
-
-      const childrenCount = childrenData?.length || 0;
-      console.log('[AuthContext] checkAndRedirect: 子供の数:', childrenCount);
-
-      // 子供がいる場合、オンボーディングは完了しているとみなす（子供を登録するにはオンボーディングを完了している必要があるため）
-      if (childrenCount > 0) {
-        // オンボーディング完了フラグが設定されていない場合は設定する
-        if (!hasCompletedOnboarding) {
-          console.log('[AuthContext] checkAndRedirect: 子供がいるがオンボーディングフラグがないため、フラグを設定します');
-          await AsyncStorage.setItem(onboardingKey, 'true');
-        }
-        
-        const isTabs = segments[0] === '(tabs)';
-        const inAuthGroup = segments[0] === '(auth)';
-        const isOnboarding = currentPath === 'onboarding';
-        const isRegisterChild = currentPath === 'register-child';
-        
-        // オンボーディングページ、認証グループ、子供登録ページにいる場合はタブページへリダイレクト
-        if (isOnboarding || inAuthGroup || isRegisterChild) {
-          console.log('[AuthContext] checkAndRedirect: 子供がいる、タブページへ');
-          router.replace('/(tabs)');
-        } else if (!isTabs) {
-          // タブページ以外（settings, children, detail, addなど）にいる場合はリダイレクトしない
-          console.log('[AuthContext] checkAndRedirect: 既に適切なページにいます:', currentPath);
-        }
-        setCheckingOnboarding(false);
-        return;
-      }
-
-      // オンボーディング未完了の場合
-      if (!hasCompletedOnboarding) {
-        if (currentPath !== 'onboarding') {
-          console.log('[AuthContext] checkAndRedirect: オンボーディング未完了、オンボーディングページへ');
+      if (needsDisplayName || needsChildSetup) {
+        if (!isOnboarding) {
+          console.log('[AuthContext] checkAndRedirect: 初期セットアップが必要、オンボーディングへ');
           router.replace('/onboarding');
         }
         setCheckingOnboarding(false);
         return;
       }
 
-      // オンボーディング完了だが子供が0人の場合、子供登録ページへ
-      if (childrenCount === 0) {
-        if (currentPath !== 'register-child') {
-          console.log('[AuthContext] checkAndRedirect: 子供が0人、子供登録ページへ');
-          router.replace('/register-child');
-        }
+      if (isOnboarding || inAuthGroup || isRegisterChild) {
+        console.log('[AuthContext] checkAndRedirect: セットアップ完了、タブページへ');
+        router.replace('/(tabs)');
+      } else if (!isTabs) {
+        console.log('[AuthContext] checkAndRedirect: 既に適切なページにいます:', currentPath);
       }
     } catch (error) {
       console.error('[AuthContext] checkAndRedirect: エラー:', error);
     } finally {
       setCheckingOnboarding(false);
     }
-  }, [checkingOnboarding, router, segments]);
+  }, [checkingOnboarding, router, segments, familyId, isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup, refreshSetupStatus]);
 
   const ensureFamilyForUser = useCallback(async (userId: string) => {
     try {
@@ -185,6 +179,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('[AuthContext] family ensure 例外:', error);
       return null;
     }
+  }, []);
+
+  const refreshFamilyDisplayName = useCallback(async () => {
+    if (!user?.id || !isFamilyReady || !familyId) {
+      setFamilyDisplayName(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('family_members')
+      .select('display_name')
+      .eq('family_id', familyId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[AuthContext] display_name 取得エラー:', error);
+      setFamilyDisplayName(null);
+      return;
+    }
+
+    setFamilyDisplayName((data?.display_name as string | null) ?? null);
+  }, [user?.id, isFamilyReady, familyId]);
+
+  const refreshSetupStatus = useCallback(async () => {
+    if (!user?.id || !isFamilyReady || !familyId) {
+      setIsSetupReady(false);
+      setNeedsDisplayName(false);
+      setNeedsChildSetup(false);
+      return;
+    }
+
+    setIsSetupReady(false);
+
+    const { data: member, error: memberError } = await supabase
+      .from('family_members')
+      .select('display_name')
+      .eq('family_id', familyId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (memberError) {
+      console.error('[AuthContext] setup 判定: display_name 取得エラー:', memberError);
+      setNeedsDisplayName(true);
+      setNeedsChildSetup(true);
+      setIsSetupReady(true);
+      return;
+    }
+
+    const displayName = (member?.display_name as string | null) ?? null;
+    setFamilyDisplayName(displayName);
+    const needsName = !displayName || displayName.trim().length === 0;
+    setNeedsDisplayName(needsName);
+
+    const { data: childrenData, error: childError } = await supabase
+      .from('children')
+      .select('id')
+      .eq('family_id', familyId)
+      .limit(1);
+
+    if (childError) {
+      console.error('[AuthContext] setup 判定: child 取得エラー:', childError);
+      setNeedsChildSetup(true);
+      setIsSetupReady(true);
+      return;
+    }
+
+    const needsChild = !childrenData || childrenData.length === 0;
+    setNeedsChildSetup(needsChild);
+    setIsSetupReady(true);
+  }, [user?.id, isFamilyReady, familyId]);
+
+  const setActiveFamilyId = useCallback((nextFamilyId: string | null) => {
+    setFamilyId(nextFamilyId);
+    setIsFamilyReady(!!nextFamilyId);
+    setFamilyDisplayName(null);
+    setNeedsDisplayName(false);
+    setNeedsChildSetup(false);
+    setIsSetupReady(false);
   }, []);
 
   // checkAndRedirectの最新の参照を保持するためのref
@@ -241,6 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[AuthContext] ログアウト検出、ログイン画面にリダイレクト', { platform: Platform.OS });
         setLoading(false);
         setFamilyId(null);
+        setIsFamilyReady(false);
         ensuredUserIdRef.current = null;
         ensureFamilyInFlightRef.current = false;
         // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
@@ -259,6 +333,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           setLoading(false);
+          if (!currentSession?.user) {
+            setFamilyId(null);
+            setIsFamilyReady(false);
+          }
           console.log('[AuthContext] INITIAL_SESSION処理完了:', { 
             hasUser: !!currentSession?.user,
             platform: Platform.OS 
@@ -297,28 +375,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, segments, loading, checkingOnboarding, checkAndRedirect]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setFamilyId(null);
+      setIsFamilyReady(false);
+      setFamilyDisplayName(null);
+      setIsSetupReady(false);
+      setNeedsDisplayName(false);
+      setNeedsChildSetup(false);
+      return;
+    }
     if (ensureFamilyInFlightRef.current) return;
     if (ensuredUserIdRef.current === user.id) return;
 
     ensureFamilyInFlightRef.current = true;
+    setIsFamilyReady(false);
     ensureFamilyForUser(user.id)
       .then((id) => {
         if (id) {
           setFamilyId(id);
           ensuredUserIdRef.current = user.id;
+          setIsFamilyReady(true);
         } else {
           ensuredUserIdRef.current = null;
+          setIsFamilyReady(false);
         }
       })
       .catch((error) => {
         console.error('[AuthContext] family ensure 実行エラー:', error);
         ensuredUserIdRef.current = null;
+        setIsFamilyReady(false);
       })
       .finally(() => {
         ensureFamilyInFlightRef.current = false;
       });
   }, [user?.id, ensureFamilyForUser]);
+
+  useEffect(() => {
+    refreshFamilyDisplayName();
+  }, [refreshFamilyDisplayName]);
+
+  useEffect(() => {
+    refreshSetupStatus();
+  }, [refreshSetupStatus]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -406,6 +504,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setUser(null);
       setFamilyId(null);
+      setIsFamilyReady(false);
       ensuredUserIdRef.current = null;
       ensureFamilyInFlightRef.current = false;
       
@@ -575,6 +674,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         loading,
         familyId,
+        isFamilyReady,
+        familyDisplayName,
+        refreshFamilyDisplayName,
+        isSetupReady,
+        needsDisplayName,
+        needsChildSetup,
+        refreshSetupStatus,
+        setActiveFamilyId,
         signIn,
         signUp,
         signInWithGoogle,

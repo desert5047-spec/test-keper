@@ -1,80 +1,158 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+  ScrollView,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
-
-const { width } = Dimensions.get('window');
-
-const slides = [
-  {
-    title: '学校のテストを、\nちゃんと残すだけのアプリです。',
-    description: '捨てられないテストを、画像に残しておけます。',
-  },
-  {
-    title: '残っている。',
-    description: 'それだけで十分です。',
-  },
-  {
-    title: 'さっそく始めましょう。',
-    description: 'テストやプリントを撮って、簡単に残せます。',
-  },
-];
+import { supabase } from '@/lib/supabase';
 
 export default function OnboardingScreen() {
-  const [currentIndex, setCurrentIndex] = useState(0);
   const router = useRouter();
-  const { user } = useAuth();
+  const {
+    user,
+    familyId,
+    isFamilyReady,
+    isSetupReady,
+    needsDisplayName,
+    needsChildSetup,
+    refreshSetupStatus,
+    familyDisplayName,
+  } = useAuth();
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [displayNameError, setDisplayNameError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const displayNameValue = displayNameInput.trim();
+  const remainingChars = 4 - displayNameValue.length;
+  const isDisplayNameValid = displayNameValue.length >= 1 && displayNameValue.length <= 4;
 
-  const handleNext = () => {
-    if (currentIndex < slides.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
-  };
+  useEffect(() => {
+    setDisplayNameInput(familyDisplayName ?? '');
+  }, [familyDisplayName]);
 
-  const handleStart = async () => {
+  useEffect(() => {
     if (!user) {
       router.replace('/(auth)/login');
       return;
     }
+    if (isFamilyReady && isSetupReady && !needsDisplayName && !needsChildSetup) {
+      router.replace('/(tabs)');
+    }
+  }, [user, isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup, router]);
 
-    const onboardingKey = `hasCompletedOnboarding_${user.id}`;
-    await AsyncStorage.setItem(onboardingKey, 'true');
-    router.replace('/register-child');
+  const handleSaveDisplayName = async () => {
+    if (!user || !familyId || !isFamilyReady) {
+      setDisplayNameError('家族情報の取得中です。少し待ってから再度お試しください');
+      return;
+    }
+    if (!isDisplayNameValid) {
+      setDisplayNameError('1〜4文字で入力してください');
+      return;
+    }
+    setDisplayNameError('');
+    setIsSaving(true);
+
+    const { error } = await supabase
+      .from('family_members')
+      .update({ display_name: displayNameValue })
+      .eq('family_id', familyId)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[Onboarding] display_name 更新エラー:', error);
+      setDisplayNameError('保存に失敗しました');
+      setIsSaving(false);
+      return;
+    }
+
+    await refreshSetupStatus();
+    setIsSaving(false);
+
+    if (needsChildSetup) {
+      return;
+    }
+    router.replace('/(tabs)');
   };
-
-  const slide = slides[currentIndex];
-  const isLastSlide = currentIndex === slides.length - 1;
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>{slide.title}</Text>
-          <Text style={styles.description}>{slide.description}</Text>
+      {!isFamilyReady || !isSetupReady ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
         </View>
-
-        <View style={styles.dotsContainer}>
-          {slides.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                index === currentIndex && styles.activeDot,
-              ]}
-            />
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={isLastSlide ? handleStart : handleNext}
-          activeOpacity={0.8}>
-          <Text style={styles.buttonText}>
-            {isLastSlide ? 'テストを残してみる' : '次へ'}
+      ) : (
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>初期セットアップ</Text>
+          <Text style={styles.description}>
+            まずは家族の中での呼び方を設定してください
           </Text>
-        </TouchableOpacity>
-      </View>
+
+          {needsDisplayName && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>あなたの呼称</Text>
+              <Text style={styles.sectionDescription}>
+                家族の中での呼び方を設定できます（最大4文字）
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="例：父、母、ママ"
+                placeholderTextColor="#999"
+                maxLength={4}
+                value={displayNameInput}
+                onChangeText={(value) => {
+                  setDisplayNameInput(value);
+                  if (displayNameError) setDisplayNameError('');
+                }}
+              />
+              <Text style={styles.remainingText}>あと{remainingChars}文字</Text>
+              {displayNameError ? <Text style={styles.errorText}>{displayNameError}</Text> : null}
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (!isDisplayNameValid || isSaving) && styles.primaryButtonDisabled,
+                ]}
+                onPress={handleSaveDisplayName}
+                disabled={!isDisplayNameValid || isSaving}
+                activeOpacity={0.7}>
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>保存する</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!needsDisplayName && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>お子さま登録</Text>
+              <Text style={styles.sectionDescription}>
+                最初に1人だけ登録してください。あとから増やせます。
+              </Text>
+              {needsChildSetup ? (
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => router.push('/register-child')}
+                  activeOpacity={0.7}>
+                  <Text style={styles.primaryButtonText}>お子さま登録へ</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => router.replace('/(tabs)')}
+                  activeOpacity={0.7}>
+                  <Text style={styles.primaryButtonText}>完了して進む</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -82,64 +160,90 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F9FA',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  textContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    maxWidth: 400,
+    padding: 24,
+    paddingBottom: 40,
   },
   title: {
-    fontSize: 22,
-    fontFamily: 'Nunito-SemiBold',
-    textAlign: 'center',
-    marginBottom: 20,
+    fontSize: 24,
+    fontFamily: 'Nunito-Bold',
     color: '#333',
-    lineHeight: 34,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   description: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Nunito-Regular',
     textAlign: 'center',
     color: '#666',
-    lineHeight: 24,
+    marginBottom: 24,
   },
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ddd',
-    marginHorizontal: 4,
-  },
-  activeDot: {
-    backgroundColor: '#4A90E2',
-    width: 24,
-  },
-  button: {
-    backgroundColor: '#4A90E2',
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 28,
-    marginBottom: 40,
-    minWidth: 200,
-  },
-  buttonText: {
-    color: '#fff',
+  sectionTitle: {
     fontSize: 16,
-    fontFamily: 'Nunito-Bold',
-    textAlign: 'center',
+    fontFamily: 'Nunito-SemiBold',
+    color: '#333',
+    marginBottom: 6,
+  },
+  sectionDescription: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    marginBottom: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    marginBottom: 6,
+  },
+  remainingText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginBottom: 6,
+  },
+  errorText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#E74C3C',
+    marginBottom: 6,
+  },
+  primaryButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  primaryButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#fff',
   },
 });

@@ -23,7 +23,16 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { children, loadChildren } = useChild();
-  const { signOut, user, familyId, isFamilyReady } = useAuth();
+  const {
+    signOut,
+    user,
+    familyId,
+    isFamilyReady,
+    familyDisplayName,
+    refreshFamilyDisplayName,
+    refreshSetupStatus,
+    setActiveFamilyId,
+  } = useAuth();
   const [isResetting, setIsResetting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [familyRole, setFamilyRole] = useState<'owner' | 'member' | null>(null);
@@ -40,8 +49,18 @@ export default function SettingsScreen() {
   const [isAcceptingInvite, setIsAcceptingInvite] = useState(false);
   const [acceptMessage, setAcceptMessage] = useState('');
   const [acceptError, setAcceptError] = useState('');
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [displayNameError, setDisplayNameError] = useState('');
+  const [displayNameMessage, setDisplayNameMessage] = useState('');
+  const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
 
   const isOwner = familyRole === 'owner';
+  const displayNameValue = displayNameInput.trim();
+  const remainingChars = 4 - displayNameValue.length;
+  const isDisplayNameValid = displayNameValue.length >= 1 && displayNameValue.length <= 4;
+  const isDisplayNameUnchanged =
+    displayNameValue === (familyDisplayName ?? '') ||
+    (!familyDisplayName && displayNameValue === '');
 
   const getCreateInviteErrorMessage = (message: string) => {
     if (message.includes('owner_only')) {
@@ -244,11 +263,52 @@ export default function SettingsScreen() {
       console.error('[Settings] 招待受諾エラー:', error);
       setAcceptError(getAcceptInviteErrorMessage(error.message || ''));
     } else {
+      const nextFamilyId = data as string | null;
       setAcceptMessage('参加しました');
       setAcceptToken('');
+      if (nextFamilyId) {
+        setActiveFamilyId(nextFamilyId);
+        await refreshSetupStatus();
+        router.replace('/onboarding');
+      }
     }
 
     setIsAcceptingInvite(false);
+  };
+
+  useEffect(() => {
+    setDisplayNameInput(familyDisplayName ?? '');
+  }, [familyDisplayName]);
+
+  const handleSaveDisplayName = async () => {
+    if (!isFamilyReady || !familyId || !user?.id) {
+      setDisplayNameError('家族情報の取得中です。少し待ってから再度お試しください');
+      return;
+    }
+    if (!isDisplayNameValid) {
+      setDisplayNameError('1〜4文字で入力してください');
+      return;
+    }
+
+    setDisplayNameError('');
+    setDisplayNameMessage('');
+    setIsSavingDisplayName(true);
+
+    const { error } = await supabase
+      .from('family_members')
+      .update({ display_name: displayNameValue })
+      .eq('family_id', familyId)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[Settings] display_name 更新エラー:', error);
+      setDisplayNameError('保存に失敗しました');
+    } else {
+      setDisplayNameMessage('呼称を保存しました');
+      await refreshFamilyDisplayName();
+    }
+
+    setIsSavingDisplayName(false);
   };
 
   const handleResetData = () => {
@@ -451,6 +511,47 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>あなたの呼称</Text>
+          <Text style={styles.sectionDescription}>
+            家族の中での呼び方を設定できます（最大4文字）
+          </Text>
+          <View style={styles.familyCard}>
+            <Text style={styles.currentDisplayName}>
+              現在の呼称: {familyDisplayName ?? '保護者'}
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="例：父、母、ママ"
+              placeholderTextColor="#999"
+              maxLength={4}
+              value={displayNameInput}
+              onChangeText={(value) => {
+                setDisplayNameInput(value);
+                if (displayNameError) setDisplayNameError('');
+              }}
+            />
+            <Text style={styles.remainingText}>あと{remainingChars}文字</Text>
+            {displayNameError ? <Text style={styles.errorText}>{displayNameError}</Text> : null}
+            {displayNameMessage ? <Text style={styles.successText}>{displayNameMessage}</Text> : null}
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                (!isDisplayNameValid || isDisplayNameUnchanged || isSavingDisplayName) &&
+                  styles.primaryButtonDisabled,
+              ]}
+              onPress={handleSaveDisplayName}
+              disabled={!isDisplayNameValid || isDisplayNameUnchanged || isSavingDisplayName}
+              activeOpacity={0.7}>
+              {isSavingDisplayName ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>保存する</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>アプリについて</Text>
           <View style={styles.infoCard}>
             <Text style={styles.appName}>テストアルバム</Text>
@@ -583,6 +684,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  sectionDescription: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    marginBottom: 8,
+  },
   menuItem: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -709,6 +816,12 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 12,
   },
+  currentDisplayName: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    marginBottom: 8,
+  },
   input: {
     borderWidth: 1,
     borderColor: '#E0E0E0',
@@ -724,6 +837,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Nunito-Regular',
     color: '#999',
+  },
+  remainingText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginBottom: 6,
   },
   errorText: {
     fontSize: 12,

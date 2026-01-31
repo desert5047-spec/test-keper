@@ -29,7 +29,7 @@ const GRADES = [
 export default function RegisterChildScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, familyId, isFamilyReady, refreshSetupStatus } = useAuth();
   const { loadChildren } = useChild();
   const [name, setName] = useState('');
   const [grade, setGrade] = useState<number | null>(null);
@@ -44,12 +44,12 @@ export default function RegisterChildScreen() {
   // お子様が既に登録されている場合はタブページにリダイレクト
   useEffect(() => {
     const checkExistingChildren = async () => {
-      if (!user || !fontsLoaded) return;
+      if (!user || !fontsLoaded || !isFamilyReady || !familyId) return;
 
       const { data: childrenData } = await supabase
         .from('children')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('family_id', familyId)
         .limit(1);
 
       if (childrenData && childrenData.length > 0) {
@@ -80,7 +80,7 @@ export default function RegisterChildScreen() {
       return;
     }
 
-    if (!user) {
+    if (!user || !isFamilyReady || !familyId) {
       Alert.alert('エラー', 'ログインが必要です');
       return;
     }
@@ -93,6 +93,7 @@ export default function RegisterChildScreen() {
       color: '#4A90E2',
       is_default: false,
       user_id: user.id,
+      family_id: familyId,
     });
 
     setSaving(false);
@@ -105,6 +106,7 @@ export default function RegisterChildScreen() {
 
     // 子供リストを更新
     await loadChildren();
+    await refreshSetupStatus();
 
     router.replace('/(tabs)');
   };
