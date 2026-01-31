@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
 interface MonthSummary {
@@ -29,24 +30,26 @@ export default function MonthlyScreen() {
   const router = useRouter();
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
+  const { familyId, isFamilyReady } = useAuth();
   const [monthlySummaries, setMonthlySummaries] = useState<MonthSummary[]>([]);
   const [displayCount, setDisplayCount] = useState(3);
 
   useFocusEffect(
     useCallback(() => {
-      if (selectedChildId) {
+      if (selectedChildId && isFamilyReady && familyId) {
         loadMonthlySummaries();
       }
-    }, [year, month, selectedChildId])
+    }, [year, month, selectedChildId, isFamilyReady, familyId])
   );
 
   const loadMonthlySummaries = async () => {
-    if (!selectedChildId) return;
+    if (!selectedChildId || !isFamilyReady || !familyId) return;
 
     const { data: allRecords } = await supabase
       .from('records')
       .select('*')
       .eq('child_id', selectedChildId)
+      .eq('family_id', familyId)
       .order('date', { ascending: false });
 
     const monthlyData: Record<string, TestRecord[]> = {};

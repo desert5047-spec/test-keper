@@ -27,7 +27,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
   const [selectedChildId, setSelectedChildIdState] = useState<string | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
   const [isLoadingChild, setIsLoadingChild] = useState(true);
-  const { user, loading } = useAuth();
+  const { user, loading, familyId, isFamilyReady } = useAuth();
 
   // 永続化されたselectedChildIdを読み込む
   useEffect(() => {
@@ -51,8 +51,11 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
   }, []);
 
   const loadChildren = async () => {
-    if (!user) {
+    if (!user || !isFamilyReady || !familyId) {
       console.log('[ChildContext] ユーザーが未ログインのため、子供を読み込めません', { platform: Platform.OS });
+      if (!isFamilyReady || !familyId) {
+        console.log('[ChildContext] familyId 未確定のため待機', { platform: Platform.OS });
+      }
       return;
     }
 
@@ -61,7 +64,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
     const { data, error } = await supabase
       .from('children')
       .select('id, name, grade, color')
-      .eq('user_id', user.id)
+      .eq('family_id', familyId)
       .order('created_at');
 
     if (error) {
@@ -105,10 +108,10 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
   };
 
   useEffect(() => {
-    if (!loading && !isLoadingChild && user) {
+    if (!loading && !isLoadingChild && user && isFamilyReady && familyId) {
       loadChildren();
     }
-  }, [user, loading, isLoadingChild]);
+  }, [user, loading, isLoadingChild, isFamilyReady, familyId]);
 
   const setSelectedChildId = async (id: string) => {
     console.log('[ChildContext] 子供IDを設定:', id, { platform: Platform.OS });

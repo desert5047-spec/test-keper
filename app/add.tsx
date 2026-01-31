@@ -41,7 +41,7 @@ interface Child {
 
 export default function AddScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
@@ -631,6 +631,11 @@ export default function AddScreen() {
         }
         return;
       }
+      if (!isFamilyReady || !familyId) {
+        setErrorMessage('家族情報の取得中です。少し待ってから再度お試しください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
 
       // child_idの妥当性チェック
       if (selectedChildId) {
@@ -728,6 +733,7 @@ export default function AddScreen() {
           .from('records')
           .insert({
             child_id: selectedChildId || null,
+            family_id: familyId,
             date,
             subject: selectedSubject,
             type,

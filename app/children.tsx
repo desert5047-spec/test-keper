@@ -43,7 +43,7 @@ const GRADES = [
 export default function ChildrenScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, familyId, isFamilyReady } = useAuth();
   const { loadChildren: loadContextChildren } = useChild();
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +58,7 @@ export default function ChildrenScreen() {
   }, []);
 
   const loadChildren = async () => {
-    if (!user) {
+    if (!user || !isFamilyReady || !familyId) {
       setLoading(false);
       return;
     }
@@ -67,7 +67,7 @@ export default function ChildrenScreen() {
     const { data } = await supabase
       .from('children')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('family_id', familyId)
       .order('created_at');
 
     if (data) {
@@ -123,7 +123,8 @@ export default function ChildrenScreen() {
           grade: grade?.toString(),
           color: selectedColor,
         })
-        .eq('id', editingChild.id);
+        .eq('id', editingChild.id)
+        .eq('family_id', familyId ?? '');
 
       if (error) {
         Alert.alert('エラー', '更新に失敗しました');
@@ -133,7 +134,7 @@ export default function ChildrenScreen() {
         await loadContextChildren();
       }
     } else {
-      if (!user) {
+      if (!user || !isFamilyReady || !familyId) {
         Alert.alert('エラー', 'ログインが必要です');
         return;
       }
@@ -146,6 +147,7 @@ export default function ChildrenScreen() {
           color: selectedColor,
           is_default: false,
           user_id: user.id,
+          family_id: familyId,
         });
 
       if (error) {
@@ -181,7 +183,8 @@ export default function ChildrenScreen() {
             const { error } = await supabase
               .from('children')
               .delete()
-              .eq('id', child.id);
+              .eq('id', child.id)
+              .eq('family_id', familyId ?? '');
 
             if (error) {
               Alert.alert('エラー', '削除に失敗しました');

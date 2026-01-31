@@ -71,6 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const segments = useSegments();
   const ensureFamilyInFlightRef = useRef(false);
   const ensuredUserIdRef = useRef<string | null>(null);
+  const pendingInviteNavigationRef = useRef(false);
+  const pendingInviteKey = 'pendingInviteToken';
   
   // 前回のログイン手段を追跡
   useTrackLastAuthProvider();
@@ -80,57 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     segmentsCount: segments.length,
     platform: Platform.OS 
   });
-
-  // 初期セットアップ状態を確認して適切な画面にリダイレクト
-  const checkAndRedirect = useCallback(async (currentUser: User) => {
-    if (checkingOnboarding) {
-      console.log('[AuthContext] checkAndRedirect: 既にチェック中です');
-      return;
-    }
-    if (!isFamilyReady || !familyId) {
-      console.log('[AuthContext] checkAndRedirect: familyId 未確定のため待機', {
-        userId: currentUser.id,
-        isFamilyReady,
-      });
-      return;
-    }
-    if (!isSetupReady) {
-      console.log('[AuthContext] checkAndRedirect: setup 判定中のため待機', {
-        userId: currentUser.id,
-      });
-      await refreshSetupStatus();
-      return;
-    }
-    setCheckingOnboarding(true);
-
-    try {
-      const currentPath = segments.join('/');
-      const isTabs = segments[0] === '(tabs)';
-      const inAuthGroup = segments[0] === '(auth)';
-      const isOnboarding = currentPath === 'onboarding';
-      const isRegisterChild = currentPath === 'register-child';
-
-      if (needsDisplayName || needsChildSetup) {
-        if (!isOnboarding) {
-          console.log('[AuthContext] checkAndRedirect: 初期セットアップが必要、オンボーディングへ');
-          router.replace('/onboarding');
-        }
-        setCheckingOnboarding(false);
-        return;
-      }
-
-      if (isOnboarding || inAuthGroup || isRegisterChild) {
-        console.log('[AuthContext] checkAndRedirect: セットアップ完了、タブページへ');
-        router.replace('/(tabs)');
-      } else if (!isTabs) {
-        console.log('[AuthContext] checkAndRedirect: 既に適切なページにいます:', currentPath);
-      }
-    } catch (error) {
-      console.error('[AuthContext] checkAndRedirect: エラー:', error);
-    } finally {
-      setCheckingOnboarding(false);
-    }
-  }, [checkingOnboarding, router, segments, familyId, isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup, refreshSetupStatus]);
 
   const ensureFamilyForUser = useCallback(async (userId: string) => {
     try {
@@ -251,6 +202,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsSetupReady(true);
   }, [user?.id, isFamilyReady, familyId]);
 
+  // 初期セットアップ状態を確認して適切な画面にリダイレクト
+  const navigateToPendingInvite = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem(pendingInviteKey);
+      if (!token) {
+        pendingInviteNavigationRef.current = false;
+        return false;
+      }
+      if (pendingInviteNavigationRef.current) {
+        return false;
+      }
+      pendingInviteNavigationRef.current = true;
+      router.replace(`/invite?token=${encodeURIComponent(token)}`);
+      return true;
+    } catch (error) {
+      console.warn('[AuthContext] 招待トークン取得エラー:', error);
+      return false;
+    }
+  }, [router]);
+
+  const checkAndRedirect = useCallback(async (currentUser: User) => {
+    if (checkingOnboarding) {
+      console.log('[AuthContext] checkAndRedirect: 既にチェック中です');
+      return;
+    }
+    if (!isFamilyReady || !familyId) {
+      console.log('[AuthContext] checkAndRedirect: familyId 未確定のため待機', {
+        userId: currentUser.id,
+        isFamilyReady,
+      });
+      return;
+    }
+    if (!isSetupReady) {
+      console.log('[AuthContext] checkAndRedirect: setup 判定中のため待機', {
+        userId: currentUser.id,
+      });
+      await refreshSetupStatus();
+      return;
+    }
+    const hasPendingInvite = await navigateToPendingInvite();
+    if (hasPendingInvite) {
+      return;
+    }
+    setCheckingOnboarding(true);
+
+    try {
+      const currentPath = segments.join('/');
+      const isTabs = segments[0] === '(tabs)';
+      const inAuthGroup = segments[0] === '(auth)';
+      const isOnboarding = currentPath === 'onboarding';
+      const isRegisterChild = currentPath === 'register-child';
+      const isInvite = currentPath.startsWith('invite');
+
+      if (needsDisplayName || needsChildSetup) {
+        if (!isOnboarding && !isInvite) {
+          console.log('[AuthContext] checkAndRedirect: 初期セットアップが必要、オンボーディングへ');
+          router.replace('/onboarding');
+        }
+        setCheckingOnboarding(false);
+        return;
+      }
+
+      if (isOnboarding || inAuthGroup || isRegisterChild) {
+        console.log('[AuthContext] checkAndRedirect: セットアップ完了、タブページへ');
+        router.replace('/(tabs)');
+      } else if (!isTabs) {
+        console.log('[AuthContext] checkAndRedirect: 既に適切なページにいます:', currentPath);
+      }
+    } catch (error) {
+      console.error('[AuthContext] checkAndRedirect: エラー:', error);
+    } finally {
+      setCheckingOnboarding(false);
+    }
+  }, [checkingOnboarding, router, segments, familyId, isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup, refreshSetupStatus, navigateToPendingInvite]);
+
   const setActiveFamilyId = useCallback((nextFamilyId: string | null) => {
     setFamilyId(nextFamilyId);
     setIsFamilyReady(!!nextFamilyId);
@@ -303,10 +329,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('[AuthContext] ログイン検出、オンボーディングチェックを実行', { platform: Platform.OS, userId: session.user.id });
         setLoading(false);
-        // 少し遅延を入れて、segmentsが更新されるのを待つ
-        setTimeout(() => {
-          checkAndRedirectRef.current(session.user);
-        }, 200);
+        const hasPendingInvite = await navigateToPendingInvite();
+        if (!hasPendingInvite) {
+          // 少し遅延を入れて、segmentsが更新されるのを待つ
+          setTimeout(() => {
+            checkAndRedirectRef.current(session.user);
+          }, 200);
+        }
       }
       
       // SIGNED_OUTイベントの場合は、ログイン画面にリダイレクト
@@ -317,6 +346,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsFamilyReady(false);
         ensuredUserIdRef.current = null;
         ensureFamilyInFlightRef.current = false;
+        pendingInviteNavigationRef.current = false;
         // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
         const delay = Platform.OS === 'android' ? 300 : 100;
         setTimeout(() => {
@@ -355,6 +385,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isOnboarding = segments[0] === 'onboarding';
     const isRegisterChild = segments[0] === 'register-child';
     const isTabs = segments[0] === '(tabs)';
+    const isInvite = segments[0] === 'invite';
 
     // 未ログインの場合
     if (!user && !inAuthGroup) {
@@ -367,7 +398,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 認証グループ内にいる場合は、オンボーディング/子供登録チェックを実行
       if (inAuthGroup) {
         checkAndRedirect(user);
-      } else if (!isOnboarding && !isRegisterChild && !isTabs) {
+      } else if (!isOnboarding && !isRegisterChild && !isTabs && !isInvite) {
         // オンボーディング、子供登録、タブページ以外にいる場合もチェック
         checkAndRedirect(user);
       }

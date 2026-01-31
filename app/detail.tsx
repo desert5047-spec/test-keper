@@ -29,7 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { user } = useAuth();
+  const { user, familyId, isFamilyReady } = useAuth();
   const insets = useSafeAreaInsets();
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,10 +52,10 @@ export default function DetailScreen() {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
-    if (params.id) {
+    if (params.id && isFamilyReady && familyId) {
       loadRecord(params.id as string);
     }
-  }, [params.id]);
+  }, [params.id, isFamilyReady, familyId]);
 
   const loadRecord = async (id: string) => {
     setLoading(true);
@@ -63,6 +63,7 @@ export default function DetailScreen() {
       .from('records')
       .select('*')
       .eq('id', id)
+      .eq('family_id', familyId ?? '')
       .maybeSingle();
 
     if (data) {
@@ -230,6 +231,10 @@ export default function DetailScreen() {
 
   const handleSave = async () => {
     if (!record) return;
+    if (!isFamilyReady || !familyId) {
+      Alert.alert('エラー', '家族情報の取得中です。少し待ってから再度お試しください');
+      return;
+    }
 
     if (evaluationType === 'score') {
       if (!score.trim()) {
@@ -302,7 +307,8 @@ export default function DetailScreen() {
           photo_uri: uploadedImageUrl,
           photo_rotation: 0,
         })
-        .eq('id', record.id);
+        .eq('id', record.id)
+        .eq('family_id', familyId ?? '');
 
       if (error) throw error;
 
@@ -344,7 +350,8 @@ export default function DetailScreen() {
       const { error } = await supabase
         .from('records')
         .delete()
-        .eq('id', record.id);
+        .eq('id', record.id)
+        .eq('family_id', familyId ?? '');
 
       if (error) {
         if (Platform.OS === 'web') {

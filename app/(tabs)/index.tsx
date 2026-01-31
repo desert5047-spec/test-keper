@@ -8,6 +8,7 @@ import {
   Image,
   RefreshControl,
   Dimensions,
+  ActivityIndicator,
   Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -15,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
@@ -26,13 +28,14 @@ export default function HomeScreen() {
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
+  const { familyId, isFamilyReady } = useAuth();
 
   useFocusEffect(
     useCallback(() => {
-      if (selectedChildId) {
+      if (selectedChildId && isFamilyReady && familyId) {
         loadRecords();
       }
-    }, [year, month, selectedChildId])
+    }, [year, month, selectedChildId, isFamilyReady, familyId])
   );
 
   // 画像のアスペクト比を事前に取得
@@ -90,7 +93,7 @@ export default function HomeScreen() {
   }, [records]);
 
   const loadRecords = async () => {
-    if (!selectedChildId) return;
+    if (!selectedChildId || !isFamilyReady || !familyId) return;
 
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = new Date(year, month, 0);
@@ -100,6 +103,7 @@ export default function HomeScreen() {
       .from('records')
       .select('*')
       .eq('child_id', selectedChildId)
+      .eq('family_id', familyId)
       .gte('date', startDate)
       .lte('date', endDateStr)
       .order('date', { ascending: false })
@@ -271,6 +275,14 @@ export default function HomeScreen() {
     );
   };
 
+  if (!isFamilyReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4A90E2" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
@@ -413,5 +425,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     fontFamily: 'Nunito-Regular',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

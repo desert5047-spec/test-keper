@@ -57,11 +57,10 @@ export default function OnboardingScreen() {
     setDisplayNameError('');
     setIsSaving(true);
 
-    const { error } = await supabase
-      .from('family_members')
-      .update({ display_name: displayNameValue })
-      .eq('family_id', familyId)
-      .eq('user_id', user.id);
+    const { error } = await supabase.rpc('update_family_display_name', {
+      target_family_id: familyId,
+      new_display_name: displayNameValue,
+    });
 
     if (error) {
       console.error('[Onboarding] display_name 更新エラー:', error);

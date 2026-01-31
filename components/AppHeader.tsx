@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const HEADER_HEIGHT = Platform.select({
   web: 78,
@@ -36,6 +37,8 @@ export function AppHeader({
   const router = useRouter();
   const { year, month, setYearMonth } = useDateContext();
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const { familyDisplayName } = useAuth();
+  const guardianLabel = familyDisplayName ?? '保護者';
 
   const handleMonthChange = (direction: 'next' | 'prev') => {
     if (direction === 'next') {
@@ -108,6 +111,9 @@ export function AppHeader({
         )}
 
         <View style={styles.right}>
+          <View style={styles.guardianBadge}>
+            <Text style={styles.guardianText}>{guardianLabel}</Text>
+          </View>
           {showEdit && onEdit && (
             <TouchableOpacity
               onPress={onEdit}
@@ -221,6 +227,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  guardianBadge: {
+    backgroundColor: '#EEF6FF',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    maxWidth: 80,
+  },
+  guardianText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#2563EB',
   },
   backButton: {
     padding: 6,
