@@ -50,6 +50,11 @@ export default function DetailScreen() {
   const [showCustomStampInput, setShowCustomStampInput] = useState(false);
   const [memo, setMemo] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [newSubject, setNewSubject] = useState<string>('');
+  const [showSubjectInput, setShowSubjectInput] = useState(false);
+
+  const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 
   useEffect(() => {
     if (params.id && isFamilyReady && familyId) {
@@ -83,6 +88,21 @@ export default function DetailScreen() {
     setShowCustomStampInput(false);
     setMemo(data.memo || '');
     setScoreError('');
+    setSelectedSubject(data.subject || '');
+    if (data.subject && !MAIN_SUBJECTS.includes(data.subject)) {
+      setShowSubjectInput(true);
+      setNewSubject(data.subject);
+    } else {
+      setShowSubjectInput(false);
+      setNewSubject('');
+    }
+  };
+
+  const handleOtherSubjectChange = (value: string) => {
+    setNewSubject(value);
+    if (value.trim().length >= 2) {
+      setSelectedSubject(value.trim());
+    }
   };
 
   const validateScore = (scoreValue: string, maxScoreValue: string) => {
@@ -235,6 +255,10 @@ export default function DetailScreen() {
       Alert.alert('エラー', '家族情報の取得中です。少し待ってから再度お試しください');
       return;
     }
+    if (!selectedSubject) {
+      Alert.alert('エラー', '教科を選んでください');
+      return;
+    }
 
     if (evaluationType === 'score') {
       if (!score.trim()) {
@@ -300,6 +324,7 @@ export default function DetailScreen() {
       const { error } = await supabase
         .from('records')
         .update({
+          subject: selectedSubject,
           score: evaluationType === 'score' ? parseInt(score) : null,
           max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
           stamp: evaluationType === 'stamp' ? stamp : null,
@@ -475,6 +500,69 @@ export default function DetailScreen() {
                 <Camera size={32} color="#4A90E2" />
                 <Text style={styles.photoPickerText}>写真を追加</Text>
               </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.editSection}>
+            <Text style={styles.editSectionTitle}>教科</Text>
+            {!showSubjectInput ? (
+              <View style={styles.chipContainer}>
+                {MAIN_SUBJECTS.map((subject) => (
+                  <TouchableOpacity
+                    key={subject}
+                    style={[
+                      styles.chip,
+                      selectedSubject === subject && styles.chipSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedSubject(subject);
+                      setShowSubjectInput(false);
+                      setNewSubject('');
+                    }}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.chipText,
+                        selectedSubject === subject && styles.chipTextSelected,
+                      ]}>
+                      {subject}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={styles.chipAdd}
+                  onPress={() => setShowSubjectInput(true)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.chipAddText}>+ その他</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.subjectInputRow}>
+                <TextInput
+                  style={[
+                    styles.subjectInput,
+                    newSubject.trim().length >= 2 && styles.textInputValid,
+                  ]}
+                  value={newSubject}
+                  onChangeText={handleOtherSubjectChange}
+                  placeholder="教科名を入力（例：生活、図工、音楽、体育）"
+                  placeholderTextColor="#999"
+                  autoFocus
+                />
+                {newSubject.trim().length >= 2 && (
+                  <View style={styles.checkIconContainer}>
+                    <Check size={20} color="#4CAF50" />
+                  </View>
+                )}
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowSubjectInput(false);
+                    setNewSubject('');
+                  }}
+                  activeOpacity={0.7}>
+                  <X size={24} color="#999" />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
 
@@ -1007,6 +1095,58 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  chipSelected: {
+    backgroundColor: '#4A90E2',
+  },
+  chipText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  chipTextSelected: {
+    color: '#fff',
+  },
+  chipAdd: {
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    backgroundColor: '#fff',
+  },
+  chipAddText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#4A90E2',
+  },
+  subjectInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  subjectInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    backgroundColor: '#fff',
   },
   memoText: {
     fontSize: 15,

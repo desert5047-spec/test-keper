@@ -41,7 +41,7 @@ export default function RegisterChildScreen() {
     'Nunito-Bold': Nunito_700Bold,
   });
 
-  // お子様が既に登録されている場合はタブページにリダイレクト
+  // お子様が既に登録されている場合はオンボーディングへリダイレクト
   useEffect(() => {
     const checkExistingChildren = async () => {
       if (!user || !fontsLoaded || !isFamilyReady || !familyId) return;
@@ -53,7 +53,7 @@ export default function RegisterChildScreen() {
         .limit(1);
 
       if (childrenData && childrenData.length > 0) {
-        router.replace('/(tabs)');
+        router.replace('/onboarding');
       }
     };
 
@@ -108,7 +108,7 @@ export default function RegisterChildScreen() {
     await loadChildren();
     await refreshSetupStatus();
 
-    router.replace('/(tabs)');
+    router.replace('/onboarding');
   };
 
   return (

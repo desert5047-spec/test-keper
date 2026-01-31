@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -27,6 +27,7 @@ export default function OnboardingScreen() {
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [displayNameError, setDisplayNameError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const displayNameValue = displayNameInput.trim();
   const remainingChars = 4 - displayNameValue.length;
   const isDisplayNameValid = displayNameValue.length >= 1 && displayNameValue.length <= 4;
@@ -40,10 +41,18 @@ export default function OnboardingScreen() {
       router.replace('/(auth)/login');
       return;
     }
-    if (isFamilyReady && isSetupReady && !needsDisplayName && !needsChildSetup) {
-      router.replace('/(tabs)');
-    }
   }, [user, isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user || !isFamilyReady || !familyId) return;
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+      refreshSetupStatus().finally(() => {
+        refreshInFlightRef.current = false;
+      });
+    }, [user, isFamilyReady, familyId, refreshSetupStatus])
+  );
 
   const handleSaveDisplayName = async () => {
     if (!user || !familyId || !isFamilyReady) {
@@ -73,9 +82,9 @@ export default function OnboardingScreen() {
     setIsSaving(false);
 
     if (needsChildSetup) {
+      router.replace('/register-child');
       return;
     }
-    router.replace('/(tabs)');
   };
 
   return (
@@ -129,24 +138,39 @@ export default function OnboardingScreen() {
 
           {!needsDisplayName && (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>お子さま登録</Text>
-              <Text style={styles.sectionDescription}>
-                最初に1人だけ登録してください。あとから増やせます。
-              </Text>
               {needsChildSetup ? (
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() => router.push('/register-child')}
-                  activeOpacity={0.7}>
-                  <Text style={styles.primaryButtonText}>お子さま登録へ</Text>
-                </TouchableOpacity>
+                <>
+                  <Text style={styles.sectionTitle}>お子さま登録</Text>
+                  <Text style={styles.sectionDescription}>
+                    最初に1人だけ登録してください。あとから増やせます。
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={() => router.push('/register-child')}
+                    activeOpacity={0.7}>
+                    <Text style={styles.primaryButtonText}>お子さま登録へ</Text>
+                  </TouchableOpacity>
+                </>
               ) : (
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() => router.replace('/(tabs)')}
-                  activeOpacity={0.7}>
-                  <Text style={styles.primaryButtonText}>完了して進む</Text>
-                </TouchableOpacity>
+                <>
+                  <Text style={styles.sectionTitle}>🎉 準備完了</Text>
+                  <Text style={styles.sectionDescription}>
+                    準備ができました！{'\n'}
+                    さっそくテストを写真で残してみましょう。
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={() => router.replace('/add')}
+                    activeOpacity={0.7}>
+                    <Text style={styles.primaryButtonText}>テストを撮影する</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => router.replace('/(tabs)')}
+                    activeOpacity={0.7}>
+                    <Text style={styles.secondaryButtonText}>あとで登録する</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           )}
@@ -244,5 +268,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
     color: '#fff',
+  },
+  secondaryButton: {
+    backgroundColor: '#EEF6FF',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#2563EB',
   },
 });

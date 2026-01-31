@@ -27,7 +27,7 @@ interface Child {
 }
 
 const COLORS = [
-  '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+  '#4ECDC4', '#FF6B6B', '#45B7D1', '#FFA07A', '#98D8C8',
   '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B195', '#C06C84'
 ];
 

@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Switch,
 } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogleExpoGo } from '@/lib/auth';
 import { getLastAuthProvider } from '@/lib/auth/lastProvider';
+import { getRememberMe, setRememberMe } from '@/lib/authStorage';
 import { Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -30,6 +32,7 @@ export default function LoginScreen() {
   const { signIn, signInWithGoogle } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [lastLoginMethod, setLastLoginMethod] = useState<string | null>(null);
+  const [rememberMe, setRememberMeState] = useState(true);
 
   // 前回のログイン手段を確認
   useEffect(() => {
@@ -50,6 +53,19 @@ export default function LoginScreen() {
     };
     checkLastLogin();
   }, []);
+
+  useEffect(() => {
+    const loadRememberMe = async () => {
+      const stored = await getRememberMe();
+      setRememberMeState(stored);
+    };
+    loadRememberMe();
+  }, []);
+
+  const handleRememberMeChange = async (value: boolean) => {
+    setRememberMeState(value);
+    await setRememberMe(value);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -212,6 +228,16 @@ export default function LoginScreen() {
               activeOpacity={0.7}>
               <Text style={styles.forgotPasswordText}>パスワードを忘れた場合</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.rememberRow}>
+            <Text style={styles.rememberLabel}>次回のためログイン情報を保存</Text>
+            <Switch
+              value={rememberMe}
+              onValueChange={handleRememberMeChange}
+              trackColor={{ false: '#e0e0e0', true: '#A5C7F7' }}
+              thumbColor={rememberMe ? '#4A90E2' : '#f4f4f4'}
+            />
           </View>
 
           {error ? (
@@ -436,6 +462,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#4A90E2',
+  },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  rememberLabel: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
   },
   passwordInputContainer: {
     flexDirection: 'row',

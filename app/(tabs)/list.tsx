@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  SectionList,
+  ScrollView,
   TouchableOpacity,
   Image,
   ActivityIndicator,
@@ -28,9 +28,8 @@ export default function ListScreen() {
   const params = useLocalSearchParams();
   const { year, month, setYearMonth } = useDateContext();
   const { selectedChildId } = useChild();
-  const { familyId, isFamilyReady, familyDisplayName } = useAuth();
+  const { familyId, isFamilyReady } = useAuth();
   const [sections, setSections] = useState<Section[]>([]);
-  const guardianLabel = familyDisplayName ?? '保護者';
 
   useEffect(() => {
     if (params.year && params.month) {
@@ -115,7 +114,7 @@ export default function ListScreen() {
     return colors[subject] || '#95A5A6';
   };
 
-  const renderItem = ({ item }: { item: TestRecord }) => {
+  const renderItem = (item: TestRecord) => {
     const subjectColor = getSubjectColor(item.subject);
     const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
 
@@ -159,14 +158,6 @@ export default function ListScreen() {
     );
   };
 
-  const renderSectionHeader = ({ section }: { section: Section }) => {
-    return (
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>
-      </View>
-    );
-  };
-
   return (
     <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
@@ -182,20 +173,25 @@ export default function ListScreen() {
           </Text>
         </View>
       ) : (
-        <SectionList
-          sections={sections}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={
-            <View style={styles.listHeader}>
-              <Text style={styles.listHeaderText}>あなた: {guardianLabel}</Text>
-            </View>
-          }
+        <ScrollView
           contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 12 }]}
-          showsVerticalScrollIndicator={false}
-          stickySectionHeadersEnabled={true}
-        />
+          showsVerticalScrollIndicator={false}>
+          {sections.map((section) => (
+            <View key={section.title} style={styles.daySection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>
+              </View>
+              <View style={styles.dayRecords}>
+                {section.data.map((item) => (
+                  <View key={item.id} style={styles.dayRecordWrapper}>
+                    {renderItem(item)}
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))}
+          <View style={{ height: 20 }} />
+        </ScrollView>
       )}
     </View>
   );
@@ -209,39 +205,40 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 20,
   },
-  listHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 6,
-  },
-  listHeaderText: {
-    fontSize: 12,
-    fontFamily: 'Nunito-Regular',
-    color: '#666',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  daySection: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 10,
+  },
   sectionHeader: {
-    backgroundColor: '#f8f8f8',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-    marginTop: 8,
+    paddingBottom: 4,
   },
   sectionHeaderText: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
-    color: '#666',
+    color: '#1e3a8a',
+  },
+  dayRecords: {
+    gap: 2,
+  },
+  dayRecordWrapper: {
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   recordItem: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginVertical: 6,
+    backgroundColor: '#EEF6FF',
+    marginVertical: 2,
     borderRadius: 10,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     overflow: 'hidden',
     ...Platform.select({
       web: {

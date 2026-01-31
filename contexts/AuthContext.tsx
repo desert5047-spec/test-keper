@@ -181,12 +181,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const displayName = (member?.display_name as string | null) ?? null;
     setFamilyDisplayName(displayName);
-    const needsName = !displayName || displayName.trim().length === 0;
+    const hasMember = !!member;
+    const needsName = !hasMember || !displayName || displayName.trim().length === 0;
     setNeedsDisplayName(needsName);
 
-    const { data: childrenData, error: childError } = await supabase
+    const { count: childCount, error: childError } = await supabase
       .from('children')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('family_id', familyId)
       .limit(1);
 
@@ -197,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const needsChild = !childrenData || childrenData.length === 0;
+    const needsChild = !childCount || childCount === 0;
     setNeedsChildSetup(needsChild);
     setIsSetupReady(true);
   }, [user?.id, isFamilyReady, familyId]);
@@ -256,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isInvite = currentPath.startsWith('invite');
 
       if (needsDisplayName || needsChildSetup) {
-        if (!isOnboarding && !isInvite) {
+        if (!isOnboarding && !isInvite && !isRegisterChild) {
           console.log('[AuthContext] checkAndRedirect: 初期セットアップが必要、オンボーディングへ');
           router.replace('/onboarding');
         }
@@ -264,9 +265,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (isOnboarding || inAuthGroup || isRegisterChild) {
+      if (isRegisterChild) {
+        console.log('[AuthContext] checkAndRedirect: セットアップ完了、オンボーディングへ');
+        router.replace('/onboarding');
+      } else if (inAuthGroup) {
         console.log('[AuthContext] checkAndRedirect: セットアップ完了、タブページへ');
         router.replace('/(tabs)');
+      } else if (isOnboarding) {
+        console.log('[AuthContext] checkAndRedirect: セットアップ完了、オンボーディングに滞在');
       } else if (!isTabs) {
         console.log('[AuthContext] checkAndRedirect: 既に適切なページにいます:', currentPath);
       }
@@ -393,15 +399,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // ログイン済みの場合
+    // ログイン済みの場合は常にセットアップ判定を実行
     if (user) {
-      // 認証グループ内にいる場合は、オンボーディング/子供登録チェックを実行
-      if (inAuthGroup) {
-        checkAndRedirect(user);
-      } else if (!isOnboarding && !isRegisterChild && !isTabs && !isInvite) {
-        // オンボーディング、子供登録、タブページ以外にいる場合もチェック
-        checkAndRedirect(user);
-      }
+      checkAndRedirect(user);
     }
   }, [user, segments, loading, checkingOnboarding, checkAndRedirect]);
 

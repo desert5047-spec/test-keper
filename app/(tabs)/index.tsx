@@ -168,7 +168,6 @@ export default function HomeScreen() {
   const renderRecord = ({ item }: { item: TestRecord }) => {
     const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
     const subjectColor = getSubjectColor(item.subject);
-    const imageAspectRatio = imageAspectRatios[item.id];
     const hasImageError = imageErrors[item.id];
 
     if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
@@ -179,36 +178,11 @@ export default function HomeScreen() {
     // 画像エラーがある場合は写真なしとして扱う
     const shouldShowPhoto = hasPhoto && !hasImageError;
 
-    // コンテナの高さは元のアスペクト比で計算（回転は画像の表示にのみ影響）
-    // 詳細画面と同じ表示にするため、回転を考慮しない
-    const isLandscape = imageAspectRatio ? imageAspectRatio > 1 : null;
-
-    // アスペクト比に応じてコンテナの高さを動的に計算
+    // 横幅に合わせて高さを統一（カード幅と同じ高さ）
     const getImageContainerHeight = () => {
-      if (!shouldShowPhoto) return 80;
-      if (!imageAspectRatio) {
-        // アスペクト比が取得できていない場合はデフォルト
-        return 240;
-      }
-      
-      // 実際の画面幅を取得（カードの幅 = 画面幅 - パディング32px）
       const screenWidth = Dimensions.get('window').width;
       const cardWidth = screenWidth - 32; // 左右のパディング16px × 2
-      
-      // 元のアスペクト比に基づいて高さを計算（回転を考慮しない）
-      // 横長の画像: 高さを小さく
-      // 縦長の画像: 高さを大きく
-      const calculatedHeight = cardWidth / imageAspectRatio;
-      
-      // 高さの範囲を制限
-      // 横長の画像（imageAspectRatio > 1）: 最小150px、最大300px
-      // 縦長の画像（imageAspectRatio <= 1）: 最小200px、最大500px
-      const height = imageAspectRatio > 1
-        ? Math.max(150, Math.min(300, calculatedHeight))
-        : Math.max(200, Math.min(500, calculatedHeight));
-      
-      console.log(`[画像コンテナ高さ] ${item.id}: アスペクト比=${imageAspectRatio.toFixed(2)}, 横長=${isLandscape}, 回転=${item.photo_rotation || 0}度, 計算高さ=${calculatedHeight.toFixed(0)}px, 最終高さ=${height}px`);
-      return height;
+      return cardWidth;
     };
 
     return (
@@ -239,10 +213,8 @@ export default function HomeScreen() {
                       });
                     }
                   }}
-                  onError={(error) => {
-                    console.error(`[画像読み込みエラー] ${item.id}:`, error);
-                    console.error(`[画像読み込みエラー] URI: ${item.photo_uri}`);
-                    console.error(`[画像読み込みエラー] Platform: ${Platform.OS}`);
+                  onError={() => {
+                    console.warn(`[画像読み込みエラー] ${item.id}`);
                     // エラーを記録
                     setImageErrors((prev) => ({ ...prev, [item.id]: true }));
                   }}

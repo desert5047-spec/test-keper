@@ -145,29 +145,32 @@ export default function MonthlyScreen() {
         style={styles.card}
         onPress={() => handleMonthCardPress(summary.year, summary.month)}
         activeOpacity={0.7}>
-        <Text style={styles.cardTitle}>
-          {summary.year}年{summary.month}月の記録
-        </Text>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>
+            {summary.year}年{summary.month}月のテスト平均
+          </Text>
+          {hasRecords ? (
+            <Text style={styles.totalText}>{summary.totalRecords}件</Text>
+          ) : null}
+        </View>
 
         {hasRecords ? (
           <>
-            <Text style={styles.totalText}>
-              この月は合計{summary.totalRecords}件の記録が残っています
-            </Text>
-
             {summary.subjectStats.length > 0 && (
               <View style={styles.subjectStatsContainer}>
                 {summary.subjectStats.map((stat) => (
                   <View key={stat.subject} style={styles.subjectStatRow}>
-                    <View style={[styles.subjectChip, { backgroundColor: getSubjectColor(stat.subject) }]}>
-                      <Text style={styles.subjectChipText}>{stat.subject}</Text>
+                    <View style={styles.subjectChip}>
+                      <Text style={styles.subjectChipText}>{stat.subject}テスト</Text>
                     </View>
-                    <Text style={styles.subjectStatText}>
-                      {stat.averageScore !== null
-                        ? `平均${stat.averageScore}点、`
-                        : ''}
-                      {stat.totalCount}件
-                    </Text>
+                    {stat.averageScore !== null ? (
+                      <Text style={styles.subjectStatText}>
+                        <Text style={styles.subjectScoreText}>{stat.averageScore}点</Text>
+                        <Text>{`（${stat.totalCount}件）`}</Text>
+                      </Text>
+                    ) : (
+                      <Text style={styles.subjectStatText}>{`${stat.totalCount}件`}</Text>
+                    )}
                   </View>
                 ))}
               </View>
@@ -245,15 +248,27 @@ const styles = StyleSheet.create({
     }),
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: 'Nunito-Bold',
-    color: '#333',
+    color: '#1e3a8a',
+    marginBottom: 0,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
     marginBottom: 8,
   },
   totalText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
+    alignSelf: 'flex-start',
+    fontSize: 12,
+    color: '#1d4ed8',
+    backgroundColor: '#EEF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 0,
   },
   noRecordsText: {
     fontSize: 14,
@@ -268,6 +283,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    backgroundColor: '#EEF6FF',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
   subjectChip: {
     paddingHorizontal: 10,
@@ -275,14 +294,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   subjectChipText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Nunito-Bold',
+    color: '#111827',
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
   },
   subjectStatText: {
     fontSize: 14,
     color: '#555',
     fontFamily: 'Nunito-Regular',
+  },
+  subjectScoreText: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#2563eb',
   },
   emptyContainer: {
     flex: 1,
