@@ -3,12 +3,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,9 +23,45 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { children, loadChildren } = useChild();
-  const { signOut, user } = useAuth();
+  const { signOut, user, familyId, isFamilyReady } = useAuth();
   const [isResetting, setIsResetting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [familyRole, setFamilyRole] = useState<'owner' | 'member' | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteToken, setInviteToken] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+  const [inviteList, setInviteList] = useState<
+    { token: string; email: string; created_at: string; expires_at: string | null; status: string }[]
+  >([]);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
+  const [acceptToken, setAcceptToken] = useState('');
+  const [isAcceptingInvite, setIsAcceptingInvite] = useState(false);
+  const [acceptMessage, setAcceptMessage] = useState('');
+  const [acceptError, setAcceptError] = useState('');
+
+  const isOwner = familyRole === 'owner';
+
+  const getCreateInviteErrorMessage = (message: string) => {
+    if (message.includes('owner_only')) {
+      return 'オーナーのみ招待を作成できます';
+    }
+    return '招待の作成に失敗しました';
+  };
+
+  const getAcceptInviteErrorMessage = (message: string) => {
+    if (message.includes('invalid_or_expired')) {
+      return '招待コードが無効か期限切れです';
+    }
+    if (message.includes('email_mismatch')) {
+      return 'この招待コードは別のメールアドレス宛てです';
+    }
+    if (message.includes('email_not_found')) {
+      return 'ログイン中のメールアドレスを取得できませんでした';
+    }
+    return '招待の受諾に失敗しました';
+  };
 
   const performResetData = async () => {
     setIsResetting(true);
@@ -32,11 +69,14 @@ export default function SettingsScreen() {
       if (!user?.id) {
         throw new Error('ユーザー情報が見つかりません');
       }
+      if (!isFamilyReady || !familyId) {
+        throw new Error('家族情報の取得中です。少し待ってから再度お試しください');
+      }
 
       const { data: records } = await supabase
         .from('records')
         .select('photo_uri')
-        .eq('user_id', user.id)
+        .eq('family_id', familyId)
         .not('photo_uri', 'is', null);
 
       if (records && records.length > 0) {
@@ -58,7 +98,7 @@ export default function SettingsScreen() {
       const { error: childrenError } = await supabase
         .from('children')
         .delete()
-        .eq('user_id', user.id);
+        .eq('family_id', familyId);
 
       if (childrenError) {
         throw new Error('初期化に失敗しました: ' + childrenError.message);
@@ -85,6 +125,130 @@ export default function SettingsScreen() {
     } finally {
       setIsResetting(false);
     }
+  };
+
+  const loadFamilyRole = useCallback(async () => {
+    if (!user?.id || !isFamilyReady || !familyId) {
+      setFamilyRole(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('family_members')
+      .select('role')
+      .eq('family_id', familyId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Settings] family role 取得エラー:', error);
+      setFamilyRole(null);
+      return;
+    }
+
+    setFamilyRole((data?.role as 'owner' | 'member') ?? null);
+  }, [user?.id, isFamilyReady, familyId]);
+
+  const loadInvites = useCallback(async () => {
+    if (!isOwner) return;
+    setIsLoadingInvites(true);
+    const { data, error } = await supabase.rpc('list_invites');
+    if (error) {
+      console.error('[Settings] 招待一覧取得エラー:', error);
+      setInviteList([]);
+    } else {
+      setInviteList(data ?? []);
+    }
+    setIsLoadingInvites(false);
+  }, [isOwner]);
+
+  useEffect(() => {
+    loadFamilyRole();
+  }, [loadFamilyRole]);
+
+  useEffect(() => {
+    if (isOwner) {
+      loadInvites();
+    }
+  }, [isOwner, loadInvites]);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      const Clipboard = await import('expo-clipboard');
+      await Clipboard.setStringAsync(text);
+      return true;
+    } catch (error) {
+      console.warn('[Settings] クリップボードコピー失敗:', error);
+      return false;
+    }
+  };
+
+  const handleCreateInvite = async () => {
+    if (!inviteEmail.trim()) {
+      setInviteError('メールアドレスを入力してください');
+      return;
+    }
+    if (!isFamilyReady || !familyId) {
+      setInviteError('家族情報の取得中です。少し待ってから再度お試しください');
+      return;
+    }
+    setInviteError('');
+    setInviteMessage('');
+    setInviteToken('');
+    setIsCreatingInvite(true);
+
+    const { data, error } = await supabase.rpc('create_invite', {
+      invited_email: inviteEmail.trim(),
+    });
+
+    if (error) {
+      console.error('[Settings] 招待作成エラー:', error);
+      setInviteError(getCreateInviteErrorMessage(error.message || ''));
+    } else {
+      setInviteToken(data ?? '');
+      setInviteMessage('招待コードを作成しました');
+      loadInvites();
+    }
+
+    setIsCreatingInvite(false);
+  };
+
+  const handleCopyToken = async () => {
+    if (!inviteToken) return;
+    const ok = await copyToClipboard(inviteToken);
+    if (ok) {
+      setInviteMessage('招待コードをコピーしました');
+    } else {
+      setInviteError('コピーに失敗しました。手動でコピーしてください。');
+    }
+  };
+
+  const handleAcceptInvite = async () => {
+    if (!acceptToken.trim()) {
+      setAcceptError('招待コードを入力してください');
+      return;
+    }
+    setAcceptError('');
+    setAcceptMessage('');
+    setIsAcceptingInvite(true);
+
+    const { data, error } = await supabase.rpc('accept_invite', {
+      invite_token: acceptToken.trim(),
+    });
+
+    if (error) {
+      console.error('[Settings] 招待受諾エラー:', error);
+      setAcceptError(getAcceptInviteErrorMessage(error.message || ''));
+    } else {
+      setAcceptMessage('参加しました');
+      setAcceptToken('');
+    }
+
+    setIsAcceptingInvite(false);
   };
 
   const handleResetData = () => {
@@ -194,6 +358,96 @@ export default function SettingsScreen() {
               </>
             )}
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>家族共有</Text>
+
+          {isOwner && isFamilyReady && familyId ? (
+            <View style={styles.familyCard}>
+              <Text style={styles.familyCardTitle}>家族を招待（オーナーのみ）</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="招待するメールアドレス"
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={inviteEmail}
+                onChangeText={setInviteEmail}
+              />
+              {inviteError ? <Text style={styles.errorText}>{inviteError}</Text> : null}
+              {inviteMessage ? <Text style={styles.successText}>{inviteMessage}</Text> : null}
+              <TouchableOpacity
+                style={[styles.primaryButton, isCreatingInvite && styles.primaryButtonDisabled]}
+                onPress={handleCreateInvite}
+                disabled={isCreatingInvite}
+                activeOpacity={0.7}>
+                {isCreatingInvite ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>招待コードを作成</Text>
+                )}
+              </TouchableOpacity>
+
+              {inviteToken ? (
+                <View style={styles.tokenBox}>
+                  <Text style={styles.tokenLabel}>招待コード</Text>
+                  <Text style={styles.tokenValue}>{inviteToken}</Text>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={handleCopyToken}>
+                    <Text style={styles.secondaryButtonText}>コピー</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              <View style={styles.inviteListHeader}>
+                <Text style={styles.inviteListTitle}>招待中一覧</Text>
+                {isLoadingInvites ? <ActivityIndicator size="small" color="#4A90E2" /> : null}
+              </View>
+              {inviteList.length === 0 ? (
+                <Text style={styles.infoText}>招待中のユーザーはいません</Text>
+              ) : (
+                inviteList.map((invite) => (
+                  <View key={invite.token} style={styles.inviteRow}>
+                    <Text style={styles.inviteEmail}>{invite.email}</Text>
+                    <Text style={styles.inviteMeta}>
+                      期限: {invite.expires_at ? new Date(invite.expires_at).toLocaleDateString() : '未設定'}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+          ) : (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoText}>
+                {isFamilyReady ? 'オーナーのみ招待を作成できます' : '家族情報を読み込み中です...'}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.familyCard}>
+            <Text style={styles.familyCardTitle}>招待コードで参加</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="招待コードを入力"
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              value={acceptToken}
+              onChangeText={setAcceptToken}
+            />
+            {acceptError ? <Text style={styles.errorText}>{acceptError}</Text> : null}
+            {acceptMessage ? <Text style={styles.successText}>{acceptMessage}</Text> : null}
+            <TouchableOpacity
+              style={[styles.primaryButton, isAcceptingInvite && styles.primaryButtonDisabled]}
+              onPress={handleAcceptInvite}
+              disabled={isAcceptingInvite}
+              activeOpacity={0.7}>
+              {isAcceptingInvite ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>参加する</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -430,6 +684,132 @@ const styles = StyleSheet.create({
         elevation: 2,
       },
     }),
+  },
+  familyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+      },
+    }),
+  },
+  familyCardTitle: {
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+  },
+  errorText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#E74C3C',
+    marginBottom: 6,
+  },
+  successText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#27AE60',
+    marginBottom: 6,
+  },
+  primaryButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  primaryButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#fff',
+  },
+  tokenBox: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  tokenLabel: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    marginBottom: 4,
+  },
+  tokenValue: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  secondaryButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EEF6FF',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  secondaryButtonText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#2563EB',
+  },
+  inviteListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  inviteListTitle: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  inviteRow: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  inviteEmail: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+  },
+  inviteMeta: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginTop: 2,
   },
   appName: {
     fontSize: 20,
