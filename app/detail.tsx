@@ -25,11 +25,13 @@ import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 import { uploadImage, deleteImage } from '@/utils/imageUpload';
 import { useAuth } from '@/contexts/AuthContext';
+import { useChild } from '@/contexts/ChildContext';
 
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, familyId, isFamilyReady } = useAuth();
+  const { children: contextChildren } = useChild();
   const insets = useSafeAreaInsets();
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,7 @@ export default function DetailScreen() {
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
 
   const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 
@@ -89,6 +92,7 @@ export default function DetailScreen() {
     setMemo(data.memo || '');
     setScoreError('');
     setSelectedSubject(data.subject || '');
+    setSelectedChildId(data.child_id || null);
     if (data.subject && !MAIN_SUBJECTS.includes(data.subject)) {
       setShowSubjectInput(true);
       setNewSubject(data.subject);
@@ -282,6 +286,11 @@ export default function DetailScreen() {
       }
     }
 
+    if (contextChildren.length > 0 && !selectedChildId) {
+      Alert.alert('エラー', '子供を選択してください');
+      return;
+    }
+
     if (photoUri) {
       try {
         validateImageUri(photoUri);
@@ -324,6 +333,7 @@ export default function DetailScreen() {
       const { error } = await supabase
         .from('records')
         .update({
+          child_id: selectedChildId ?? null,
           subject: selectedSubject,
           score: evaluationType === 'score' ? parseInt(score) : null,
           max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
@@ -502,6 +512,33 @@ export default function DetailScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          {contextChildren.length > 0 && (
+            <View style={styles.editSection}>
+              <Text style={styles.editSectionTitle}>子供</Text>
+              <View style={styles.childChipContainer}>
+                {contextChildren.map((child) => (
+                  <TouchableOpacity
+                    key={child.id}
+                    style={[
+                      styles.childChip,
+                      selectedChildId === child.id && styles.childChipSelected,
+                    ]}
+                    onPress={() => setSelectedChildId(child.id)}
+                    activeOpacity={0.7}>
+                    <View style={[styles.childColorBadge, { backgroundColor: child.color }]} />
+                    <Text
+                      style={[
+                        styles.childChipText,
+                        selectedChildId === child.id && styles.childChipTextSelected,
+                      ]}>
+                      {child.name || '未設定'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
 
           <View style={styles.editSection}>
             <Text style={styles.editSectionTitle}>教科</Text>
@@ -1243,6 +1280,39 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#666',
     marginTop: 8,
+  },
+  childChipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  childChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    gap: 6,
+  },
+  childChipSelected: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  childColorBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  childChipText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  childChipTextSelected: {
+    color: '#fff',
   },
   evaluationTypeContainer: {
     flexDirection: 'row',

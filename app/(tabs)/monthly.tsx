@@ -88,7 +88,11 @@ export default function MonthlyScreen() {
         }
         subjectData[record.subject].totalCount++;
         if (record.score !== null) {
-          subjectData[record.subject].scores.push(record.score);
+          const maxScore = record.max_score ?? 100;
+          const normalizedScore = maxScore > 0
+            ? (record.score / maxScore) * 100
+            : record.score;
+          subjectData[record.subject].scores.push(normalizedScore);
         }
       });
 

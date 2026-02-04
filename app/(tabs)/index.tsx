@@ -184,6 +184,7 @@ export default function HomeScreen() {
       const cardWidth = screenWidth - 32; // 左右のパディング16px × 2
       return cardWidth;
     };
+    const imageContainerHeight = shouldShowPhoto ? getImageContainerHeight() : 160;
 
     return (
       <TouchableOpacity
@@ -193,7 +194,7 @@ export default function HomeScreen() {
         <View style={[
           styles.imageContainer, 
           !shouldShowPhoto && styles.imageContainerNoPhoto,
-          { height: getImageContainerHeight() }
+          { height: imageContainerHeight }
         ]}>
           {shouldShowPhoto ? (
             <>

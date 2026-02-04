@@ -32,6 +32,8 @@ import { uploadImage } from '@/utils/imageUpload';
 const PENDING_CAMERA_RESULT_KEY = '@pending_camera_result';
 
 const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+const LAST_SUBJECT_KEY = '@last_record_subject';
+const LAST_CHILD_KEY = '@last_record_child_id';
 
 interface Child {
   id: string;
@@ -43,6 +45,7 @@ export default function AddScreen() {
   const router = useRouter();
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
+  const scrollViewRef = useRef<ScrollView>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -60,6 +63,7 @@ export default function AddScreen() {
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
@@ -70,6 +74,26 @@ export default function AddScreen() {
   useEffect(() => {
     requestPermissions();
   }, []);
+
+  useEffect(() => {
+    const loadLastSelections = async () => {
+      try {
+        const results = await AsyncStorage.multiGet([LAST_SUBJECT_KEY, LAST_CHILD_KEY]);
+        const lastSubject = results.find(([key]) => key === LAST_SUBJECT_KEY)?.[1] ?? '';
+        const lastChildId = results.find(([key]) => key === LAST_CHILD_KEY)?.[1] ?? '';
+
+        if (lastSubject) {
+          setSelectedSubject(lastSubject);
+        }
+        if (lastChildId && contextChildren.some((child) => child.id === lastChildId)) {
+          setSelectedChildId(lastChildId);
+        }
+      } catch (error) {
+        console.warn('[記録保存] 前回選択の読み込み失敗:', error);
+      }
+    };
+    loadLastSelections();
+  }, [contextChildren]);
 
   useEffect(() => {
     if (contextSelectedChildId) {
@@ -552,15 +576,15 @@ export default function AddScreen() {
 
   const canSave = () => {
     if (!selectedSubject) return false;
-    if (evaluationType === 'score') {
-      if (!score.trim()) return false;
+    const hasMethodInput =
+      evaluationType === 'score' ? !!score.trim() : !!stamp;
+    if (!photoUri && !hasMethodInput) return false;
+    if (hasMethodInput && evaluationType === 'score') {
       const scoreNum = parseInt(score);
       const maxScoreNum = parseInt(maxScore);
       if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
         return false;
       }
-    } else {
-      if (!stamp) return false;
     }
     return true;
   };
@@ -574,26 +598,28 @@ export default function AddScreen() {
         return;
       }
 
-      if (evaluationType === 'score') {
-        if (!score.trim()) {
-          setErrorMessage('点数を入れてください');
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
-        }
-        const scoreNum = parseInt(score);
-        const maxScoreNum = parseInt(maxScore);
-        if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
-          setErrorMessage('点数は正しい数字で入れてください');
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
-        }
-        if (scoreNum > maxScoreNum) {
-          setErrorMessage(`点数は${maxScoreNum}点以下で入力してください`);
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
-        }
-      } else {
-        if (!stamp) {
+      const hasMethodInput =
+        evaluationType === 'score' ? !!score.trim() : !!stamp;
+      if (!photoUri && !hasMethodInput) {
+        setErrorMessage('写真または記録方法を入力してください');
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
+      if (hasMethodInput) {
+        if (evaluationType === 'score') {
+          const scoreNum = parseInt(score);
+          const maxScoreNum = parseInt(maxScore);
+          if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
+            setErrorMessage('点数は正しい数字で入れてください');
+            setTimeout(() => setErrorMessage(''), 3000);
+            return;
+          }
+          if (scoreNum > maxScoreNum) {
+            setErrorMessage(`点数は${maxScoreNum}点以下で入力してください`);
+            setTimeout(() => setErrorMessage(''), 3000);
+            return;
+          }
+        } else if (!stamp) {
           setErrorMessage('スタンプを選んでください');
           setTimeout(() => setErrorMessage(''), 3000);
           return;
@@ -721,6 +747,18 @@ export default function AddScreen() {
         }
       }
 
+      const hasMethodInputFinal =
+        evaluationType === 'score' ? !!score.trim() : !!stamp;
+      const scoreValue = hasMethodInputFinal && evaluationType === 'score'
+        ? parseInt(score)
+        : null;
+      const maxScoreValue = hasMethodInputFinal && evaluationType === 'score'
+        ? parseInt(maxScore)
+        : 100;
+      const stampValue = hasMethodInputFinal && evaluationType === 'stamp'
+        ? stamp
+        : null;
+
       console.log('[記録保存] データベースに保存開始', {
         child_id: selectedChildId,
         photo_uri: uploadedImageUrl ? uploadedImageUrl.substring(0, 50) : null,
@@ -737,9 +775,9 @@ export default function AddScreen() {
             date,
             subject: selectedSubject,
             type,
-            score: evaluationType === 'score' ? parseInt(score) : null,
-            max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
-            stamp: evaluationType === 'stamp' ? stamp : null,
+            score: scoreValue,
+            max_score: maxScoreValue,
+            stamp: stampValue,
             memo: memo.trim() || null,
             photo_uri: uploadedImageUrl,
             photo_rotation: photoRotation,
@@ -753,26 +791,34 @@ export default function AddScreen() {
 
         console.log('[記録保存] データベース保存成功', { insertData });
 
-        console.log('[記録保存] データベース保存成功', { insertData });
+        try {
+          await AsyncStorage.setItem(LAST_SUBJECT_KEY, selectedSubject);
+          if (selectedChildId) {
+            await AsyncStorage.setItem(LAST_CHILD_KEY, selectedChildId);
+          } else {
+            await AsyncStorage.removeItem(LAST_CHILD_KEY);
+          }
+        } catch (persistError) {
+          console.warn('[記録保存] 前回選択の保存失敗:', persistError);
+        }
 
         // 成功時の処理もtry-catchで保護
         try {
+          setIsSaving(false);
           setShowToast(true);
           setTimeout(() => {
             try {
               setShowToast(false);
-              resetForm();
-              router.push('/(tabs)');
+              setShowSaveConfirm(true);
             } catch (navigationError: any) {
               console.error('[記録保存] ナビゲーションエラー:', navigationError);
-              // ナビゲーションに失敗しても、フォームはリセット
               try {
                 resetForm();
               } catch (resetError) {
                 console.error('[記録保存] フォームリセットエラー:', resetError);
               }
             }
-          }, 1500);
+          }, 300);
         } catch (successError: any) {
           console.error('[記録保存] 成功処理エラー:', successError);
           // 成功処理に失敗しても、保存は完了しているので、エラーを表示しない
@@ -892,6 +938,7 @@ export default function AddScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
@@ -1317,6 +1364,43 @@ export default function AddScreen() {
           <Text style={styles.toastText}>記録を残しました</Text>
         </View>
       )}
+
+      <Modal
+        visible={showSaveConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {}}>
+        <View style={styles.saveConfirmOverlay}>
+          <View style={styles.saveConfirmCard}>
+            <Text style={styles.saveConfirmTitle}>確認</Text>
+            <Text style={styles.saveConfirmMessage}>記録は保存されました。続けて入力しますか？</Text>
+            <View style={styles.saveConfirmActions}>
+              <TouchableOpacity
+                style={styles.saveConfirmSecondaryButton}
+                onPress={() => {
+                  setShowSaveConfirm(false);
+                  resetForm();
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                  }, 0);
+                }}
+                activeOpacity={0.7}>
+                <Text style={styles.saveConfirmSecondaryText}>続けて記録する</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveConfirmPrimaryButton}
+                onPress={() => {
+                  setShowSaveConfirm(false);
+                  resetForm();
+                  router.push('/(tabs)');
+                }}
+                activeOpacity={0.7}>
+                <Text style={styles.saveConfirmPrimaryText}>ホームに戻る</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1819,6 +1903,66 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
+  },
+  saveConfirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  saveConfirmCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 360,
+  },
+  saveConfirmTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  saveConfirmMessage: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  saveConfirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  saveConfirmSecondaryButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#666',
+  },
+  saveConfirmSecondaryText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: '#666',
+  },
+  saveConfirmPrimaryButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#666',
+  },
+  saveConfirmPrimaryText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: '#666',
   },
   childChipContainer: {
     flexDirection: 'row',
