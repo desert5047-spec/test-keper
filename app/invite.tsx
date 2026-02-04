@@ -35,6 +35,44 @@ export default function InviteScreen() {
     }
   }, [inviteToken, router, user]);
 
+  useEffect(() => {
+    if (!inviteToken || !user) return;
+    let isActive = true;
+    const syncExistingMembership = async () => {
+      const { data: inviteStatus } = await supabase
+        .from('invites')
+        .select('status, family_id')
+        .eq('token', inviteToken)
+        .maybeSingle();
+
+      if (!isActive || !inviteStatus?.family_id) {
+        return;
+      }
+
+      const { data: membership } = await supabase
+        .from('family_members')
+        .select('family_id')
+        .eq('family_id', inviteStatus.family_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!isActive) return;
+
+      if (membership?.family_id || inviteStatus.status !== 'pending') {
+        await AsyncStorage.removeItem(PENDING_INVITE_KEY);
+        setActiveFamilyId(inviteStatus.family_id);
+        await refreshSetupStatus();
+        setMessage('既に参加済みです');
+        router.replace('/onboarding');
+      }
+    };
+
+    syncExistingMembership();
+    return () => {
+      isActive = false;
+    };
+  }, [inviteToken, user, setActiveFamilyId, refreshSetupStatus, router]);
+
   const getAcceptInviteErrorMessage = (msg: string) => {
     if (msg.includes('invalid_or_expired')) {
       return '招待リンクが無効か期限切れです';
@@ -46,6 +84,42 @@ export default function InviteScreen() {
       return 'ログイン中のメールアドレスを取得できませんでした';
     }
     return '招待の参加に失敗しました';
+  };
+
+  const tryRecoverFromInviteError = async () => {
+    if (!user || !inviteToken) return false;
+    const { data: invite } = await supabase
+      .from('invites')
+      .select('family_id, status')
+      .eq('token', inviteToken)
+      .maybeSingle();
+
+    if (!invite?.family_id) {
+      return false;
+    }
+
+    const { data: membership } = await supabase
+      .from('family_members')
+      .select('family_id')
+      .eq('family_id', invite.family_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (membership?.family_id) {
+      await AsyncStorage.removeItem(PENDING_INVITE_KEY);
+      setActiveFamilyId(invite.family_id);
+      await refreshSetupStatus();
+      setMessage('既に参加済みです');
+      router.replace('/onboarding');
+      return true;
+    }
+
+    if (invite.status !== 'pending') {
+      setError('招待リンクが無効か期限切れです');
+      return true;
+    }
+
+    return false;
   };
 
   const handleAcceptInvite = async () => {
@@ -63,13 +137,64 @@ export default function InviteScreen() {
     setMessage('');
     setIsAccepting(true);
 
+    const { data: inviteStatus } = await supabase
+      .from('invites')
+      .select('status, family_id')
+      .eq('token', inviteToken)
+      .maybeSingle();
+
+    if (inviteStatus?.family_id && user?.id) {
+      const { data: membership } = await supabase
+        .from('family_members')
+        .select('family_id')
+        .eq('family_id', inviteStatus.family_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (membership?.family_id) {
+        await AsyncStorage.removeItem(PENDING_INVITE_KEY);
+        setActiveFamilyId(inviteStatus.family_id);
+        await refreshSetupStatus();
+        setMessage('既に参加済みです');
+        setIsAccepting(false);
+        router.replace('/onboarding');
+        return;
+      }
+    }
+
+    if (inviteStatus && inviteStatus.status !== 'pending') {
+      if (inviteStatus.family_id) {
+        await AsyncStorage.removeItem(PENDING_INVITE_KEY);
+        setActiveFamilyId(inviteStatus.family_id);
+        await refreshSetupStatus();
+      }
+      setMessage('既に参加済みです');
+      setIsAccepting(false);
+      router.replace('/onboarding');
+      return;
+    }
+
     const { data, error: acceptError } = await supabase.rpc('accept_invite', {
       invite_token: inviteToken,
     });
 
     if (acceptError) {
       console.error('[Invite] 招待受諾エラー:', acceptError);
-      setError(getAcceptInviteErrorMessage(acceptError.message || ''));
+      if ((acceptError as any)?.code === '23505') {
+        const recovered = await tryRecoverFromInviteError();
+        if (recovered) {
+          setIsAccepting(false);
+          return;
+        }
+        setMessage('既に参加済みです');
+        setIsAccepting(false);
+        router.replace('/onboarding');
+        return;
+      }
+      const recovered = await tryRecoverFromInviteError();
+      if (!recovered) {
+        setError(getAcceptInviteErrorMessage(acceptError.message || ''));
+      }
       setIsAccepting(false);
       return;
     }
@@ -86,11 +211,41 @@ export default function InviteScreen() {
   };
 
   const handleGoHome = () => {
-    router.replace('/(tabs)');
+    AsyncStorage.removeItem(PENDING_INVITE_KEY).finally(() => {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('token');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      }
+      router.replace('/(tabs)');
+    });
   };
+
+  // TODO: 家族招待機能は次フェーズで再開予定
+  const ENABLE_INVITE_FEATURE = false;
 
   const hasToken = inviteToken.trim().length > 0;
   const showLoading = !user && hasToken;
+
+  // 機能が無効化されている場合は、準備中メッセージを表示
+  if (!ENABLE_INVITE_FEATURE) {
+    return (
+      <View style={styles.container}>
+        <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="家族招待" />
+        <View style={styles.content}>
+          <View style={styles.card}>
+            <Text style={styles.title}>家族招待機能は現在準備中です</Text>
+            <Text style={styles.description}>
+              家族招待機能は現在準備中です。しばらくお待ちください。
+            </Text>
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleGoHome} activeOpacity={0.7}>
+              <Text style={styles.secondaryButtonText}>ホームに戻る</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

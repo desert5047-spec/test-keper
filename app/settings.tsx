@@ -494,10 +494,13 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>家族共有</Text>
+        {/* TODO: 家族共有機能は次フェーズで再開予定 */}
+        {false && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>家族共有</Text>
 
-          {isOwner && isFamilyReady && familyId ? (
+            {/* TODO: 家族招待機能は次フェーズで再開予定 */}
+            {isOwner && isFamilyReady && familyId ? (
             <View style={styles.familyCard}>
               <Text style={styles.familyCardTitle}>家族を招待（オーナーのみ）</Text>
               <TextInput
@@ -538,82 +541,87 @@ export default function SettingsScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.inviteListHeader}>
-                <Text style={styles.inviteListTitle}>招待中一覧</Text>
-                {isLoadingInvites ? <ActivityIndicator size="small" color="#4A90E2" /> : null}
-              </View>
-              {inviteList.length === 0 ? (
-                <Text style={styles.infoText}>招待中のユーザーはいません</Text>
-              ) : (
-                inviteList.map((invite) => (
-                  <View key={invite.token} style={styles.inviteRow}>
-                    <Text style={styles.inviteEmail}>{invite.email}</Text>
-                    <Text style={styles.inviteMeta}>
-                      期限: {invite.expires_at ? new Date(invite.expires_at).toLocaleDateString() : '未設定'}
-                    </Text>
+              {(isLoadingInvites || inviteList.length > 0) ? (
+                <>
+                  <View style={styles.inviteListHeader}>
+                    <Text style={styles.inviteListTitle}>招待中一覧</Text>
+                    {isLoadingInvites ? <ActivityIndicator size="small" color="#4A90E2" /> : null}
                   </View>
-                ))
+                  {inviteList.map((invite) => (
+                    <View key={invite.token} style={styles.inviteRow}>
+                      <Text style={styles.inviteEmail}>{invite.email}</Text>
+                      <Text style={styles.inviteMeta}>
+                        期限: {invite.expires_at ? new Date(invite.expires_at).toLocaleDateString() : '未設定'}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              ) : null}
+            </View>
+            ) : null}
+            {!isOwner && isFamilyReady ? (
+              <View style={styles.infoCard}>
+                <Text style={styles.infoText}>
+                  {isFamilyReady ? 'オーナーのみ招待を作成できます' : '家族情報を読み込み中です...'}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.familyCard}>
+              <View style={styles.inviteListHeader}>
+                <Text style={styles.inviteListTitle}>家族一覧</Text>
+                {isLoadingFamilyMembers ? <ActivityIndicator size="small" color="#4A90E2" /> : null}
+              </View>
+              {familyMembers.length === 0 ? (
+                <Text style={styles.infoText}>家族メンバーが見つかりません</Text>
+              ) : (
+                familyMembers.map((member) => {
+                  const displayName = member.display_name?.trim()
+                    ? member.display_name
+                    : '未設定';
+                  const roleLabel = member.role === 'owner' ? 'オーナー' : 'メンバー';
+                  const isSelf = member.user_id === user?.id;
+                  return (
+                    <View key={member.user_id} style={styles.familyMemberRow}>
+                      <Text style={styles.familyMemberName}>
+                        {displayName} {isSelf ? '（あなた）' : ''}
+                      </Text>
+                      <Text style={styles.familyMemberMeta}>{roleLabel}</Text>
+                    </View>
+                  );
+                })
               )}
             </View>
-          ) : (
-            <View style={styles.infoCard}>
-              <Text style={styles.infoText}>
-                {isFamilyReady ? 'オーナーのみ招待を作成できます' : '家族情報を読み込み中です...'}
-              </Text>
-            </View>
-          )}
 
-          <View style={styles.familyCard}>
-            <View style={styles.inviteListHeader}>
-              <Text style={styles.inviteListTitle}>家族一覧</Text>
-              {isLoadingFamilyMembers ? <ActivityIndicator size="small" color="#4A90E2" /> : null}
-            </View>
-            {familyMembers.length === 0 ? (
-              <Text style={styles.infoText}>家族メンバーが見つかりません</Text>
-            ) : (
-              familyMembers.map((member) => {
-                const displayName = member.display_name?.trim()
-                  ? member.display_name
-                  : '未設定';
-                const roleLabel = member.role === 'owner' ? 'オーナー' : 'メンバー';
-                const isSelf = member.user_id === user?.id;
-                return (
-                  <View key={member.user_id} style={styles.familyMemberRow}>
-                    <Text style={styles.familyMemberName}>
-                      {displayName} {isSelf ? '（あなた）' : ''}
-                    </Text>
-                    <Text style={styles.familyMemberMeta}>{roleLabel}</Text>
-                  </View>
-                );
-              })
-            )}
-          </View>
-
-          <View style={styles.familyCard}>
-            <Text style={styles.familyCardTitle}>招待コードで参加（予備）</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="招待コードを入力"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              value={acceptToken}
-              onChangeText={setAcceptToken}
-            />
-            {acceptError ? <Text style={styles.errorText}>{acceptError}</Text> : null}
-            {acceptMessage ? <Text style={styles.successText}>{acceptMessage}</Text> : null}
-            <TouchableOpacity
-              style={[styles.primaryButton, isAcceptingInvite && styles.primaryButtonDisabled]}
-              onPress={handleAcceptInvite}
-              disabled={isAcceptingInvite}
-              activeOpacity={0.7}>
-              {isAcceptingInvite ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.primaryButtonText}>参加する</Text>
+            {/* TODO: 家族招待機能は次フェーズで再開予定 */}
+            {false && (
+            <View style={styles.familyCard}>
+              <Text style={styles.familyCardTitle}>招待コードで参加（予備）</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="招待コードを入力"
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+                value={acceptToken}
+                onChangeText={setAcceptToken}
+              />
+              {acceptError ? <Text style={styles.errorText}>{acceptError}</Text> : null}
+              {acceptMessage ? <Text style={styles.successText}>{acceptMessage}</Text> : null}
+              <TouchableOpacity
+                style={[styles.primaryButton, isAcceptingInvite && styles.primaryButtonDisabled]}
+                onPress={handleAcceptInvite}
+                disabled={isAcceptingInvite}
+                activeOpacity={0.7}>
+                {isAcceptingInvite ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>参加する</Text>
               )}
             </TouchableOpacity>
           </View>
-        </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>あなたの呼称</Text>

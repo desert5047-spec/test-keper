@@ -27,43 +27,84 @@ export default function ResetPasswordScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isValidToken, setIsValidToken] = useState(false);
   const [checkingToken, setCheckingToken] = useState(true);
+  const [resetAccessToken, setResetAccessToken] = useState<string | null>(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { updatePassword } = useAuth();
   const params = useLocalSearchParams();
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
   useEffect(() => {
     const checkResetToken = async () => {
       try {
-        // URLパラメータからトークンを取得
-        const accessToken = params.access_token as string | undefined;
-        const type = params.type as string | undefined;
-
-        if (type === 'recovery' && accessToken) {
-          // セッションを設定してトークンを検証
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: '', // リセットフローではrefresh_tokenは不要
+        const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string) => {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error(`${label} timeout`)), ms);
           });
+          return Promise.race([promise, timeoutPromise]);
+        };
 
-          if (sessionError) {
-            console.error('トークン検証エラー:', sessionError);
+        const accessTokenFromParams = params.access_token as string | undefined;
+        const typeFromParams = params.type as string | undefined;
+        const codeFromParams = params.code as string | undefined;
+        const refreshTokenFromParams = params.refresh_token as string | undefined;
+        let accessToken = accessTokenFromParams ?? null;
+        let type = typeFromParams ?? null;
+        let code = codeFromParams ?? null;
+        let refreshToken = refreshTokenFromParams ?? null;
+
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          accessToken = accessToken ?? hashParams.get('access_token');
+          refreshToken = refreshToken ?? hashParams.get('refresh_token');
+          type = type ?? hashParams.get('type');
+
+          const searchParams = new URLSearchParams(window.location.search);
+          code = code ?? searchParams.get('code');
+          refreshToken = refreshToken ?? searchParams.get('refresh_token');
+          type = type ?? searchParams.get('type');
+        }
+
+        if (type === 'recovery' && code) {
+          const { error: exchangeError } = await withTimeout(
+            supabase.auth.exchangeCodeForSession(code),
+            10000,
+            'exchangeCodeForSession'
+          );
+          if (exchangeError) {
+            console.error('コード検証エラー:', exchangeError);
             setError('無効または期限切れのリンクです。');
             setIsValidToken(false);
             setCheckingToken(false);
             return;
           }
+          setIsValidToken(true);
+          setCheckingToken(false);
+          return;
+        }
 
+        if (type === 'recovery' && accessToken) {
+          setResetAccessToken(accessToken);
+          setIsValidToken(true);
+          setCheckingToken(false);
+          return;
+        }
+
+        if (type === 'recovery') {
+          setError('無効または期限切れのリンクです。');
+          setIsValidToken(false);
+          setCheckingToken(false);
+          return;
+        }
+
+        // 既存のセッションを確認（リセットフロー中の場合）
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
           setIsValidToken(true);
         } else {
-          // 既存のセッションを確認（リセットフロー中の場合）
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            setIsValidToken(true);
-          } else {
-            setError('無効または期限切れのリンクです。');
-            setIsValidToken(false);
-          }
+          setError('無効または期限切れのリンクです。');
+          setIsValidToken(false);
         }
       } catch (err) {
         console.error('トークンチェックエラー:', err);
@@ -76,6 +117,28 @@ export default function ResetPasswordScreen() {
 
     checkResetToken();
   }, [params]);
+
+  const updatePasswordWithToken = async (token: string, newPassword: string) => {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Supabaseの設定が見つかりません');
+    }
+
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ password: newPassword }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      const message = errorBody?.error_description || errorBody?.message || '不明なエラー';
+      throw new Error(message);
+    }
+  };
 
   const handleResetPassword = async () => {
     if (!password || !confirmPassword) {
@@ -96,9 +159,17 @@ export default function ResetPasswordScreen() {
     setError('');
     setLoading(true);
 
-    const { error: updateError } = await updatePassword(password);
-
-    if (updateError) {
+    try {
+      if (resetAccessToken) {
+        await updatePasswordWithToken(resetAccessToken, password);
+      } else {
+        const { error: updateError } = await updatePassword(password);
+        if (updateError) {
+          throw updateError;
+        }
+      }
+    } catch (updateError: any) {
+      console.error('パスワード更新エラー:', updateError);
       setError('パスワードの更新に失敗しました。もう一度お試しください。');
       setLoading(false);
       return;

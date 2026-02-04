@@ -64,7 +64,20 @@ export function AppHeader({
         <View style={styles.left}>
           {showBack ? (
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => {
+                const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
+                if (canGoBack) {
+                  router.back();
+                  return;
+                }
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                  if (window.history.length > 1) {
+                    router.back();
+                    return;
+                  }
+                }
+                router.replace('/(tabs)');
+              }}
               style={styles.backButton}
               activeOpacity={0.7}>
               <ArrowLeft size={20} color="#333" />

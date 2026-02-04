@@ -57,6 +57,15 @@ export interface Tag {
   created_at: string;
 }
 
+export interface Profile {
+  user_id: string;
+  agreed_terms: boolean | null;
+  agreed_privacy: boolean | null;
+  agreed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RecordTag {
   record_id: string;
   tag_id: string;
@@ -140,6 +149,12 @@ export type Database = {
             referencedColumns: ['id'];
           }
         ];
+      };
+      profiles: {
+        Row: Profile;
+        Insert: Omit<Profile, 'created_at' | 'updated_at'> & { created_at?: string; updated_at?: string };
+        Update: Partial<Omit<Profile, 'created_at' | 'updated_at'>>;
+        Relationships: [];
       };
     };
     Views: {

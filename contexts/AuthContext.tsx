@@ -23,10 +23,17 @@ interface AuthContextType {
   isSetupReady: boolean;
   needsDisplayName: boolean;
   needsChildSetup: boolean;
+  isConsentReady: boolean;
+  needsConsent: boolean;
   refreshSetupStatus: () => Promise<void>;
+  saveConsent: (consent: { agreedTerms: boolean; agreedPrivacy: boolean }) => Promise<void>;
   setActiveFamilyId: (familyId: string | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    consent?: { agreedTerms: boolean; agreedPrivacy: boolean }
+  ) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
@@ -44,7 +51,10 @@ const AuthContext = createContext<AuthContextType>({
   isSetupReady: false,
   needsDisplayName: false,
   needsChildSetup: false,
+  isConsentReady: false,
+  needsConsent: false,
   refreshSetupStatus: async () => {},
+  saveConsent: async () => {},
   setActiveFamilyId: () => {},
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
@@ -67,12 +77,213 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isSetupReady, setIsSetupReady] = useState(false);
   const [needsDisplayName, setNeedsDisplayName] = useState(false);
   const [needsChildSetup, setNeedsChildSetup] = useState(false);
+  const [isConsentReady, setIsConsentReady] = useState(false);
+  const [needsConsent, setNeedsConsent] = useState(false);
   const router = useRouter();
   const segments = useSegments();
   const ensureFamilyInFlightRef = useRef(false);
   const ensuredUserIdRef = useRef<string | null>(null);
+  const familyEnsureRetryRef = useRef(0);
+  const familyEnsureRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cachedFamilyIdAppliedRef = useRef(false);
+  const refreshSetupCallRef = useRef(0);
+
+  const familyIdCacheKey = (userId: string) => `familyId:${userId}`;
   const pendingInviteNavigationRef = useRef(false);
   const pendingInviteKey = 'pendingInviteToken';
+  const pendingConsentKey = 'pendingConsent';
+  const extractInviteTokenFromUrl = async () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const token = url.searchParams.get('token');
+      return token ?? null;
+    }
+    try {
+      const initialUrl = await Linking.getInitialURL();
+      if (!initialUrl) return null;
+      const parsed = Linking.parse(initialUrl);
+      return (parsed.queryParams?.token as string) || null;
+    } catch (error) {
+      console.warn('[AuthContext] 招待トークンURL解析失敗:', error);
+      return null;
+    }
+  };
+
+  const extractConsentFromMetadata = (currentUser: User) => {
+    const meta = (currentUser.user_metadata ?? {}) as Record<string, unknown>;
+    const agreedTerms =
+      meta.agreed_terms === true || meta.agreed_terms === 'true';
+    const agreedPrivacy =
+      meta.agreed_privacy === true || meta.agreed_privacy === 'true';
+    const agreedAt =
+      typeof meta.agreed_at === 'string' ? meta.agreed_at : null;
+
+    return { agreedTerms, agreedPrivacy, agreedAt };
+  };
+
+  const upsertProfileConsent = useCallback(
+    async (
+      userId: string,
+      consent: { agreedTerms: boolean; agreedPrivacy: boolean; agreedAt?: string | null }
+    ) => {
+      const now = new Date().toISOString();
+      const agreedAt = consent.agreedAt ?? now;
+      const { error } = await supabase.from('profiles').upsert(
+        {
+          user_id: userId,
+          agreed_terms: consent.agreedTerms,
+          agreed_privacy: consent.agreedPrivacy,
+          agreed_at: agreedAt,
+          updated_at: now,
+        },
+        { onConflict: 'user_id' }
+      );
+
+      if (error) {
+        console.warn('[AuthContext] profiles upsert 失敗:', error);
+      }
+    },
+    []
+  );
+
+  const saveConsent = useCallback(
+    async (consent: { agreedTerms: boolean; agreedPrivacy: boolean }) => {
+      if (!user?.id) return;
+      const agreedAt = new Date().toISOString();
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            agreed_terms: consent.agreedTerms,
+            agreed_privacy: consent.agreedPrivacy,
+            agreed_at: agreedAt,
+          },
+        });
+      } catch (error) {
+        console.warn('[AuthContext] user_metadata 更新失敗:', error);
+      }
+
+      await upsertProfileConsent(user.id, {
+        agreedTerms: consent.agreedTerms,
+        agreedPrivacy: consent.agreedPrivacy,
+        agreedAt,
+      });
+
+      setNeedsConsent(false);
+      setIsConsentReady(true);
+    },
+    [user?.id, upsertProfileConsent]
+  );
+
+  const ensureProfileConsent = useCallback(
+    async (currentUser: User) => {
+      const metaConsent = extractConsentFromMetadata(currentUser);
+
+      let pendingConsent: { agreedTerms: boolean; agreedPrivacy: boolean; agreedAt: string | null } | null = null;
+      try {
+        const stored = await AsyncStorage.getItem(pendingConsentKey);
+        if (stored) {
+          const parsed = JSON.parse(stored) as {
+            agreedTerms?: boolean;
+            agreedPrivacy?: boolean;
+            agreedAt?: string;
+            email?: string | null;
+            userId?: string | null;
+          };
+          const emailMatches =
+            parsed.email && currentUser.email
+              ? parsed.email === currentUser.email
+              : false;
+          const userMatches =
+            parsed.userId ? parsed.userId === currentUser.id : false;
+          const isRecent =
+            parsed.agreedAt
+              ? Date.now() - new Date(parsed.agreedAt).getTime() < 30 * 60 * 1000
+              : false;
+          if (emailMatches || userMatches || isRecent) {
+            pendingConsent = {
+              agreedTerms: !!parsed.agreedTerms,
+              agreedPrivacy: !!parsed.agreedPrivacy,
+              agreedAt: parsed.agreedAt ?? null,
+            };
+            await AsyncStorage.removeItem(pendingConsentKey);
+          }
+        }
+      } catch (error) {
+        console.warn('[AuthContext] pendingConsent 読み込み失敗:', error);
+      }
+
+      if (!metaConsent.agreedTerms && !metaConsent.agreedPrivacy && pendingConsent) {
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              agreed_terms: pendingConsent.agreedTerms,
+              agreed_privacy: pendingConsent.agreedPrivacy,
+              agreed_at: pendingConsent.agreedAt ?? new Date().toISOString(),
+            },
+          });
+          metaConsent.agreedTerms = pendingConsent.agreedTerms;
+          metaConsent.agreedPrivacy = pendingConsent.agreedPrivacy;
+          metaConsent.agreedAt = pendingConsent.agreedAt ?? new Date().toISOString();
+        } catch (error) {
+          console.warn('[AuthContext] user_metadata 更新失敗:', error);
+        }
+      }
+
+      const hasMetaConsent =
+        metaConsent.agreedTerms || metaConsent.agreedPrivacy || !!metaConsent.agreedAt;
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('user_id, agreed_terms, agreed_privacy, agreed_at')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[AuthContext] profiles 取得失敗:', error);
+        setIsConsentReady(true);
+        return;
+      }
+
+      if (!profile) {
+        if (!hasMetaConsent) {
+          setNeedsConsent(true);
+          setIsConsentReady(true);
+          return;
+        }
+        await upsertProfileConsent(currentUser.id, {
+          agreedTerms: metaConsent.agreedTerms,
+          agreedPrivacy: metaConsent.agreedPrivacy,
+          agreedAt: metaConsent.agreedAt,
+        });
+        setNeedsConsent(false);
+        setIsConsentReady(true);
+        return;
+      }
+
+      const needsAgreementBackfill =
+        profile.agreed_terms === null ||
+        profile.agreed_privacy === null ||
+        (profile.agreed_at === null && metaConsent.agreedAt);
+
+      if (needsAgreementBackfill && hasMetaConsent) {
+        await supabase
+          .from('profiles')
+          .update({
+            agreed_terms: profile.agreed_terms ?? metaConsent.agreedTerms,
+            agreed_privacy: profile.agreed_privacy ?? metaConsent.agreedPrivacy,
+            agreed_at: profile.agreed_at ?? metaConsent.agreedAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', currentUser.id);
+      }
+
+      const isMissingConsent =
+        profile.agreed_terms !== true || profile.agreed_privacy !== true;
+      setNeedsConsent(isMissingConsent);
+      setIsConsentReady(true);
+    },
+    [upsertProfileConsent]
+  );
   
   // 前回のログイン手段を追跡
   useTrackLastAuthProvider();
@@ -84,48 +295,284 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const ensureFamilyForUser = useCallback(async (userId: string) => {
+    console.log('[AuthContext] ensureFamilyForUser 開始', { userId, platform: Platform.OS });
     try {
-      const { data: membership, error: membershipError } = await supabase
-        .from('family_members')
-        .select('family_id')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
-
-      if (membershipError) {
-        console.error('[AuthContext] family_members 取得エラー:', membershipError);
-        return null;
-      }
-
-      if (membership?.family_id) {
-        return membership.family_id as string;
-      }
-
-      const { data: family, error: familyError } = await supabase
-        .from('families')
-        .insert({ owner_id: userId })
-        .select('id')
-        .single();
-
-      if (familyError || !family?.id) {
-        console.error('[AuthContext] families 作成エラー:', familyError);
-        return null;
-      }
-
-      const { error: memberError } = await supabase
-        .from('family_members')
-        .insert({
-          family_id: family.id,
-          user_id: userId,
-          role: 'owner',
+      const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string) => {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`${label} timeout`)), ms);
         });
+        return Promise.race([promise, timeoutPromise]);
+      };
+      const isTimeoutError = (error: unknown) =>
+        error instanceof Error && error.message.includes('timeout');
 
-      if (memberError) {
-        console.error('[AuthContext] family_members 作成エラー:', memberError);
-        return null;
+      // RLSやネットワークの影響を受けにくいRPCで先に取得を試す
+      try {
+        const { data: rpcFamilyId, error: rpcError } = await withTimeout(
+          supabase.rpc('get_my_family_id'),
+          8000,
+          'get_my_family_id'
+        ) as { data: string | null; error: any };
+        if (rpcError) {
+          console.warn('[AuthContext] get_my_family_id RPCエラー:', {
+            message: rpcError?.message,
+            code: rpcError?.code,
+            platform: Platform.OS,
+          });
+        } else if (rpcFamilyId) {
+          console.log('[AuthContext] get_my_family_id RPC成功', { familyId: rpcFamilyId, platform: Platform.OS });
+          return rpcFamilyId;
+        }
+      } catch (rpcException: any) {
+        if (isTimeoutError(rpcException)) {
+          console.warn('[AuthContext] get_my_family_id RPCタイムアウト', { platform: Platform.OS });
+        } else {
+          console.warn('[AuthContext] get_my_family_id RPC例外:', rpcException);
+        }
       }
 
-      return family.id as string;
+      const ensureMemberForFamily = async (targetFamilyId: string) => {
+        console.log('[AuthContext] ensureMemberForFamily 開始', { targetFamilyId, userId, platform: Platform.OS });
+        let insertResult: { error: any } | null = null;
+        try {
+          insertResult = await withTimeout(
+            supabase
+              .from('family_members')
+              .insert({
+                family_id: targetFamilyId,
+                user_id: userId,
+                role: 'owner',
+              }),
+            12000,
+            'family_members insert'
+          ) as { error: any };
+        } catch (insertError: any) {
+          if (isTimeoutError(insertError)) {
+            console.warn('[AuthContext] ensureMemberForFamily タイムアウト:', { targetFamilyId, platform: Platform.OS });
+            return false;
+          }
+          console.error('[AuthContext] ensureMemberForFamily 例外:', insertError);
+          return false;
+        }
+
+        const { error } = insertResult ?? { error: null };
+
+        if (error) {
+          if ((error as any)?.code !== '23505') {
+            console.error('[AuthContext] family_members 作成エラー:', {
+              message: error?.message,
+              code: (error as any)?.code,
+              details: (error as any)?.details,
+              hint: (error as any)?.hint,
+            });
+          } else {
+            console.log('[AuthContext] family_members 既に存在（重複エラー無視）', { targetFamilyId, userId });
+          }
+          const { data: retryMembership, error: retryError } = await withTimeout(
+            supabase
+              .from('family_members')
+              .select('family_id')
+              .eq('user_id', userId)
+              .eq('family_id', targetFamilyId)
+              .limit(1)
+              .maybeSingle(),
+            12000,
+            'family_members retry query'
+          ) as { data: any; error: any };
+          if (!retryError && retryMembership?.family_id) {
+            console.log('[AuthContext] ensureMemberForFamily 成功（リトライ後）', { targetFamilyId });
+            return true;
+          }
+          if (retryError) {
+            console.error('[AuthContext] ensureMemberForFamily リトライエラー:', retryError);
+          }
+          return false;
+        }
+
+        console.log('[AuthContext] ensureMemberForFamily 成功', { targetFamilyId });
+        return true;
+      };
+
+      console.log('[AuthContext] 既存のfamily（owner）を検索中...', { userId, platform: Platform.OS });
+      try {
+        const { data: existingOwnerFamily, error: existingOwnerFamilyError } = await withTimeout(
+          supabase
+            .from('families')
+            .select('id')
+            .eq('owner_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          12000,
+          'families owner query'
+        ) as { data: any; error: any };
+
+        if (existingOwnerFamilyError) {
+          console.error('[AuthContext] families(owner) 検索エラー:', {
+            message: existingOwnerFamilyError?.message,
+            code: (existingOwnerFamilyError as any)?.code,
+            platform: Platform.OS,
+          });
+        } else {
+          console.log('[AuthContext] families(owner) クエリ成功', {
+            hasExistingFamily: !!existingOwnerFamily?.id,
+            familyId: existingOwnerFamily?.id,
+            platform: Platform.OS,
+          });
+        }
+
+        if (!existingOwnerFamilyError && existingOwnerFamily?.id) {
+          console.log('[AuthContext] 既存のfamily（owner）を発見', { familyId: existingOwnerFamily.id, platform: Platform.OS });
+          const memberOk = await ensureMemberForFamily(existingOwnerFamily.id as string);
+          if (memberOk) {
+            return existingOwnerFamily.id as string;
+          }
+          console.warn('[AuthContext] 既存family（owner）へのメンバー追加失敗', { familyId: existingOwnerFamily.id, platform: Platform.OS });
+        }
+      } catch (ownerFamilyQueryError: any) {
+        if (isTimeoutError(ownerFamilyQueryError)) {
+          console.warn('[AuthContext] families(owner) クエリタイムアウト:', { userId, platform: Platform.OS });
+        } else {
+          console.error('[AuthContext] families(owner) クエリ例外:', {
+            message: ownerFamilyQueryError?.message,
+            code: ownerFamilyQueryError?.code,
+            platform: Platform.OS,
+          });
+        }
+      }
+
+      console.log('[AuthContext] family_members から既存メンバーシップを検索中...', { userId, platform: Platform.OS });
+      try {
+        const { data: membership, error: membershipError } = await withTimeout(
+          supabase
+            .from('family_members')
+            .select('family_id')
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle(),
+          12000,
+          'family_members query'
+        ) as { data: any; error: any };
+
+        if (membershipError) {
+          console.error('[AuthContext] family_members 取得エラー:', {
+            message: membershipError?.message,
+            code: (membershipError as any)?.code,
+            details: (membershipError as any)?.details,
+            hint: (membershipError as any)?.hint,
+            platform: Platform.OS,
+          });
+          // RLSエラーの場合は、新しいfamilyを作成する処理に進む
+          if ((membershipError as any)?.code === '42P17' || membershipError?.message?.includes('recursion')) {
+            console.warn('[AuthContext] RLS再帰エラー検出、新しいfamily作成を試みます', { platform: Platform.OS });
+            // エラーを無視して続行（新しいfamilyを作成する）
+          } else {
+            return null;
+          }
+        } else {
+          console.log('[AuthContext] family_members クエリ成功', { 
+            hasMembership: !!membership?.family_id,
+            familyId: membership?.family_id,
+            platform: Platform.OS 
+          });
+        }
+
+        if (membership?.family_id) {
+          console.log('[AuthContext] 既存のメンバーシップを発見', { familyId: membership.family_id, platform: Platform.OS });
+          return membership.family_id as string;
+        }
+      } catch (membershipQueryError: any) {
+        if (isTimeoutError(membershipQueryError)) {
+          console.warn('[AuthContext] family_members クエリタイムアウト:', { userId, platform: Platform.OS });
+        } else {
+        console.error('[AuthContext] family_members クエリ例外:', {
+          message: membershipQueryError?.message,
+          code: membershipQueryError?.code,
+          platform: Platform.OS,
+        });
+        // RLSエラーの場合は、新しいfamilyを作成する処理に進む
+        if (membershipQueryError?.code === '42P17' || membershipQueryError?.message?.includes('recursion')) {
+          console.warn('[AuthContext] RLS再帰エラー検出（例外）、新しいfamily作成を試みます', { platform: Platform.OS });
+          // エラーを無視して続行（新しいfamilyを作成する）
+        } else {
+          return null;
+        }
+        }
+      }
+
+      console.log('[AuthContext] 新しいfamilyを作成中...', { userId, platform: Platform.OS });
+      try {
+        const { data: family, error: familyError } = await withTimeout(
+          supabase
+            .from('families')
+            .insert({ owner_id: userId })
+            .select('id')
+            .single(),
+          12000,
+          'families insert'
+        ) as { data: any; error: any };
+
+        if (familyError || !family?.id) {
+          console.error('[AuthContext] families 作成エラー:', {
+            message: familyError?.message,
+            code: (familyError as any)?.code,
+            details: (familyError as any)?.details,
+            hint: (familyError as any)?.hint,
+            platform: Platform.OS,
+          });
+
+          console.log('[AuthContext] 最終リトライ: family_members から検索...', { platform: Platform.OS });
+          try {
+            const { data: retryMembership, error: retryError } = await withTimeout(
+              supabase
+                .from('family_members')
+                .select('family_id')
+                .eq('user_id', userId)
+                .limit(1)
+                .maybeSingle(),
+              12000,
+              'family_members final retry'
+            ) as { data: any; error: any };
+
+            if (!retryError && retryMembership?.family_id) {
+              console.log('[AuthContext] 最終リトライでメンバーシップを発見', { familyId: retryMembership.family_id, platform: Platform.OS });
+              return retryMembership.family_id as string;
+            }
+            if (retryError) {
+              console.error('[AuthContext] 最終リトライエラー:', {
+                message: retryError?.message,
+                code: (retryError as any)?.code,
+                platform: Platform.OS,
+              });
+            }
+          } catch (retryException: any) {
+            console.error('[AuthContext] 最終リトライ例外:', {
+              message: retryException?.message,
+              code: retryException?.code,
+              platform: Platform.OS,
+            });
+          }
+
+          return null;
+        }
+
+        console.log('[AuthContext] 新しいfamilyを作成成功', { familyId: family.id, platform: Platform.OS });
+        const memberOk = await ensureMemberForFamily(family.id);
+        if (!memberOk) {
+          console.error('[AuthContext] 新しいfamilyへのメンバー追加失敗', { familyId: family.id, platform: Platform.OS });
+          return null;
+        }
+
+        console.log('[AuthContext] ensureFamilyForUser 成功', { familyId: family.id, platform: Platform.OS });
+        return family.id as string;
+      } catch (familyCreateError: any) {
+        console.error('[AuthContext] families 作成例外:', {
+          message: familyCreateError?.message,
+          code: familyCreateError?.code,
+          platform: Platform.OS,
+        });
+        return null;
+      }
     } catch (error) {
       console.error('[AuthContext] family ensure 例外:', error);
       return null;
@@ -155,6 +602,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id, isFamilyReady, familyId]);
 
   const refreshSetupStatus = useCallback(async () => {
+    const callId = ++refreshSetupCallRef.current;
+    if (!session?.user) {
+      setIsSetupReady(false);
+      setNeedsDisplayName(false);
+      setNeedsChildSetup(false);
+      return;
+    }
     if (!user?.id || !isFamilyReady || !familyId) {
       setIsSetupReady(false);
       setNeedsDisplayName(false);
@@ -163,16 +617,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setIsSetupReady(false);
+    const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string) => {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+      });
+      return Promise.race([promise, timeoutPromise]);
+    };
+    const getCachedChildId = async () => {
+      try {
+        return await AsyncStorage.getItem('@selected_child_id');
+      } catch (error) {
+        console.warn('[AuthContext] setup 判定: childId キャッシュ取得失敗:', error);
+        return null;
+      }
+    };
 
-    const { data: member, error: memberError } = await supabase
-      .from('family_members')
-      .select('display_name')
-      .eq('family_id', familyId)
-      .eq('user_id', user.id)
-      .maybeSingle();
+    console.log('[AuthContext] setup 判定開始', { familyId, userId: user.id, platform: Platform.OS, callId });
+    let member: any = null;
+    let memberError: any = null;
+    let profileElapsedMs: number | null = null;
+    let profileData: any = null;
+    let profileError: any = null;
+    try {
+      const profileStart = Date.now();
+      const memberResult = await withTimeout(
+        supabase
+          .from('family_members')
+          .select('display_name')
+          .eq('family_id', familyId)
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        12000,
+        'setup display_name'
+      ) as { data: any; error: any };
+      profileElapsedMs = Date.now() - profileStart;
+      member = memberResult?.data ?? null;
+      memberError = memberResult?.error ?? null;
+      profileData = memberResult?.data ?? null;
+      profileError = memberResult?.error ?? null;
+    } catch (error: any) {
+      memberError = error;
+      profileElapsedMs = profileElapsedMs ?? null;
+      profileError = error;
+    }
 
     if (memberError) {
-      console.error('[AuthContext] setup 判定: display_name 取得エラー:', memberError);
+      const isTimeout = memberError instanceof Error && memberError.message.includes('timeout');
+      if (isTimeout) {
+        try {
+          const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+          console.log('[AuthContext][Session] getSession 結果 (before warn)', {
+            callId,
+            hasSession: !!currentSession,
+            hasUser: !!currentSession?.user,
+            userId: currentSession?.user?.id ?? null,
+            error: sessionError,
+          });
+        } catch (sessionError) {
+          console.log('[AuthContext][Session] getSession 例外 (before warn)', { callId, error: sessionError });
+        }
+        console.log('[AuthContext][Profiles] profiles 取得結果 (before warn)', {
+          callId,
+          elapsedMs: profileElapsedMs,
+          data: profileData,
+          error: profileError,
+        });
+        console.warn('[AuthContext] setup 判定: display_name タイムアウト');
+        try {
+          const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+          console.log('[AuthContext][Session] getSession 結果 (after warn)', {
+            callId,
+            hasSession: !!currentSession,
+            hasUser: !!currentSession?.user,
+            userId: currentSession?.user?.id ?? null,
+            error: sessionError,
+          });
+        } catch (sessionError) {
+          console.log('[AuthContext][Session] getSession 例外 (after warn)', { callId, error: sessionError });
+        }
+        console.log('[AuthContext][Profiles] profiles 取得結果 (after warn)', {
+          callId,
+          elapsedMs: profileElapsedMs,
+          data: profileData,
+          error: profileError,
+        });
+      } else {
+        console.error('[AuthContext] setup 判定: display_name 取得エラー:', memberError);
+      }
       setNeedsDisplayName(true);
       setNeedsChildSetup(true);
       setIsSetupReady(true);
@@ -185,14 +716,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const needsName = !hasMember || !displayName || displayName.trim().length === 0;
     setNeedsDisplayName(needsName);
 
-    const { count: childCount, error: childError } = await supabase
-      .from('children')
-      .select('id', { count: 'exact', head: true })
-      .eq('family_id', familyId)
-      .limit(1);
+    let childCount: number | null = null;
+    let childError: any = null;
+    try {
+      const childResult = await withTimeout(
+        supabase
+          .from('children')
+          .select('id', { count: 'exact', head: true })
+          .eq('family_id', familyId)
+          .limit(1),
+        12000,
+        'setup children'
+      ) as { count: number | null; error: any };
+      childCount = childResult?.count ?? null;
+      childError = childResult?.error ?? null;
+    } catch (error: any) {
+      childError = error;
+    }
 
     if (childError) {
-      console.error('[AuthContext] setup 判定: child 取得エラー:', childError);
+      const isTimeout = childError instanceof Error && childError.message.includes('timeout');
+      if (isTimeout) {
+        console.warn('[AuthContext] setup 判定: child タイムアウト');
+        const cachedChildId = await getCachedChildId();
+        if (cachedChildId) {
+          console.warn('[AuthContext] setup 判定: キャッシュを信頼してホームへ', { cachedChildId });
+          setNeedsChildSetup(false);
+          setIsSetupReady(true);
+          return;
+        }
+      } else {
+        console.error('[AuthContext] setup 判定: child 取得エラー:', childError);
+      }
       setNeedsChildSetup(true);
       setIsSetupReady(true);
       return;
@@ -204,7 +759,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id, isFamilyReady, familyId]);
 
   // 初期セットアップ状態を確認して適切な画面にリダイレクト
+  // TODO: 家族招待機能は次フェーズで再開予定
+  const ENABLE_INVITE_FEATURE = false;
   const navigateToPendingInvite = useCallback(async () => {
+    if (!ENABLE_INVITE_FEATURE) {
+      return false;
+    }
     try {
       const token = await AsyncStorage.getItem(pendingInviteKey);
       if (!token) {
@@ -255,6 +815,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isOnboarding = currentPath === 'onboarding';
       const isRegisterChild = currentPath === 'register-child';
       const isInvite = currentPath.startsWith('invite');
+      const isConsent = currentPath === 'consent';
+
+      if (isConsentReady && needsConsent) {
+        if (!isConsent) {
+          console.log('[AuthContext] checkAndRedirect: 同意が必要、同意画面へ');
+          router.replace('/consent');
+        }
+        setCheckingOnboarding(false);
+        return;
+      }
 
       if (needsDisplayName || needsChildSetup) {
         if (!isOnboarding && !isInvite && !isRegisterChild) {
@@ -273,6 +843,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.replace('/(tabs)');
       } else if (isOnboarding) {
         console.log('[AuthContext] checkAndRedirect: セットアップ完了、オンボーディングに滞在');
+      } else if (isConsent) {
+        console.log('[AuthContext] checkAndRedirect: 同意済み、次の画面へ');
+        router.replace('/onboarding');
       } else if (!isTabs) {
         console.log('[AuthContext] checkAndRedirect: 既に適切なページにいます:', currentPath);
       }
@@ -281,7 +854,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setCheckingOnboarding(false);
     }
-  }, [checkingOnboarding, router, segments, familyId, isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup, refreshSetupStatus, navigateToPendingInvite]);
+  }, [checkingOnboarding, router, segments, familyId, isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup, isConsentReady, needsConsent, refreshSetupStatus, navigateToPendingInvite]);
 
   const setActiveFamilyId = useCallback((nextFamilyId: string | null) => {
     setFamilyId(nextFamilyId);
@@ -299,28 +872,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkAndRedirect]);
 
   useEffect(() => {
-    console.log('[AuthContext] セッション取得開始', { platform: Platform.OS });
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('[AuthContext] セッション取得エラー:', error);
+    const initAuthSession = async () => {
+      console.log('[AuthContext][Session] getSession 開始', { platform: Platform.OS });
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('[AuthContext][Session] getSession 結果', {
+          hasSession: !!session,
+          hasUser: !!session?.user,
+          userId: session?.user?.id ?? null,
+          error,
+          platform: Platform.OS,
+        });
+        if (error) {
+          console.error('[AuthContext] セッション取得エラー:', error);
+          // リフレッシュトークンエラーの場合は、セッションをクリアしてログイン画面へ
+          if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
+            console.warn('[AuthContext] リフレッシュトークンエラーを検出、セッションをクリアします');
+            setSession(null);
+            setUser(null);
+            setFamilyId(null);
+            setIsFamilyReady(false);
+            ensuredUserIdRef.current = null;
+            ensureFamilyInFlightRef.current = false;
+          }
+          setLoading(false);
+          return;
+        }
+
+        setSession(session);
+        setUser(session?.user ?? null);
         setLoading(false);
-        return;
+
+        if (session?.user) {
+          const profileStart = Date.now();
+          console.log('[AuthContext][Profiles] profiles 取得開始', {
+            startedAt: new Date(profileStart).toISOString(),
+            userId: session.user.id,
+          });
+          try {
+            const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string) => {
+              const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+              });
+              return Promise.race([promise, timeoutPromise]);
+            };
+            const { data, error: profileError } = await withTimeout(
+              supabase
+                .from('profiles')
+                .select('display_name')
+                .eq('id', session.user.id)
+                .maybeSingle(),
+              5000,
+              'profiles'
+            ) as { data: any; error: any };
+            const elapsedMs = Date.now() - profileStart;
+            console.log('[AuthContext][Profiles] profiles 取得完了', {
+              elapsedMs,
+              data,
+              error: profileError,
+            });
+          } catch (profileError: any) {
+            const elapsedMs = Date.now() - profileStart;
+            if (profileError instanceof Error && profileError.message.includes('timeout')) {
+              console.warn('[AuthContext][Profiles] profiles タイムアウト', { elapsedMs, error: profileError });
+            } else {
+              console.warn('[AuthContext][Profiles] profiles 取得エラー', { elapsedMs, error: profileError });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[AuthContext] セッション取得例外:', error);
+        // リフレッシュトークンエラーの場合は、セッションをクリア
+        if ((error as any)?.message?.includes('Refresh Token') || (error as any)?.message?.includes('refresh_token')) {
+          console.warn('[AuthContext] リフレッシュトークンエラー例外を検出、セッションをクリアします');
+          setSession(null);
+          setUser(null);
+          setFamilyId(null);
+          setIsFamilyReady(false);
+        }
+        setLoading(false);
       }
-      console.log('[AuthContext] セッション取得完了', { 
-        hasSession: !!session,
-        hasUser: !!session?.user,
-        platform: Platform.OS 
-      });
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    }).catch((error) => {
-      console.error('[AuthContext] セッション取得例外:', error);
-      setLoading(false);
-    });
+    };
+
+    initAuthSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[AuthContext] 認証状態変更:', { event, userId: session?.user?.id, platform: Platform.OS });
+      
+      // トークンリフレッシュエラーを処理
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('[AuthContext] トークンがリフレッシュされました', { platform: Platform.OS });
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+        return;
+      }
       
       setSession(session);
       setUser(session?.user ?? null);
@@ -335,6 +981,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('[AuthContext] ログイン検出、オンボーディングチェックを実行', { platform: Platform.OS, userId: session.user.id });
         setLoading(false);
+        await ensureProfileConsent(session.user);
         const hasPendingInvite = await navigateToPendingInvite();
         if (!hasPendingInvite) {
           // 少し遅延を入れて、segmentsが更新されるのを待つ
@@ -372,6 +1019,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!currentSession?.user) {
             setFamilyId(null);
             setIsFamilyReady(false);
+        setIsConsentReady(false);
+        setNeedsConsent(false);
           }
           console.log('[AuthContext] INITIAL_SESSION処理完了:', { 
             hasUser: !!currentSession?.user,
@@ -383,6 +1032,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    // TODO: 家族招待機能は次フェーズで再開予定
+    const ENABLE_INVITE_FEATURE = false;
+    if (!ENABLE_INVITE_FEATURE) {
+      return;
+    }
+    const syncInviteTokenFromUrl = async () => {
+      const token = await extractInviteTokenFromUrl();
+      if (!token) return;
+      const currentPath = segments.join('/');
+      const isInvite = currentPath.startsWith('invite');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const reloadKey = `inviteReloaded:${token}`;
+        if (!sessionStorage.getItem(reloadKey)) {
+          sessionStorage.setItem(reloadKey, '1');
+          const url = `/invite?token=${encodeURIComponent(token)}`;
+          window.location.replace(url);
+          return;
+        }
+      }
+      await AsyncStorage.setItem(pendingInviteKey, token);
+      if (!isInvite) {
+        router.replace(`/invite?token=${encodeURIComponent(token)}`);
+      }
+    };
+    syncInviteTokenFromUrl();
+  }, [router, segments]);
 
   useEffect(() => {
     if (loading || checkingOnboarding) return;
@@ -406,29 +1083,142 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, segments, loading, checkingOnboarding, checkAndRedirect]);
 
   useEffect(() => {
-    if (!user?.id) {
+    let cancelled = false;
+
+    const loadCachedFamilyId = async (userId: string) => {
+      try {
+        const cachedFamilyId = await AsyncStorage.getItem(familyIdCacheKey(userId));
+        if (!cancelled && cachedFamilyId) {
+          setFamilyId(cachedFamilyId);
+          setIsFamilyReady(true);
+          console.log('[AuthContext] familyId キャッシュを適用', { familyId: cachedFamilyId, platform: Platform.OS });
+        }
+      } catch (error) {
+        console.warn('[AuthContext] familyId キャッシュ取得失敗:', error);
+      }
+    };
+
+    const waitForSessionReady = async (attempts = 10, delayMs = 600) => {
+      for (let i = 0; i < attempts; i += 1) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+      return false;
+    };
+
+    const runEnsureFamily = async () => {
+      if (!user?.id) {
+      console.log('[AuthContext] ユーザーIDなし、family処理をスキップ', { platform: Platform.OS });
       setFamilyId(null);
       setIsFamilyReady(false);
       setFamilyDisplayName(null);
       setIsSetupReady(false);
       setNeedsDisplayName(false);
       setNeedsChildSetup(false);
+      setIsConsentReady(false);
+      setNeedsConsent(false);
+      familyEnsureRetryRef.current = 0;
+      cachedFamilyIdAppliedRef.current = false;
+      if (familyEnsureRetryTimerRef.current) {
+        clearTimeout(familyEnsureRetryTimerRef.current);
+        familyEnsureRetryTimerRef.current = null;
+      }
       return;
     }
-    if (ensureFamilyInFlightRef.current) return;
-    if (ensuredUserIdRef.current === user.id) return;
 
-    ensureFamilyInFlightRef.current = true;
-    setIsFamilyReady(false);
-    ensureFamilyForUser(user.id)
+      if (!cachedFamilyIdAppliedRef.current) {
+        cachedFamilyIdAppliedRef.current = true;
+        await loadCachedFamilyId(user.id);
+      }
+
+      const hasSession = await waitForSessionReady();
+      if (!hasSession) {
+        console.warn('[AuthContext] セッション未確定のためfamily処理を延期', { userId: user.id, platform: Platform.OS });
+        return;
+      }
+
+      if (ensuredUserIdRef.current !== user.id) {
+        familyEnsureRetryRef.current = 0;
+        if (familyEnsureRetryTimerRef.current) {
+          clearTimeout(familyEnsureRetryTimerRef.current);
+          familyEnsureRetryTimerRef.current = null;
+        }
+      }
+      if (ensureFamilyInFlightRef.current) {
+        console.log('[AuthContext] ensureFamilyForUser 既に実行中、スキップ', { userId: user.id, platform: Platform.OS });
+        return;
+      }
+      if (ensuredUserIdRef.current === user.id) {
+        console.log('[AuthContext] 既に処理済みのユーザー、スキップ', { userId: user.id, platform: Platform.OS });
+        return;
+      }
+
+      console.log('[AuthContext] ensureFamilyForUser 実行開始', { userId: user.id, platform: Platform.OS });
+      ensureFamilyInFlightRef.current = true;
+      setIsFamilyReady(false);
+      ensureFamilyForUser(user.id)
       .then((id) => {
+        console.log('[AuthContext] ensureFamilyForUser 完了', { userId: user.id, familyId: id, platform: Platform.OS });
         if (id) {
           setFamilyId(id);
           ensuredUserIdRef.current = user.id;
           setIsFamilyReady(true);
+          familyEnsureRetryRef.current = 0;
+          if (familyEnsureRetryTimerRef.current) {
+            clearTimeout(familyEnsureRetryTimerRef.current);
+            familyEnsureRetryTimerRef.current = null;
+          }
+          AsyncStorage.setItem(familyIdCacheKey(user.id), id).catch((error) => {
+            console.warn('[AuthContext] familyId キャッシュ保存失敗:', error);
+          });
+          console.log('[AuthContext] familyId設定完了', { familyId: id, platform: Platform.OS });
         } else {
+          console.warn('[AuthContext] ensureFamilyForUser 失敗、familyIdがnull', { userId: user.id, platform: Platform.OS });
           ensuredUserIdRef.current = null;
           setIsFamilyReady(false);
+          if (familyEnsureRetryRef.current < 3) {
+            familyEnsureRetryRef.current += 1;
+            const delay = 1500 * familyEnsureRetryRef.current;
+            if (familyEnsureRetryTimerRef.current) {
+              clearTimeout(familyEnsureRetryTimerRef.current);
+            }
+            familyEnsureRetryTimerRef.current = setTimeout(() => {
+              console.log('[AuthContext] ensureFamilyForUser 再試行開始', {
+                userId: user.id,
+                attempt: familyEnsureRetryRef.current,
+                delayMs: delay,
+                platform: Platform.OS,
+              });
+              ensureFamilyInFlightRef.current = true;
+              setIsFamilyReady(false);
+              ensureFamilyForUser(user.id)
+                .then((retryId) => {
+                  console.log('[AuthContext] ensureFamilyForUser 再試行完了', { userId: user.id, familyId: retryId, platform: Platform.OS });
+                  if (retryId) {
+                    setFamilyId(retryId);
+                    ensuredUserIdRef.current = user.id;
+                    setIsFamilyReady(true);
+                    familyEnsureRetryRef.current = 0;
+                  } else {
+                    console.warn('[AuthContext] ensureFamilyForUser 再試行失敗', { userId: user.id, platform: Platform.OS });
+                    ensuredUserIdRef.current = null;
+                    setIsFamilyReady(false);
+                  }
+                })
+                .catch((retryError) => {
+                  console.error('[AuthContext] ensureFamilyForUser 再試行エラー:', retryError);
+                  ensuredUserIdRef.current = null;
+                  setIsFamilyReady(false);
+                })
+                .finally(() => {
+                  ensureFamilyInFlightRef.current = false;
+                  console.log('[AuthContext] ensureFamilyForUser 再試行処理完了（finally）', { userId: user.id, platform: Platform.OS });
+                });
+            }, delay);
+          }
         }
       })
       .catch((error) => {
@@ -438,7 +1228,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .finally(() => {
         ensureFamilyInFlightRef.current = false;
+        console.log('[AuthContext] ensureFamilyForUser 処理完了（finally）', { userId: user.id, platform: Platform.OS });
       });
+    };
+
+    runEnsureFamily();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id, ensureFamilyForUser]);
 
   useEffect(() => {
@@ -450,34 +1247,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshSetupStatus]);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    console.log('[AuthContext] signIn 開始', { email, platform: Platform.OS });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      return { error };
+      if (error) {
+        console.error('[AuthContext] signIn エラー:', error);
+        return { error };
+      }
+
+      console.log('[AuthContext] signIn 成功', { userId: data?.user?.id, platform: Platform.OS });
+      
+      // メール認証でログインした場合は明示的に保存する
+      await saveLastAuthProvider('email');
+      
+      // セッションが確立されるまで少し待つ
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      return { error: null };
+    } catch (err: any) {
+      console.error('[AuthContext] signIn 例外:', err);
+      return { error: err instanceof Error ? err : new Error('ログイン中にエラーが発生しました') };
     }
-
-    // メール認証でログインした場合は明示的に保存する
-    await saveLastAuthProvider('email');
-    return { error: null };
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (
+    email: string,
+    password: string,
+    consent?: { agreedTerms: boolean; agreedPrivacy: boolean }
+  ) => {
+    const agreedAt = consent ? new Date().toISOString() : undefined;
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         // メール確認のリダイレクトURLを設定
         emailRedirectTo: Platform.OS === 'web' 
-          ? (typeof window !== 'undefined' ? `${window.location.origin}/(auth)/callback` : undefined)
+          ? (typeof window !== 'undefined' ? `${window.location.origin}/callback` : undefined)
+          : undefined,
+        data: consent
+          ? {
+              agreed_terms: consent.agreedTerms,
+              agreed_privacy: consent.agreedPrivacy,
+              agreed_at: agreedAt,
+            }
           : undefined,
       },
     });
 
     if (error) {
       return { error };
+    }
+
+    if (data?.user && consent) {
+      await upsertProfileConsent(data.user.id, {
+        agreedTerms: consent.agreedTerms,
+        agreedPrivacy: consent.agreedPrivacy,
+        agreedAt,
+      });
     }
 
     return { error: null };
@@ -503,7 +1333,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Web環境では window.location.origin を使用
       const redirectUrl = typeof window !== 'undefined' 
-        ? `${window.location.origin}/(auth)/callback` 
+        ? `${window.location.origin}/callback` 
         : `${supabaseUrl}/auth/v1/callback`;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -657,7 +1487,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (Platform.OS === 'web') {
         redirectUrl = typeof window !== 'undefined' 
-          ? `${window.location.origin}/(auth)/reset-password`
+          ? `${window.location.origin}/reset-password`
           : undefined;
       } else {
         // ネイティブ環境では、deep linkを使用
@@ -711,7 +1541,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSetupReady,
         needsDisplayName,
         needsChildSetup,
+        isConsentReady,
+        needsConsent,
         refreshSetupStatus,
+        saveConsent,
         setActiveFamilyId,
         signIn,
         signUp,

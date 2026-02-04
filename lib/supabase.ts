@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import { Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import { createAuthStorage } from '@/lib/authStorage';
 
@@ -24,6 +25,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: createAuthStorage(),
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web',
+    // WebはImplicitフローを使用してcode_verifier問題を回避
+    ...(Platform.OS === 'web' ? { flowType: 'implicit' as const } : {}),
+  },
+  global: {
+    // リフレッシュトークンエラーを適切に処理
+    headers: {
+      'x-client-info': `expo-go/${Platform.OS}`,
+    },
   },
 });

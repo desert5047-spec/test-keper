@@ -33,6 +33,7 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [lastLoginMethod, setLastLoginMethod] = useState<string | null>(null);
   const [rememberMe, setRememberMeState] = useState(true);
+  const enableGoogleAuth = process.env.EXPO_PUBLIC_ENABLE_GOOGLE_AUTH === 'true';
 
   // 前回のログイン手段を確認
   useEffect(() => {
@@ -73,18 +74,40 @@ export default function LoginScreen() {
       return;
     }
 
+    console.log('[Login] ログイン処理開始', { email, platform: Platform.OS });
     setError('');
     setLoading(true);
 
-    const { error: signInError } = await signIn(email, password);
+    try {
+      const trimmedEmail = email.trim();
+      const { error: signInError } = await signIn(trimmedEmail, password);
 
-    if (signInError) {
-      setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。');
+      if (signInError) {
+        const message = (signInError as any)?.message ?? '';
+        const isInvalidCredentials = message.includes('Invalid login credentials');
+        if (isInvalidCredentials) {
+          console.warn('[Login] ログイン失敗（認証情報不一致）:', signInError);
+        } else {
+          console.error('[Login] ログインエラー:', signInError);
+        }
+        setError(
+          message && !isInvalidCredentials
+            ? message
+            : 'ログインに失敗しました。メールアドレスとパスワードを確認してください。'
+        );
+        setLoading(false);
+        return;
+      }
+
+      console.log('[Login] ログイン成功、onAuthStateChangeを待機中...');
+      // onAuthStateChangeが発火するまで少し待つ
+      // リダイレクトはAuthContextのonAuthStateChangeで処理される
       setLoading(false);
-      return;
+    } catch (err: any) {
+      console.error('[Login] ログイン処理例外:', err);
+      setError('ログイン中にエラーが発生しました。もう一度お試しください。');
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleGoogleLogin = async () => {
@@ -102,9 +125,26 @@ export default function LoginScreen() {
         // Web環境では、リダイレクト後にonAuthStateChangeが自動的に発火する
       } else {
         // iOS/Android のときは必ず signInWithGoogleExpoGo() を呼ぶ
-        await signInWithGoogleExpoGo();
+        console.log('[Login] signInWithGoogleExpoGo 呼び出し', { platform: Platform.OS });
+        const { session, url } = await signInWithGoogleExpoGo();
+        console.log('[Login] signInWithGoogleExpoGo 完了', { hasSession: !!session, hasUrl: !!url, platform: Platform.OS });
         // 認証成功時は、AuthContextのonAuthStateChangeが自動的に処理するため
         // ここでは何もしない
+        // セッションが取得できた場合は、onAuthStateChangeが発火するのを待つ
+        if (session) {
+          console.log('[Login] セッション取得済み、onAuthStateChangeを待機中...', { platform: Platform.OS });
+          // セッションが確立されるまで少し待つ
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          console.log('[Login] セッションが取得できませんでした、callback.tsxでの処理を待ちます', { platform: Platform.OS });
+          if (url) {
+            console.log('[Login] callback 画面へ遷移', { platform: Platform.OS });
+            router.replace({
+              pathname: '/(auth)/callback',
+              params: { url: encodeURIComponent(url) },
+            });
+          }
+        }
       }
     } catch (googleError: any) {
       console.error('[Google認証] エラー:', googleError);
@@ -138,48 +178,57 @@ export default function LoginScreen() {
           {lastLoginMethod ? (
             <Text style={styles.lastLoginText}>前回のログイン: {lastLoginMethod}</Text>
           ) : null}
+          {!enableGoogleAuth ? (
+            <Text style={styles.googleNoticeText}>
+              Googleログインは現在調整中です。メールでログインしてください。
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.form}>
-          <TouchableOpacity
-            style={[styles.googleButton, (loading || googleLoading) && styles.googleButtonDisabled]}
-            onPress={handleGoogleLogin}
-            disabled={loading || googleLoading}
-            activeOpacity={0.8}>
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#333" />
-            ) : (
-              <>
-                <View style={styles.googleIconContainer}>
-                  <Svg width="20" height="20" viewBox="0 0 24 24">
-                    <Path
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      fill="#4285F4"
-                    />
-                    <Path
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      fill="#34A853"
-                    />
-                    <Path
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      fill="#FBBC05"
-                    />
-                    <Path
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      fill="#EA4335"
-                    />
-                  </Svg>
-                </View>
-                <Text style={styles.googleButtonLabel}>Googleでログイン</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {enableGoogleAuth ? (
+            <>
+              <TouchableOpacity
+                style={[styles.googleButton, (loading || googleLoading) && styles.googleButtonDisabled]}
+                onPress={handleGoogleLogin}
+                disabled={loading || googleLoading}
+                activeOpacity={0.8}>
+                {googleLoading ? (
+                  <ActivityIndicator size="small" color="#333" />
+                ) : (
+                  <>
+                    <View style={styles.googleIconContainer}>
+                      <Svg width="20" height="20" viewBox="0 0 24 24">
+                        <Path
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                          fill="#4285F4"
+                        />
+                        <Path
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                          fill="#34A853"
+                        />
+                        <Path
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                          fill="#FBBC05"
+                        />
+                        <Path
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                          fill="#EA4335"
+                        />
+                      </Svg>
+                    </View>
+                    <Text style={styles.googleButtonLabel}>Googleでログイン</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>または</Text>
-            <View style={styles.dividerLine} />
-          </View>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>または</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            </>
+          ) : null}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>メールアドレス</Text>
@@ -326,6 +375,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#4A90E2',
+  },
+  googleNoticeText: {
+    marginTop: 12,
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#888',
+    textAlign: 'center',
   },
   form: {
     flex: 1,
