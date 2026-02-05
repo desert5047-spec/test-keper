@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,14 @@ import {
   Alert,
   Platform,
   ActionSheetIOS,
+  Animated,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Calendar as CalendarIcon, Check } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { CalendarPicker } from '@/components/CalendarPicker';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
@@ -41,6 +43,61 @@ export default function DetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [scoreError, setScoreError] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const baseScale = useRef(new Animated.Value(1)).current;
+  const pinchScale = useRef(new Animated.Value(1)).current;
+  const lastScaleRef = useRef(1);
+  const baseTranslateX = useRef(new Animated.Value(0)).current;
+  const baseTranslateY = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const lastTranslateRef = useRef({ x: 0, y: 0 });
+  const pinchRef = useRef<PinchGestureHandler>(null);
+  const panRef = useRef<PanGestureHandler>(null);
+  const onPinchEvent = Animated.event(
+    [{ nativeEvent: { scale: pinchScale } }],
+    { useNativeDriver: true }
+  );
+
+  const onPinchStateChange = (event: { nativeEvent: { oldState: number; scale: number } }) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      const nextScale = lastScaleRef.current * event.nativeEvent.scale;
+      const clampedScale = Math.min(Math.max(nextScale, 1), 3);
+      lastScaleRef.current = clampedScale;
+      baseScale.setValue(clampedScale);
+      pinchScale.setValue(1);
+    }
+  };
+
+  const onPanEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
+    { useNativeDriver: true }
+  );
+
+  const onPanStateChange = (event: { nativeEvent: { oldState: number; translationX: number; translationY: number } }) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      const nextX = lastTranslateRef.current.x + event.nativeEvent.translationX;
+      const nextY = lastTranslateRef.current.y + event.nativeEvent.translationY;
+      lastTranslateRef.current = { x: nextX, y: nextY };
+      baseTranslateX.setValue(nextX);
+      baseTranslateY.setValue(nextY);
+      translateX.setValue(0);
+      translateY.setValue(0);
+    }
+  };
+
+  useEffect(() => {
+    if (!showImageModal) {
+      lastScaleRef.current = 1;
+      baseScale.setValue(1);
+      pinchScale.setValue(1);
+      lastTranslateRef.current = { x: 0, y: 0 };
+      baseTranslateX.setValue(0);
+      baseTranslateY.setValue(0);
+      translateX.setValue(0);
+      translateY.setValue(0);
+    }
+  }, [showImageModal, baseScale, pinchScale, baseTranslateX, baseTranslateY, translateX, translateY]);
 
   // Edit form states
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -928,23 +985,51 @@ export default function DetailScreen() {
         transparent={true}
         animationType="fade"
         onRequestClose={() => setShowImageModal(false)}>
-        <View style={styles.modalContainer}>
-          <TouchableOpacity
-            style={styles.modalCloseButton}
-            onPress={() => setShowImageModal(false)}
-            activeOpacity={0.7}>
-            <X size={28} color="#fff" />
-          </TouchableOpacity>
-          {record.photo_uri && isValidImageUri(record.photo_uri) && (
-            <View style={styles.modalImageWrapper}>
-              <Image
-                source={{ uri: record.photo_uri }}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
-            </View>
-          )}
-        </View>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalContainer}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowImageModal(false)}
+              activeOpacity={0.7}>
+              <X size={28} color="#fff" />
+            </TouchableOpacity>
+            {record.photo_uri && isValidImageUri(record.photo_uri) && (
+              <View style={styles.modalImageWrapper}>
+                <PanGestureHandler
+                  ref={panRef}
+                  simultaneousHandlers={pinchRef}
+                  onGestureEvent={onPanEvent}
+                  onHandlerStateChange={onPanStateChange}>
+                  <Animated.View style={styles.pinchWrapper}>
+                    <PinchGestureHandler
+                      ref={pinchRef}
+                      simultaneousHandlers={panRef}
+                      onGestureEvent={onPinchEvent}
+                      onHandlerStateChange={onPinchStateChange}>
+                      <Animated.View
+                        style={[
+                          styles.pinchContent,
+                          {
+                            transform: [
+                              { translateX: Animated.add(baseTranslateX, translateX) },
+                              { translateY: Animated.add(baseTranslateY, translateY) },
+                              { scale: Animated.multiply(baseScale, pinchScale) },
+                            ],
+                          },
+                        ]}>
+                        <Image
+                          source={{ uri: record.photo_uri }}
+                          style={styles.modalImage}
+                          resizeMode="contain"
+                        />
+                      </Animated.View>
+                    </PinchGestureHandler>
+                  </Animated.View>
+                </PanGestureHandler>
+              </View>
+            )}
+          </View>
+        </GestureHandlerRootView>
       </Modal>
 
       <Modal
@@ -1551,6 +1636,16 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   modalImageWrapper: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinchWrapper: {
+    width: '100%',
+    height: '100%',
+  },
+  pinchContent: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
