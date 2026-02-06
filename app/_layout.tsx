@@ -10,6 +10,7 @@ import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
 import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
+import { startBootHold } from '@/lib/authCallbackState';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -59,6 +60,10 @@ export default function RootLayout() {
     console.error('[RootLayout] フォント読み込みエラー');
     // フォントエラーがあってもアプリを続行
   }
+
+  useEffect(() => {
+    startBootHold(2500);
+  }, []);
 
   useEffect(() => {
     const handleUrl = (url: string | null, source: 'initial' | 'event') => {

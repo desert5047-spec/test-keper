@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
-import { setHandlingAuthCallback } from '@/lib/authCallbackState';
+import { setHandlingAuthCallback, startBootHold } from '@/lib/authCallbackState';
 
 type SessionStatus = 'processing' | 'success' | 'error';
 
@@ -115,6 +115,8 @@ export default function AuthCallbackDeepLink() {
         setMessage('このページはアプリ内でのみ利用できます。');
         return;
       }
+
+      startBootHold(8000);
 
       const initialUrl = await Linking.getInitialURL();
       if (initialUrl) {

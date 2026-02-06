@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
 import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
-import { getHandlingAuthCallback } from '@/lib/authCallbackState';
+import { getHandlingAuthCallback, isBootHold } from '@/lib/authCallbackState';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -1063,11 +1063,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isInvite = segments[0] === 'invite';
 
     const shouldSuppressLoginRedirect =
-      getHandlingAuthCallback() || pathname === '/auth-callback';
+      getHandlingAuthCallback() || pathname === '/auth-callback' || isBootHold();
 
     // 未ログインの場合
     if (!user && !inAuthGroup) {
-      if (shouldSuppressLoginRedirect) {
+      if (isBootHold()) {
+        console.warn('[Auth] redirect suppressed: bootHold');
+        return;
+      }
+      if (pathname === '/auth-callback') {
+        console.warn('[Auth] redirect suppressed: auth-callback');
+        return;
+      }
+      if (getHandlingAuthCallback()) {
+        console.warn('[Auth] redirect suppressed: handling auth-callback');
         return;
       }
       router.replace('/(auth)/login');
