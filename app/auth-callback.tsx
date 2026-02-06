@@ -56,7 +56,8 @@ export default function AuthCallbackDeepLink() {
     console.warn('[AuthCallback] deep link received:', url);
     setReceivedUrl(maskUrl(url));
     const { code, type } = parseAuthParams(url);
-    setDetectedType(type || '(未検出)');
+    const normalizedType = (type || 'recovery').trim();
+    setDetectedType(normalizedType || '(未検出)');
     setTokenLengths({
       urlLen: url.length,
       codeLen: code?.length ?? 0,
@@ -87,7 +88,7 @@ export default function AuthCallbackDeepLink() {
       setSessionStatus(hasSession ? 'OK' : '未確立');
       setSessionUserId(data.session?.user?.id ?? '');
 
-      if (type === 'recovery') {
+      if (normalizedType === 'recovery') {
         setHandlingAuthCallback(false);
         router.replace('/(auth)/reset-password');
         return;
