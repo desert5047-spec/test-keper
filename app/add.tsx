@@ -42,6 +42,11 @@ interface Child {
 }
 
 export default function AddScreen() {
+  const debugLog = (...args: unknown[]) => {
+    if (__DEV__) {
+      console.log(...args);
+    }
+  };
   const router = useRouter();
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
@@ -89,7 +94,7 @@ export default function AddScreen() {
           setSelectedChildId(lastChildId);
         }
       } catch (error) {
-        console.warn('[記録保存] 前回選択の読み込み失敗:', error);
+      console.warn('[記録保存] 前回選択の読み込み失敗');
       }
     };
     loadLastSelections();
@@ -115,36 +120,35 @@ export default function AddScreen() {
 
     const processPendingResult = async () => {
       if (isProcessing) {
-        console.log('[写真撮影] 既に処理中', { platform: Platform.OS });
+        debugLog('[写真撮影] 既に処理中', { platform: Platform.OS });
         return;
       }
 
       isProcessing = true;
       try {
-        console.log('[写真撮影] 保留中の結果をチェック...', { platform: Platform.OS });
+      debugLog('[写真撮影] 保留中の結果をチェック...', { platform: Platform.OS });
         
         // まずAsyncStorageからチェック
         try {
           // すべてのキーを確認（デバッグ用）
           const allKeys = await AsyncStorage.getAllKeys();
           const pendingKeys = allKeys.filter(key => key.includes('pending') || key.includes('camera'));
-          console.log('[写真撮影] AsyncStorage全キー確認:', { 
+          debugLog('[写真撮影] AsyncStorage全キー確認:', { 
             allKeysCount: allKeys.length,
             pendingKeys,
             platform: Platform.OS 
           });
           
           const savedData = await AsyncStorage.getItem(PENDING_CAMERA_RESULT_KEY);
-          console.log('[写真撮影] AsyncStorageチェック:', { 
+          debugLog('[写真撮影] AsyncStorageチェック:', { 
             hasData: !!savedData,
             dataLength: savedData?.length || 0,
-            dataValue: savedData,
             platform: Platform.OS 
           });
           
           if (savedData && savedData !== 'waiting') {
             // 'waiting'以外の場合はURIとして扱う
-            console.log('[写真撮影] AsyncStorageからURIを取得:', { uri: savedData.substring(0, 50), platform: Platform.OS });
+            debugLog('[写真撮影] AsyncStorageからURIを取得', { platform: Platform.OS });
             
             try {
               validateImageUri(savedData);
@@ -153,35 +157,38 @@ export default function AddScreen() {
                 setPhotoRotation(0);
                 // 使用したら削除
                 await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
-                console.log('[写真撮影] AsyncStorageからURIを設定完了', { platform: Platform.OS });
+                debugLog('[写真撮影] AsyncStorageからURIを設定完了', { platform: Platform.OS });
                 isProcessing = false;
                 return;
               }
             } catch (validateError: any) {
-              console.error('[写真撮影] AsyncStorage URI検証エラー:', validateError);
+              console.error('[写真撮影] AsyncStorage URI検証エラー');
               await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
             }
           } else if (savedData === 'waiting') {
             // 'waiting'フラグがある場合は、getPendingResultAsyncを試す
-            console.log('[写真撮影] カメラ起動フラグを検出、getPendingResultAsyncを試行', { platform: Platform.OS });
+            debugLog('[写真撮影] カメラ起動フラグを検出、getPendingResultAsyncを試行', { platform: Platform.OS });
             
             // 少し遅延を入れて、アプリが完全に復帰するのを待つ
             await new Promise(resolve => setTimeout(resolve, 1500));
             
             try {
               const result = await ImagePicker.getPendingResultAsync();
-              
-              console.log('[写真撮影] getPendingResultAsync結果:', { 
+              const hasCanceledFlag = !!result && typeof result === 'object' && 'canceled' in result;
+              const canceled = hasCanceledFlag ? (result as ImagePicker.ImagePickerResult).canceled : null;
+              const assets = hasCanceledFlag ? (result as ImagePicker.ImagePickerResult).assets : null;
+
+              debugLog('[写真撮影] getPendingResultAsync結果:', { 
                 hasResult: !!result,
-                canceled: result?.canceled,
-                assetsCount: result?.assets?.length || 0,
+                canceled,
+                assetsCount: assets?.length || 0,
                 platform: Platform.OS 
               });
               
-              if (result && !result.canceled && result.assets && result.assets.length > 0) {
-                const uri = result.assets[0].uri;
+              if (hasCanceledFlag && !canceled && assets && assets.length > 0) {
+                const uri = assets[0].uri;
                 if (uri && typeof uri === 'string') {
-                  console.log('[写真撮影] getPendingResultAsyncからURIを処理:', { uri: uri.substring(0, 50), platform: Platform.OS });
+                  debugLog('[写真撮影] getPendingResultAsyncからURIを処理', { platform: Platform.OS });
                   
                   try {
                     validateImageUri(uri);
@@ -190,35 +197,35 @@ export default function AddScreen() {
                       setPhotoRotation(0);
                       // フラグを削除
                       await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
-                      console.log('[写真撮影] getPendingResultAsyncからURIを設定完了', { platform: Platform.OS });
+                      debugLog('[写真撮影] getPendingResultAsyncからURIを設定完了', { platform: Platform.OS });
                       isProcessing = false;
                       return;
                     }
                   } catch (validateError: any) {
-                    console.error('[写真撮影] getPendingResultAsync URI検証エラー:', validateError);
+                    console.error('[写真撮影] getPendingResultAsync URI検証エラー');
                     await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
                   }
                 }
               } else {
                 // 結果が取得できなかった場合、フラグを削除
-                console.log('[写真撮影] getPendingResultAsyncで結果なし、フラグを削除', { platform: Platform.OS });
+                debugLog('[写真撮影] getPendingResultAsyncで結果なし、フラグを削除', { platform: Platform.OS });
                 await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
               }
             } catch (pendingError: any) {
-              console.error('[写真撮影] getPendingResultAsyncエラー:', pendingError);
+              console.error('[写真撮影] getPendingResultAsyncエラー');
               // エラーが発生した場合もフラグを削除
               try {
                 await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
               } catch (removeError) {
-                console.error('[写真撮影] フラグ削除エラー:', removeError);
+                console.error('[写真撮影] フラグ削除エラー');
               }
             }
           }
         } catch (storageError: any) {
-          console.error('[写真撮影] AsyncStorage読み込みエラー:', storageError);
+          console.error('[写真撮影] AsyncStorage読み込みエラー');
         }
       } catch (error: any) {
-        console.error('[写真撮影] 保留中の結果処理エラー:', error);
+        console.error('[写真撮影] 保留中の結果処理エラー');
       } finally {
         isProcessing = false;
       }
@@ -226,7 +233,7 @@ export default function AddScreen() {
 
     const handleAppStateChange = async (nextAppState: string) => {
       if (nextAppState === 'active') {
-        console.log('[写真撮影] アプリがアクティブになりました', { platform: Platform.OS });
+        debugLog('[写真撮影] アプリがアクティブになりました', { platform: Platform.OS });
         await processPendingResult();
       }
     };
@@ -320,11 +327,11 @@ export default function AddScreen() {
     try {
       setShowPhotoOptions(false);
     } catch (setStateError) {
-      console.error('[画像選択] setStateエラー:', setStateError);
+      console.error('[画像選択] setStateエラー');
     }
 
     try {
-      console.log('[画像選択] 画像ライブラリを起動中...', { platform: Platform.OS });
+      debugLog('[画像選択] 画像ライブラリを起動中...', { platform: Platform.OS });
       
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -332,7 +339,7 @@ export default function AddScreen() {
         quality: 1.0,
       });
 
-      console.log('[画像選択] ライブラリ結果:', { 
+      debugLog('[画像選択] ライブラリ結果:', { 
         canceled: result.canceled,
         assetsCount: result.assets?.length || 0,
         platform: Platform.OS 
@@ -342,45 +349,39 @@ export default function AddScreen() {
         const uri = result.assets[0].uri;
         
         if (!uri || typeof uri !== 'string') {
-          console.error('[画像選択] URIが無効:', uri);
+          console.error('[画像選択] URIが無効');
           throw new Error('画像のURIが取得できませんでした');
         }
 
-        console.log('[画像選択] URI取得:', { uri: uri.substring(0, 50), platform: Platform.OS });
+        debugLog('[画像選択] URI取得', { platform: Platform.OS });
 
         try {
           validateImageUri(uri);
         } catch (validateError: any) {
-          console.error('[画像選択] URI検証エラー:', validateError);
+          console.error('[画像選択] URI検証エラー');
           throw new Error(`画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         }
 
         if (!isValidImageUri(uri)) {
-          console.error('[画像選択] 無効なURI:', uri);
+          console.error('[画像選択] 無効なURI');
           throw new Error('画像の形式が正しくありません');
         }
 
-        console.log('[画像選択] 画像URIを設定中...', { platform: Platform.OS });
+        debugLog('[画像選択] 画像URIを設定中...', { platform: Platform.OS });
         
         try {
           setPhotoUri(uri);
           setPhotoRotation(0);
-          console.log('[画像選択] 画像URI設定完了', { platform: Platform.OS });
+          debugLog('[画像選択] 画像URI設定完了', { platform: Platform.OS });
         } catch (setUriError: any) {
-          console.error('[画像選択] URI設定エラー:', setUriError);
+          console.error('[画像選択] URI設定エラー');
           throw new Error(`画像の設定に失敗しました: ${setUriError.message || '不明なエラー'}`);
         }
       } else {
-        console.log('[画像選択] キャンセルされました', { platform: Platform.OS });
+        debugLog('[画像選択] キャンセルされました', { platform: Platform.OS });
       }
     } catch (error: any) {
-      console.error('[画像選択] エラー:', error);
-      console.error('[画像選択] エラー詳細:', {
-        message: error?.message,
-        stack: error?.stack,
-        name: error?.name,
-        platform: Platform.OS,
-      });
+      console.error('[画像選択] エラー');
       
       // エラーメッセージを表示（アプリをクラッシュさせない）
       setTimeout(() => {
@@ -392,7 +393,7 @@ export default function AddScreen() {
             { cancelable: true }
           );
         } catch (alertError: any) {
-          console.error('[画像選択] Alert表示エラー:', alertError);
+          console.error('[画像選択] Alert表示エラー');
           // Alert.alertも失敗した場合は、コンソールに出力するだけ
         }
       }, 100);
@@ -403,19 +404,19 @@ export default function AddScreen() {
     try {
       setShowPhotoOptions(false);
     } catch (setStateError) {
-      console.error('[写真撮影] setStateエラー:', setStateError);
+      console.error('[写真撮影] setStateエラー');
     }
 
     // Androidではexpo-cameraを使用（Expo Goで再起動する問題を回避）
     if (Platform.OS === 'android') {
-      console.log('[写真撮影] Android: expo-cameraを使用', { platform: Platform.OS });
+      debugLog('[写真撮影] Android: expo-cameraを使用', { platform: Platform.OS });
       setShowCamera(true);
       return;
     }
 
     // iOSでは従来のImagePickerを使用
     try {
-      console.log('[写真撮影] iOS: ImagePickerを使用', { platform: Platform.OS });
+      debugLog('[写真撮影] iOS: ImagePickerを使用', { platform: Platform.OS });
       
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
@@ -423,7 +424,7 @@ export default function AddScreen() {
         allowsMultipleSelection: false,
       });
 
-      console.log('[写真撮影] カメラ結果:', { 
+      debugLog('[写真撮影] カメラ結果:', { 
         canceled: result.canceled,
         assetsCount: result.assets?.length || 0,
         platform: Platform.OS 
@@ -433,45 +434,39 @@ export default function AddScreen() {
         const uri = result.assets[0].uri;
         
         if (!uri || typeof uri !== 'string') {
-          console.error('[写真撮影] URIが無効:', uri);
+          console.error('[写真撮影] URIが無効');
           throw new Error('画像のURIが取得できませんでした');
         }
 
-        console.log('[写真撮影] URI取得:', { uri: uri.substring(0, 50), platform: Platform.OS });
+        debugLog('[写真撮影] URI取得', { platform: Platform.OS });
 
         try {
           validateImageUri(uri);
         } catch (validateError: any) {
-          console.error('[写真撮影] URI検証エラー:', validateError);
+          console.error('[写真撮影] URI検証エラー');
           throw new Error(`画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         }
 
         if (!isValidImageUri(uri)) {
-          console.error('[写真撮影] 無効なURI:', uri);
+          console.error('[写真撮影] 無効なURI');
           throw new Error('画像の形式が正しくありません');
         }
 
-        console.log('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
+        debugLog('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
         
         try {
           setPhotoUri(uri);
           setPhotoRotation(0);
-          console.log('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
+          debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
         } catch (setUriError: any) {
-          console.error('[写真撮影] URI設定エラー:', setUriError);
+          console.error('[写真撮影] URI設定エラー');
           throw new Error(`画像の設定に失敗しました: ${setUriError.message || '不明なエラー'}`);
         }
       } else {
-        console.log('[写真撮影] キャンセルされました', { platform: Platform.OS });
+        debugLog('[写真撮影] キャンセルされました', { platform: Platform.OS });
       }
     } catch (error: any) {
-      console.error('[写真撮影] エラー:', error);
-      console.error('[写真撮影] エラー詳細:', {
-        message: error?.message,
-        stack: error?.stack,
-        name: error?.name,
-        platform: Platform.OS,
-      });
+      console.error('[写真撮影] エラー');
       
       // エラーメッセージを表示（アプリをクラッシュさせない）
       setTimeout(() => {
@@ -483,7 +478,7 @@ export default function AddScreen() {
             { cancelable: true }
           );
         } catch (alertError: any) {
-          console.error('[写真撮影] Alert表示エラー:', alertError);
+          console.error('[写真撮影] Alert表示エラー');
         }
       }, 100);
     }
@@ -491,36 +486,36 @@ export default function AddScreen() {
 
   const handleCameraCapture = async (uri: string) => {
     try {
-      console.log('[写真撮影] カメラからURIを取得:', { uri: uri.substring(0, 50), platform: Platform.OS });
+      debugLog('[写真撮影] カメラからURIを取得', { platform: Platform.OS });
       setShowCamera(false);
 
       try {
         validateImageUri(uri);
       } catch (validateError: any) {
-        console.error('[写真撮影] URI検証エラー:', validateError);
+        console.error('[写真撮影] URI検証エラー');
         Alert.alert('エラー', `画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         return;
       }
 
       if (!isValidImageUri(uri)) {
-        console.error('[写真撮影] 無効なURI:', uri);
+        console.error('[写真撮影] 無効なURI');
         Alert.alert('エラー', '画像の形式が正しくありません');
         return;
       }
 
-      console.log('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
+      debugLog('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
       setPhotoUri(uri);
       setPhotoRotation(0);
-      console.log('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
+      debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
     } catch (error: any) {
-      console.error('[写真撮影] カメラキャプチャ処理エラー:', error);
+      console.error('[写真撮影] カメラキャプチャ処理エラー');
       setShowCamera(false);
       Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
     }
   };
 
   const handleCameraCancel = () => {
-    console.log('[写真撮影] カメラをキャンセル', { platform: Platform.OS });
+    debugLog('[写真撮影] カメラをキャンセル', { platform: Platform.OS });
     setShowCamera(false);
   };
 
@@ -641,7 +636,7 @@ export default function AddScreen() {
             return;
           }
         } catch (error: any) {
-          console.error('[記録保存] 画像URI検証エラー:', error);
+          console.error('[記録保存] 画像URI検証エラー');
           setErrorMessage(error?.message || '画像の形式が正しくありません');
           setTimeout(() => setErrorMessage(''), 3000);
           return;
@@ -652,7 +647,7 @@ export default function AddScreen() {
         try {
           Alert.alert('エラー', 'ログインが必要です');
         } catch (alertError) {
-          console.error('[記録保存] Alert表示エラー:', alertError);
+          console.error('[記録保存] Alert表示エラー');
           setErrorMessage('ログインが必要です');
         }
         return;
@@ -671,7 +666,7 @@ export default function AddScreen() {
           try {
             Alert.alert('エラー', '選択された子供が見つかりません。ページを再読み込みしてください。');
           } catch (alertError) {
-            console.error('[記録保存] Alert表示エラー:', alertError);
+            console.error('[記録保存] Alert表示エラー');
             setErrorMessage('選択された子供が見つかりません');
           }
           return;
@@ -681,7 +676,7 @@ export default function AddScreen() {
         try {
           Alert.alert('エラー', '子供を選択してください');
         } catch (alertError) {
-          console.error('[記録保存] Alert表示エラー:', alertError);
+          console.error('[記録保存] Alert表示エラー');
           setErrorMessage('子供を選択してください');
         }
         return;
@@ -691,15 +686,11 @@ export default function AddScreen() {
       setErrorMessage(''); // エラーメッセージをクリア
 
       try {
-      let uploadedImageUrl: string | null = null;
+      let uploadedImagePath: string | null = null;
 
       if (photoUri) {
         try {
-          console.log('[記録保存] 画像アップロード開始', { 
-            photoUri: photoUri.substring(0, 50),
-            userId: user.id,
-            platform: Platform.OS 
-          });
+          debugLog('[記録保存] 画像アップロード開始', { platform: Platform.OS });
           
           // タイムアウトを設定（60秒）
           const uploadPromise = uploadImage(photoUri, user.id);
@@ -707,23 +698,15 @@ export default function AddScreen() {
             setTimeout(() => reject(new Error('画像のアップロードがタイムアウトしました（60秒）')), 60000);
           });
           
-          uploadedImageUrl = await Promise.race([uploadPromise, timeoutPromise]);
+          uploadedImagePath = await Promise.race([uploadPromise, timeoutPromise]);
           
-          if (!uploadedImageUrl || uploadedImageUrl.trim() === '') {
+          if (!uploadedImagePath || uploadedImagePath.trim() === '') {
             throw new Error('画像のアップロードに失敗しました（URLが取得できませんでした）');
           }
           
-          console.log('[記録保存] 画像アップロード成功', { 
-            uploadedImageUrl: uploadedImageUrl.substring(0, 50) 
-          });
+          debugLog('[記録保存] 画像アップロード成功');
         } catch (uploadError: any) {
-          console.error('[記録保存] 画像アップロードエラー', uploadError);
-          console.error('[記録保存] エラー詳細:', {
-            message: uploadError?.message,
-            stack: uploadError?.stack,
-            name: uploadError?.name,
-            toString: uploadError?.toString(),
-          });
+          console.error('[記録保存] 画像アップロードエラー');
           
           const errorMessage = uploadError?.message || uploadError?.toString() || '画像のアップロードに失敗しました';
           
@@ -737,7 +720,7 @@ export default function AddScreen() {
             );
           } catch (alertError: any) {
             // Alert.alertも失敗した場合、エラーメッセージを画面に表示
-            console.error('[記録保存] Alert表示エラー:', alertError);
+            console.error('[記録保存] Alert表示エラー');
             setErrorMessage(errorMessage);
             setTimeout(() => setErrorMessage(''), 5000);
           }
@@ -759,12 +742,7 @@ export default function AddScreen() {
         ? stamp
         : null;
 
-      console.log('[記録保存] データベースに保存開始', {
-        child_id: selectedChildId,
-        photo_uri: uploadedImageUrl ? uploadedImageUrl.substring(0, 50) : null,
-        photo_rotation: photoRotation,
-        userId: user.id,
-      });
+      debugLog('[記録保存] データベースに保存開始');
 
       try {
         const { data: insertData, error } = await supabase
@@ -779,17 +757,17 @@ export default function AddScreen() {
             max_score: maxScoreValue,
             stamp: stampValue,
             memo: memo.trim() || null,
-            photo_uri: uploadedImageUrl,
+            photo_uri: uploadedImagePath,
             photo_rotation: photoRotation,
             user_id: user.id,
           });
 
         if (error) {
-          console.error('[記録保存] データベース保存エラー', error);
+          console.error('[記録保存] データベース保存エラー');
           throw new Error(`データベースへの保存に失敗しました: ${error.message || '不明なエラー'}`);
         }
 
-        console.log('[記録保存] データベース保存成功', { insertData });
+        debugLog('[記録保存] データベース保存成功');
 
         try {
           await AsyncStorage.setItem(LAST_SUBJECT_KEY, selectedSubject);
@@ -799,7 +777,7 @@ export default function AddScreen() {
             await AsyncStorage.removeItem(LAST_CHILD_KEY);
           }
         } catch (persistError) {
-          console.warn('[記録保存] 前回選択の保存失敗:', persistError);
+          console.warn('[記録保存] 前回選択の保存失敗');
         }
 
         // 成功時の処理もtry-catchで保護
@@ -811,37 +789,24 @@ export default function AddScreen() {
               setShowToast(false);
               setShowSaveConfirm(true);
             } catch (navigationError: any) {
-              console.error('[記録保存] ナビゲーションエラー:', navigationError);
+              console.error('[記録保存] ナビゲーションエラー');
               try {
                 resetForm();
               } catch (resetError) {
-                console.error('[記録保存] フォームリセットエラー:', resetError);
+                console.error('[記録保存] フォームリセットエラー');
               }
             }
           }, 300);
         } catch (successError: any) {
-          console.error('[記録保存] 成功処理エラー:', successError);
+          console.error('[記録保存] 成功処理エラー');
           // 成功処理に失敗しても、保存は完了しているので、エラーを表示しない
         }
       } catch (dbError: any) {
-        console.error('[記録保存] データベース保存エラー', dbError);
-        console.error('[記録保存] データベースエラー詳細:', {
-          message: dbError?.message,
-          stack: dbError?.stack,
-          name: dbError?.name,
-          code: dbError?.code,
-        });
+        console.error('[記録保存] データベース保存エラー');
         throw dbError;
       }
     } catch (error: any) {
-      console.error('[記録保存] 予期しないエラー:', error);
-      console.error('[記録保存] エラー詳細:', {
-        message: error?.message,
-        stack: error?.stack,
-        name: error?.name,
-        toString: error?.toString(),
-        platform: Platform.OS,
-      });
+      console.error('[記録保存] 予期しないエラー');
       
       const errorMessage = error?.message || error?.toString() || '保存に失敗しました';
       
@@ -857,18 +822,18 @@ export default function AddScreen() {
           );
         } catch (alertError: any) {
           // Alert.alertも失敗した場合、エラーメッセージを画面に表示
-          console.error('[記録保存] Alert表示エラー:', alertError);
+          console.error('[記録保存] Alert表示エラー');
           try {
             setErrorMessage(errorMessage);
             setTimeout(() => {
               try {
                 setErrorMessage('');
               } catch (clearError) {
-                console.error('[記録保存] エラーメッセージクリアエラー:', clearError);
+                console.error('[記録保存] エラーメッセージクリアエラー');
               }
             }, 5000);
           } catch (setErrorError) {
-            console.error('[記録保存] エラーメッセージ設定エラー:', setErrorError);
+            console.error('[記録保存] エラーメッセージ設定エラー');
           }
         }
       }, 100);
@@ -877,23 +842,17 @@ export default function AddScreen() {
       try {
         setIsSaving(false);
       } catch (setStateError: any) {
-        console.error('[記録保存] setStateエラー:', setStateError);
+        console.error('[記録保存] setStateエラー');
       }
     }
   } catch (outerError: any) {
       // 最外側のエラーハンドリング（すべてのエラーをキャッチ）
-      console.error('[記録保存] 最外側エラー（クラッシュ防止）:', outerError);
-      console.error('[記録保存] 最外側エラー詳細:', {
-        message: outerError?.message,
-        stack: outerError?.stack,
-        name: outerError?.name,
-        platform: Platform.OS,
-      });
+      console.error('[記録保存] 最外側エラー（クラッシュ防止）');
       
       try {
         setIsSaving(false);
       } catch (finalError) {
-        console.error('[記録保存] 最終エラー処理エラー:', finalError);
+        console.error('[記録保存] 最終エラー処理エラー');
       }
       
       // ユーザーにエラーを表示
@@ -906,7 +865,7 @@ export default function AddScreen() {
             { cancelable: true }
           );
         } catch (finalAlertError) {
-          console.error('[記録保存] 最終Alert表示エラー:', finalAlertError);
+          console.error('[記録保存] 最終Alert表示エラー');
         }
       }, 100);
     }

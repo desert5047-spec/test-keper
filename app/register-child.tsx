@@ -99,7 +99,7 @@ export default function RegisterChildScreen() {
     setSaving(false);
 
     if (error) {
-      console.error('Child registration error:', error);
+      console.error('Child registration error');
       Alert.alert('エラー', `登録に失敗しました: ${error.message}`);
       return;
     }

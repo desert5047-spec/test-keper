@@ -32,7 +32,7 @@ const secureStorage = {
       try {
         return await AsyncStorage.getItem(key);
       } catch (error) {
-        console.warn('[authStorage] AsyncStorage getItem エラー:', error);
+        console.warn('[authStorage] AsyncStorage getItem エラー');
         return null;
       }
     }
@@ -67,19 +67,19 @@ const secureStorage = {
           }
         } catch (error) {
           // SecureStoreへの保存に失敗しても続行
-          console.warn('[authStorage] SecureStoreへの移行失敗:', error);
+          console.warn('[authStorage] SecureStoreへの移行失敗');
         }
         return asyncValue;
       }
       
       return null;
     } catch (error) {
-      console.warn('[authStorage] secureStorage getItem エラー:', error);
+      console.warn('[authStorage] secureStorage getItem エラー');
       // エラー時はAsyncStorageから取得を試みる
       try {
         return await AsyncStorage.getItem(key);
       } catch (asyncError) {
-        console.warn('[authStorage] AsyncStorage getItem フォールバックエラー:', asyncError);
+        console.warn('[authStorage] AsyncStorage getItem フォールバックエラー');
         return null;
       }
     }
@@ -90,7 +90,7 @@ const secureStorage = {
         await AsyncStorage.setItem(key, value);
         return;
       } catch (error) {
-        console.warn('[authStorage] AsyncStorage setItem エラー:', error);
+        console.warn('[authStorage] AsyncStorage setItem エラー');
         return;
       }
     }
@@ -124,20 +124,20 @@ const secureStorage = {
           await AsyncStorage.setItem(key, value);
         } catch (backupError) {
           // バックアップ失敗は警告のみ
-          console.warn('[authStorage] AsyncStorageバックアップ失敗:', backupError);
+          console.warn('[authStorage] AsyncStorageバックアップ失敗');
         }
       } catch (secureError) {
         // SecureStoreに失敗した場合はAsyncStorageに保存
-        console.warn('[authStorage] SecureStore setItem エラー、AsyncStorageにフォールバック:', secureError);
+        console.warn('[authStorage] SecureStore setItem エラー、AsyncStorageにフォールバック');
         await AsyncStorage.setItem(key, value);
       }
     } catch (error) {
-      console.warn('[authStorage] secureStorage setItem エラー:', error);
+      console.warn('[authStorage] secureStorage setItem エラー');
       // 最終的にAsyncStorageに保存を試みる
       try {
         await AsyncStorage.setItem(key, value);
       } catch (asyncError) {
-        console.error('[authStorage] AsyncStorage setItem フォールバックエラー:', asyncError);
+        console.error('[authStorage] AsyncStorage setItem フォールバックエラー');
       }
     }
   },
@@ -147,7 +147,7 @@ const secureStorage = {
         await AsyncStorage.removeItem(key);
         return;
       } catch (error) {
-        console.warn('[authStorage] AsyncStorage removeItem エラー:', error);
+        console.warn('[authStorage] AsyncStorage removeItem エラー');
         return;
       }
     }
@@ -171,21 +171,24 @@ const secureStorage = {
           'SecureStore.deleteItemAsync'
         );
       } catch (secureError) {
-        console.warn('[authStorage] SecureStore deleteItem エラー:', secureError);
+        console.warn('[authStorage] SecureStore deleteItem エラー');
       }
       
       try {
         await AsyncStorage.removeItem(key);
       } catch (asyncError) {
-        console.warn('[authStorage] AsyncStorage removeItem エラー:', asyncError);
+        console.warn('[authStorage] AsyncStorage removeItem エラー');
       }
     } catch (error) {
-      console.warn('[authStorage] secureStorage removeItem エラー:', error);
+      console.warn('[authStorage] secureStorage removeItem エラー');
     }
   },
 };
 
 export const getRememberMe = async () => {
+  if (Platform.OS === 'web') {
+    return false;
+  }
   const value = await AsyncStorage.getItem(REMEMBER_ME_KEY);
   if (value === null) {
     return true;
@@ -194,31 +197,41 @@ export const getRememberMe = async () => {
 };
 
 export const setRememberMe = async (value: boolean) => {
+  if (Platform.OS === 'web') {
+    return;
+  }
   await AsyncStorage.setItem(REMEMBER_ME_KEY, value ? 'true' : 'false');
 };
 
 export const createAuthStorage = () => ({
   getItem: async (key: string) => {
     try {
+      if (Platform.OS === 'web') {
+        return await memoryStorage.getItem(key);
+      }
       const rememberMe = await getRememberMe();
       if (rememberMe) {
         const value = await secureStorage.getItem(key);
         // トークン関連のキーの場合、見つからない場合はnullを返す（エラーを発生させない）
         if (value === null && (key.includes('refresh_token') || key.includes('access_token'))) {
-          console.warn('[authStorage] トークンが見つかりません:', key);
+          console.warn('[authStorage] トークンが見つかりません');
           return null;
         }
         return value;
       }
       return await memoryStorage.getItem(key);
     } catch (error) {
-      console.error('[authStorage] getItem エラー:', error);
+      console.error('[authStorage] getItem エラー');
       // エラー時はnullを返す（Supabaseが適切に処理する）
       return null;
     }
   },
   setItem: async (key: string, value: string) => {
     try {
+      if (Platform.OS === 'web') {
+        await memoryStorage.setItem(key, value);
+        return;
+      }
       const rememberMe = await getRememberMe();
       if (rememberMe) {
         await secureStorage.setItem(key, value);
@@ -226,12 +239,16 @@ export const createAuthStorage = () => ({
       }
       await memoryStorage.setItem(key, value);
     } catch (error) {
-      console.error('[authStorage] setItem エラー:', error);
+      console.error('[authStorage] setItem エラー');
       // エラーはログに記録するが、例外を投げない（Supabaseの処理を続行）
     }
   },
   removeItem: async (key: string) => {
     try {
+      if (Platform.OS === 'web') {
+        await memoryStorage.removeItem(key);
+        return;
+      }
       const rememberMe = await getRememberMe();
       if (rememberMe) {
         await secureStorage.removeItem(key);
@@ -239,7 +256,7 @@ export const createAuthStorage = () => ({
       }
       await memoryStorage.removeItem(key);
     } catch (error) {
-      console.error('[authStorage] removeItem エラー:', error);
+      console.error('[authStorage] removeItem エラー');
       // エラーはログに記録するが、例外を投げない
     }
   },

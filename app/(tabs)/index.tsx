@@ -18,14 +18,21 @@ import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
+import { getSignedImageUrl } from '@/utils/imageUpload';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
 export default function HomeScreen() {
+  const debugLog = (...args: unknown[]) => {
+    if (__DEV__) {
+      console.log(...args);
+    }
+  };
   const router = useRouter();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [imageAspectRatios, setImageAspectRatios] = useState<{ [key: string]: number }>({});
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
+  const [resolvedImageUrls, setResolvedImageUrls] = useState<{ [key: string]: string }>({});
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
@@ -38,35 +45,61 @@ export default function HomeScreen() {
     }, [year, month, selectedChildId, isFamilyReady, familyId])
   );
 
+  useEffect(() => {
+    const loadResolvedImageUrls = async () => {
+      const targets = records.filter((record) => record.photo_uri && !resolvedImageUrls[record.id]);
+      if (targets.length === 0) return;
+
+      const entries = await Promise.all(
+        targets.map(async (record) => {
+          const resolved = await getSignedImageUrl(record.photo_uri);
+          return [record.id, resolved];
+        })
+      );
+
+      const nextMap: { [key: string]: string } = {};
+      entries.forEach(([id, url]) => {
+        if (typeof id === 'string' && url) {
+          nextMap[id] = url;
+        }
+      });
+      if (Object.keys(nextMap).length > 0) {
+        setResolvedImageUrls((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    if (records.length > 0) {
+      loadResolvedImageUrls();
+    }
+  }, [records, resolvedImageUrls]);
+
   // 画像のアスペクト比を事前に取得
   useEffect(() => {
     const loadImageAspectRatios = async () => {
       const newAspectRatios: { [key: string]: number } = {};
       const recordsToLoad = records.filter(
-        (record) => record.photo_uri && isValidImageUri(record.photo_uri) && !imageAspectRatios[record.id]
+        (record) => resolvedImageUrls[record.id] && !imageAspectRatios[record.id]
       );
 
       if (recordsToLoad.length === 0) return;
 
-      console.log(`[画像アスペクト比] ${recordsToLoad.length}件の画像サイズを取得中...`);
+      debugLog(`[画像アスペクト比] ${recordsToLoad.length}件の画像サイズを取得中...`);
 
       // 並列で画像サイズを取得
       const promises = recordsToLoad.map((record) => {
         return new Promise<void>((resolve) => {
           Image.getSize(
-            record.photo_uri!,
+            resolvedImageUrls[record.id]!,
             (width, height) => {
               if (width && height) {
                 const aspectRatio = width / height;
                 newAspectRatios[record.id] = aspectRatio;
-                console.log(`[画像アスペクト比] ${record.id}: ${width}x${height} = ${aspectRatio.toFixed(2)}, URI: ${record.photo_uri?.substring(0, 80)}`);
+                debugLog(`[画像アスペクト比] ${record.id}: ${width}x${height} = ${aspectRatio.toFixed(2)}`);
               }
               resolve();
             },
-            (error) => {
-              console.error(`[画像サイズ取得エラー] ${record.id}:`, error);
-              console.error(`[画像サイズ取得エラー] URI: ${record.photo_uri}`);
-              console.error(`[画像サイズ取得エラー] Platform: ${Platform.OS}`);
+            () => {
+              console.error('[画像サイズ取得エラー]');
               // エラーを記録
               setImageErrors((prev) => ({ ...prev, [record.id]: true }));
               resolve();
@@ -78,7 +111,7 @@ export default function HomeScreen() {
       await Promise.all(promises);
 
       if (Object.keys(newAspectRatios).length > 0) {
-        console.log(`[画像アスペクト比] ${Object.keys(newAspectRatios).length}件のアスペクト比を更新`);
+        debugLog(`[画像アスペクト比] ${Object.keys(newAspectRatios).length}件のアスペクト比を更新`);
         setImageAspectRatios((prev) => ({
           ...prev,
           ...newAspectRatios,
@@ -90,7 +123,7 @@ export default function HomeScreen() {
       loadImageAspectRatios();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records]);
+  }, [records, resolvedImageUrls, imageAspectRatios]);
 
   const loadRecords = async () => {
     if (!selectedChildId || !isFamilyReady || !familyId) return;
@@ -110,25 +143,16 @@ export default function HomeScreen() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[記録読み込みエラー]', error);
+      console.error('[記録読み込みエラー]');
       return;
     }
 
     if (data) {
-      console.log(`[記録読み込み] ${data.length}件の記録を取得`, { platform: Platform.OS });
-      // 写真がある記録のURIをログに出力
-      data.forEach((record) => {
-        if (record.photo_uri) {
-          console.log(`[記録読み込み] 写真URI: ${record.id}`, {
-            photo_uri: record.photo_uri,
-            isValid: isValidImageUri(record.photo_uri),
-            platform: Platform.OS,
-          });
-        }
-      });
+      debugLog(`[記録読み込み] ${data.length}件の記録を取得`, { platform: Platform.OS });
       setRecords(data);
       // エラー状態をリセット
       setImageErrors({});
+      setResolvedImageUrls({});
     }
   };
 
@@ -166,13 +190,14 @@ export default function HomeScreen() {
   };
 
   const renderRecord = ({ item }: { item: TestRecord }) => {
-    const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
+    const resolvedUrl = resolvedImageUrls[item.id];
+    const hasPhoto = !!resolvedUrl && isValidImageUri(resolvedUrl);
+    const isResolvingPhoto = !!item.photo_uri && !resolvedUrl;
     const subjectColor = getSubjectColor(item.subject);
     const hasImageError = imageErrors[item.id];
 
-    if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
-      console.warn('[画像警告] 無効な画像URIが検出されました:', item.photo_uri);
-      console.warn('[画像警告] Platform:', Platform.OS);
+    if (item.photo_uri && resolvedUrl && !isValidImageUri(resolvedUrl)) {
+      console.warn('[画像警告] 無効な画像URIが検出されました');
     }
 
     // 画像エラーがある場合は写真なしとして扱う
@@ -200,11 +225,11 @@ export default function HomeScreen() {
             <>
               <View style={styles.imageWrapper}>
                 <Image
-                  source={{ uri: item.photo_uri! }}
+                  source={{ uri: resolvedUrl! }}
                   style={styles.cardImage}
                   resizeMode="contain"
                   onLoad={() => {
-                    console.log(`[画像読み込み成功] ${item.id}: ${item.photo_uri?.substring(0, 80)}`);
+                    debugLog(`[画像読み込み成功] ${item.id}`);
                     // エラー状態をクリア
                     if (imageErrors[item.id]) {
                       setImageErrors((prev) => {
@@ -215,7 +240,7 @@ export default function HomeScreen() {
                     }
                   }}
                   onError={() => {
-                    console.warn(`[画像読み込みエラー] ${item.id}`);
+                    console.warn('[画像読み込みエラー]');
                     // エラーを記録
                     setImageErrors((prev) => ({ ...prev, [item.id]: true }));
                   }}
@@ -227,9 +252,13 @@ export default function HomeScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.noPhotoText}>
-                {hasImageError ? '写真の読み込みに失敗しました' : '写真なし'}
-              </Text>
+              {isResolvingPhoto ? (
+                <ActivityIndicator size="small" color="#4A90E2" />
+              ) : (
+                <Text style={styles.noPhotoText}>
+                  {hasImageError ? '写真の読み込みに失敗しました' : '写真なし'}
+                </Text>
+              )}
               <View style={styles.dateOverlay}>
                 <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
               </View>

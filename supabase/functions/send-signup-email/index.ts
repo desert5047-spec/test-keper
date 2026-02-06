@@ -58,8 +58,8 @@ serve(async (req) => {
       });
 
       if (!resendResponse.ok) {
-        const error = await resendResponse.text();
-        console.error('Resend API error:', error);
+        await resendResponse.text();
+        console.error('Resend API error');
         return new Response(
           JSON.stringify({ error: 'Failed to send email via Resend' }),
           {
@@ -79,7 +79,6 @@ serve(async (req) => {
       );
     } else {
       // Resend APIキーが設定されていない場合、ログに記録
-      console.log('Email would be sent:', { to, subject });
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -92,7 +91,7 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error');
     return new Response(
       JSON.stringify({ error: error.message }),
       {

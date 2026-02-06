@@ -69,13 +69,13 @@ export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: ImageCr
                 resolve();
               },
               (error) => {
-                console.error('画像サイズ取得エラー:', error);
+                console.error('画像サイズ取得エラー');
                 reject(error);
               }
             );
           });
         } catch (error) {
-          console.error('画像サイズ取得エラー:', error);
+          console.error('画像サイズ取得エラー');
         }
       }
     };
@@ -221,7 +221,7 @@ export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: ImageCr
       
       onCrop(result.uri);
     } catch (error: any) {
-      console.error('トリミングエラー:', error);
+      console.error('トリミングエラー');
       Alert.alert('エラー', 'トリミングに失敗しました: ' + (error.message || '不明なエラー'));
     } finally {
       setIsProcessing(false);

@@ -9,15 +9,21 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
 void SplashScreen.preventAutoHideAsync().catch((error) => {
-  console.warn('[RootLayout] SplashScreen.preventAutoHideAsyncエラー:', error);
+  console.warn('[RootLayout] SplashScreen.preventAutoHideAsyncエラー');
 });
 
 export default function RootLayout() {
   try {
     useFrameworkReady();
   } catch (error) {
-    console.error('[RootLayout] useFrameworkReadyエラー:', error);
+    console.error('[RootLayout] useFrameworkReadyエラー');
   }
 
   const [fontsLoaded, fontError] = useFonts({
@@ -29,29 +35,29 @@ export default function RootLayout() {
   useEffect(() => {
     try {
       if (fontsLoaded || fontError) {
-        console.log('[RootLayout] フォント読み込み完了、スプラッシュ画面を非表示', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
-        SplashScreen.hideAsync().catch((error) => {
-          console.error('[RootLayout] SplashScreen.hideAsyncエラー:', error);
+        debugLog('[RootLayout] フォント読み込み完了、スプラッシュ画面を非表示', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
+        SplashScreen.hideAsync().catch(() => {
+          console.error('[RootLayout] SplashScreen.hideAsyncエラー');
         });
       }
     } catch (error) {
-      console.error('[RootLayout] useEffectエラー:', error);
+      console.error('[RootLayout] useEffectエラー');
       // エラーが発生してもスプラッシュ画面を非表示にする
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) {
-    console.log('[RootLayout] フォント読み込み中...', { platform: Platform.OS });
+    debugLog('[RootLayout] フォント読み込み中...', { platform: Platform.OS });
     return null;
   }
 
   if (fontError) {
-    console.error('[RootLayout] フォント読み込みエラー:', fontError);
+    console.error('[RootLayout] フォント読み込みエラー');
     // フォントエラーがあってもアプリを続行
   }
 
-  console.log('[RootLayout] レンダリング開始', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
+  debugLog('[RootLayout] レンダリング開始', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

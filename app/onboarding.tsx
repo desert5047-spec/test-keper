@@ -72,7 +72,7 @@ export default function OnboardingScreen() {
     });
 
     if (error) {
-      console.error('[Onboarding] display_name 更新エラー:', error);
+      console.error('[Onboarding] display_name 更新エラー');
       setDisplayNameError('保存に失敗しました');
       setIsSaving(false);
       return;

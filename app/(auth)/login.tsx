@@ -21,6 +21,12 @@ import { getRememberMe, setRememberMe } from '@/lib/authStorage';
 import { Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,16 +47,16 @@ export default function LoginScreen() {
       const provider = await getLastAuthProvider();
       if (provider === 'google') {
         setLastLoginMethod('Google');
-        console.log('[認証手段] ログイン画面: 前回はGoogleでログイン');
+        debugLog('[認証手段] ログイン画面: 前回はGoogleでログイン');
         return;
       }
       if (provider === 'email') {
         setLastLoginMethod('Email');
-        console.log('[認証手段] ログイン画面: 前回はEmailでログイン');
+        debugLog('[認証手段] ログイン画面: 前回はEmailでログイン');
         return;
       }
       setLastLoginMethod(null);
-      console.log('[認証手段] ログイン画面: 前回のログイン手段なし');
+      debugLog('[認証手段] ログイン画面: 前回のログイン手段なし');
     };
     checkLastLogin();
   }, []);
@@ -74,7 +80,7 @@ export default function LoginScreen() {
       return;
     }
 
-    console.log('[Login] ログイン処理開始', { email, platform: Platform.OS });
+    debugLog('[Login] ログイン処理開始', { platform: Platform.OS });
     setError('');
     setLoading(true);
 
@@ -86,25 +92,21 @@ export default function LoginScreen() {
         const message = (signInError as any)?.message ?? '';
         const isInvalidCredentials = message.includes('Invalid login credentials');
         if (isInvalidCredentials) {
-          console.warn('[Login] ログイン失敗（認証情報不一致）:', signInError);
+          console.warn('[Login] ログイン失敗（認証情報不一致）');
         } else {
-          console.error('[Login] ログインエラー:', signInError);
+          console.error('[Login] ログインエラー');
         }
-        setError(
-          message && !isInvalidCredentials
-            ? message
-            : 'ログインに失敗しました。メールアドレスとパスワードを確認してください。'
-        );
+        setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。');
         setLoading(false);
         return;
       }
 
-      console.log('[Login] ログイン成功、onAuthStateChangeを待機中...');
+      debugLog('[Login] ログイン成功、onAuthStateChangeを待機中...');
       // onAuthStateChangeが発火するまで少し待つ
       // リダイレクトはAuthContextのonAuthStateChangeで処理される
       setLoading(false);
     } catch (err: any) {
-      console.error('[Login] ログイン処理例外:', err);
+      console.error('[Login] ログイン処理例外');
       setError('ログイン中にエラーが発生しました。もう一度お試しください。');
       setLoading(false);
     }
@@ -125,20 +127,20 @@ export default function LoginScreen() {
         // Web環境では、リダイレクト後にonAuthStateChangeが自動的に発火する
       } else {
         // iOS/Android のときは必ず signInWithGoogleExpoGo() を呼ぶ
-        console.log('[Login] signInWithGoogleExpoGo 呼び出し', { platform: Platform.OS });
+        debugLog('[Login] signInWithGoogleExpoGo 呼び出し', { platform: Platform.OS });
         const { session, url } = await signInWithGoogleExpoGo();
-        console.log('[Login] signInWithGoogleExpoGo 完了', { hasSession: !!session, hasUrl: !!url, platform: Platform.OS });
+        debugLog('[Login] signInWithGoogleExpoGo 完了', { hasSession: !!session, hasUrl: !!url, platform: Platform.OS });
         // 認証成功時は、AuthContextのonAuthStateChangeが自動的に処理するため
         // ここでは何もしない
         // セッションが取得できた場合は、onAuthStateChangeが発火するのを待つ
         if (session) {
-          console.log('[Login] セッション取得済み、onAuthStateChangeを待機中...', { platform: Platform.OS });
+          debugLog('[Login] セッション取得済み、onAuthStateChangeを待機中...', { platform: Platform.OS });
           // セッションが確立されるまで少し待つ
           await new Promise(resolve => setTimeout(resolve, 500));
         } else {
-          console.log('[Login] セッションが取得できませんでした、callback.tsxでの処理を待ちます', { platform: Platform.OS });
+          debugLog('[Login] セッションが取得できませんでした、callback.tsxでの処理を待ちます', { platform: Platform.OS });
           if (url) {
-            console.log('[Login] callback 画面へ遷移', { platform: Platform.OS });
+            debugLog('[Login] callback 画面へ遷移', { platform: Platform.OS });
             router.replace({
               pathname: '/(auth)/callback',
               params: { url: encodeURIComponent(url) },
@@ -147,7 +149,7 @@ export default function LoginScreen() {
         }
       }
     } catch (googleError: any) {
-      console.error('[Google認証] エラー:', googleError);
+      console.error('[Google認証] エラー');
       setError('Google認証に失敗しました。もう一度お試しください。');
     } finally {
       setGoogleLoading(false);
@@ -175,14 +177,6 @@ export default function LoginScreen() {
           </View>
           <Text style={styles.title}>テストアルバム</Text>
           <Text style={styles.subtitle}>写真でかんたん、テスト記録アプリ</Text>
-          {lastLoginMethod ? (
-            <Text style={styles.lastLoginText}>前回のログイン: {lastLoginMethod}</Text>
-          ) : null}
-          {!enableGoogleAuth ? (
-            <Text style={styles.googleNoticeText}>
-              Googleログインは現在調整中です。メールでログインしてください。
-            </Text>
-          ) : null}
         </View>
 
         <View style={styles.form}>

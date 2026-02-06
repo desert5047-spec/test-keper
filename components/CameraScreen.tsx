@@ -11,6 +11,12 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { X, RotateCw } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
 interface CameraScreenProps {
   onCapture: (uri: string) => void;
   onCancel: () => void;
@@ -56,7 +62,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
 
     try {
       setIsCapturing(true);
-      console.log('[CameraScreen] 写真を撮影中...', { platform: Platform.OS });
+      debugLog('[CameraScreen] 写真を撮影中...', { platform: Platform.OS });
       
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
@@ -64,8 +70,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         skipProcessing: false,
       });
 
-      console.log('[CameraScreen] 写真撮影成功:', { 
-        uri: photo.uri?.substring(0, 50),
+      debugLog('[CameraScreen] 写真撮影成功', { 
         width: photo.width,
         height: photo.height,
         platform: Platform.OS 
@@ -77,7 +82,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         throw new Error('写真のURIが取得できませんでした');
       }
     } catch (error: any) {
-      console.error('[CameraScreen] 撮影エラー:', error);
+      console.error('[CameraScreen] 撮影エラー');
       // エラーは親コンポーネントで処理
     } finally {
       setIsCapturing(false);

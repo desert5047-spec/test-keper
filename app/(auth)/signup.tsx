@@ -38,16 +38,18 @@ export default function SignupScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const enableGoogleAuth = process.env.EXPO_PUBLIC_ENABLE_GOOGLE_AUTH === 'true';
   const lpBaseUrl = process.env.EXPO_PUBLIC_LP_URL ?? 'https://example.com';
+  const privacyPolicyUrl = 'https://www.test-album.jp/privacy';
+  const termsUrl = 'https://www.test-album.jp/terms';
   const pendingConsentKey = 'pendingConsent';
 
   const openExternalLink = (path: '/terms' | '/privacy') => {
-    const url = `${lpBaseUrl}${path}`;
+    const url = path === '/privacy' ? privacyPolicyUrl : termsUrl;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
     Linking.openURL(url).catch((error) => {
-      console.warn('[Signup] 外部リンクを開けませんでした:', error);
+      console.warn('[Signup] 外部リンクを開けませんでした');
     });
   };
 
@@ -62,7 +64,7 @@ export default function SignupScreen() {
       };
       await AsyncStorage.setItem(pendingConsentKey, JSON.stringify(payload));
     } catch (error) {
-      console.warn('[Signup] 同意情報の保存に失敗:', error);
+      console.warn('[Signup] 同意情報の保存に失敗');
     }
   };
 
@@ -97,7 +99,7 @@ export default function SignupScreen() {
     });
 
     if (signUpError) {
-      console.error('[Signup] 登録エラー:', signUpError);
+      console.error('[Signup] 登録エラー');
       if (signUpError.message?.toLowerCase().includes('already registered')) {
         setError('既に登録されています。ログインをお試しください。');
       } else {
@@ -149,7 +151,7 @@ export default function SignupScreen() {
         // ここでは何もしない
       }
     } catch (googleError: any) {
-      console.error('[Google認証] エラー:', googleError);
+      console.error('[Google認証] エラー');
       setError('Google認証に失敗しました。もう一度お試しください。');
     } finally {
       setGoogleLoading(false);

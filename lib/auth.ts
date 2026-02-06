@@ -5,6 +5,12 @@ import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
 import { Alert, Platform } from "react-native";
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
 export async function signInWithGoogleExpoGo() {
   try {
     // この関数は iOS/Android 専用（Web では呼ばれない）
@@ -18,9 +24,9 @@ export async function signInWithGoogleExpoGo() {
       path: "callback",
     });
 
-    console.log("[Google認証] redirectUri:", redirectUri);
-    console.log("[Google認証] Platform.OS:", Platform.OS);
-    console.log("[Google認証] Constants.appOwnership:", Constants.appOwnership);
+    debugLog("[Google認証] redirectUri:", redirectUri);
+    debugLog("[Google認証] Platform.OS:", Platform.OS);
+    debugLog("[Google認証] Constants.appOwnership:", Constants.appOwnership);
 
     // ✅ Supabase にも「この redirectUri へ戻して」と明示する
     // skipBrowserRedirect: true を指定（モバイル専用）
@@ -33,7 +39,7 @@ export async function signInWithGoogleExpoGo() {
     });
 
     if (error) {
-      console.error("[Google認証] Supabase OAuth エラー:", error);
+      console.error("[Google認証] Supabase OAuth エラー");
       Alert.alert("認証エラー", "Google認証の開始に失敗しました。もう一度お試しください。");
       return { session: null, url: null };
     }
@@ -45,19 +51,18 @@ export async function signInWithGoogleExpoGo() {
     }
 
     // ✅ WebBrowser.openAuthSessionAsync を使用（AuthSession.startAsync の代替）
-    console.log("[Google認証] OAuth URLを開きます:", data.url);
-    console.log("[Google認証] リダイレクトURI:", redirectUri);
+    debugLog("[Google認証] OAuth URLを開きます");
+    debugLog("[Google認証] リダイレクトURI:", redirectUri);
     
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
 
-    console.log("[Google認証] WebBrowser.openAuthSessionAsync結果:", {
+    debugLog("[Google認証] WebBrowser.openAuthSessionAsync結果:", {
       type: result.type,
-      url: result.type === "success" ? result.url : undefined,
     });
 
     // cancel の場合はユーザーキャンセルとして扱い、アラートに出すだけにしてクラッシュさせない
     if (result.type === "cancel") {
-      console.log("[Google認証] ユーザーがキャンセルしました");
+      debugLog("[Google認証] ユーザーがキャンセルしました");
       Alert.alert("認証がキャンセルされました", "Google認証がキャンセルされました。もう一度お試しください。");
       return { session: null, url: null };
     }
@@ -70,14 +75,14 @@ export async function signInWithGoogleExpoGo() {
       }
       const openCallbackUrl = async (reason: string) => {
         try {
-          console.log("[Google認証] callback URL を開いて処理を委譲します", { reason });
+          debugLog("[Google認証] callback URL を開いて処理を委譲します", { reason });
           await Linking.openURL(result.url);
         } catch (openError: any) {
-          console.warn("[Google認証] callback URL を開けませんでした:", openError);
+          console.warn("[Google認証] callback URL を開けませんでした");
         }
       };
       try {
-        console.log("[Google認証] openAuthSessionAsync成功、URL:", result.url);
+        debugLog("[Google認証] openAuthSessionAsync成功");
         
         // URL文字列から直接ハッシュフラグメントを抽出（Linking.parseがexp://スキームのハッシュを正しくパースしない場合があるため）
         let accessToken: string | null = null;
@@ -92,7 +97,7 @@ export async function signInWithGoogleExpoGo() {
           accessToken = hashParams.get('access_token');
           refreshToken = hashParams.get('refresh_token');
           code = hashParams.get('code');
-          console.log("[Google認証] ハッシュフラグメントから抽出:", { 
+          debugLog("[Google認証] ハッシュフラグメントから抽出:", { 
             hasAccessToken: !!accessToken, 
             hasRefreshToken: !!refreshToken, 
             hasCode: !!code 
@@ -109,7 +114,7 @@ export async function signInWithGoogleExpoGo() {
           refreshToken = queryParams.refresh_token as string | undefined || hashParamsFromParse?.get('refresh_token') || null;
           code = queryParams.code as string | undefined || hashParamsFromParse?.get('code') || null;
           
-          console.log("[Google認証] Linking.parseから抽出:", { 
+          debugLog("[Google認証] Linking.parseから抽出:", { 
             hasAccessToken: !!accessToken, 
             hasRefreshToken: !!refreshToken, 
             hasCode: !!code,
@@ -118,38 +123,31 @@ export async function signInWithGoogleExpoGo() {
           });
         }
         
-        console.log("[Google認証] 最終的な抽出結果:", { 
+        debugLog("[Google認証] 最終的な抽出結果:", { 
           hasAccessToken: !!accessToken, 
           hasRefreshToken: !!refreshToken, 
           hasCode: !!code,
           accessTokenLength: accessToken?.length ?? 0,
           refreshTokenLength: refreshToken?.length ?? 0,
-          accessTokenValue: accessToken ? `${accessToken.substring(0, 20)}...` : null,
-          refreshTokenValue: refreshToken ? `${refreshToken.substring(0, 20)}...` : null,
         });
         
         // トークンが取得できたか確認
         if (!accessToken || !refreshToken) {
-          console.warn("[Google認証] トークンが不完全:", { 
-            hasAccessToken: !!accessToken, 
-            hasRefreshToken: !!refreshToken,
-            accessTokenLength: accessToken?.length ?? 0,
-            refreshTokenLength: refreshToken?.length ?? 0,
-          });
+          console.warn("[Google認証] トークンが不完全");
           // トークンが不完全な場合は、callback.tsxで処理される可能性があるため、nullを返す
-          console.log("[Google認証] callback.tsxでの処理を待ちます");
+          debugLog("[Google認証] callback.tsxでの処理を待ちます");
           await openCallbackUrl("token_incomplete");
           return { session: null, url: result.url };
         }
 
         // code がある場合は、exchangeCodeForSession を使用
         if (code) {
-          console.log("[Google認証] 認可コードを検出、セッション交換中...");
+          debugLog("[Google認証] 認可コードを検出、セッション交換中...");
           try {
             const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
 
             if (sessionError) {
-              console.error("[Google認証] exchangeCodeForSessionエラー:", sessionError);
+              console.error("[Google認証] exchangeCodeForSessionエラー");
               // エラーをログに記録するが、フォールバック処理に進む
               // callback.tsx で処理される可能性があるため、ここではエラーを投げない
               console.warn("[Google認証] セッション交換失敗、callback.tsxでの処理を待ちます");
@@ -157,11 +155,11 @@ export async function signInWithGoogleExpoGo() {
               await openCallbackUrl("exchange_failed");
               return { session: null, url: result.url };
             } else {
-              console.log("[Google認証] セッション交換成功:", { userId: sessionData?.session?.user?.id });
+              debugLog("[Google認証] セッション交換成功");
               return { session: sessionData?.session || null, url: result.url };
             }
           } catch (exchangeError: any) {
-            console.error("[Google認証] exchangeCodeForSession例外:", exchangeError);
+            console.error("[Google認証] exchangeCodeForSession例外");
             // callback.tsx で処理される可能性があるため、エラーを投げない
             console.warn("[Google認証] セッション交換例外、callback.tsxでの処理を待ちます");
             await openCallbackUrl("exchange_exception");
@@ -170,7 +168,7 @@ export async function signInWithGoogleExpoGo() {
         }
 
         // access_token と refresh_token がある場合は callback.tsx に処理を委譲（ネイティブ）
-        console.log("[Google認証] セッション設定チェック", { 
+        debugLog("[Google認証] セッション設定チェック", { 
           hasAccessToken: !!accessToken, 
           hasRefreshToken: !!refreshToken,
           accessTokenType: typeof accessToken,
@@ -178,16 +176,14 @@ export async function signInWithGoogleExpoGo() {
         });
         if (accessToken && refreshToken) {
           if (Platform.OS !== 'web') {
-            console.log("[Google認証] ネイティブはcallbackに委譲", { platform: Platform.OS });
+            debugLog("[Google認証] ネイティブはcallbackに委譲", { platform: Platform.OS });
             await openCallbackUrl("handoff_native_callback");
             return { session: null, url: result.url };
           }
 
-          console.log("[Google認証] セッション設定開始", { 
+          debugLog("[Google認証] セッション設定開始", { 
             hasAccessToken: !!accessToken, 
             hasRefreshToken: !!refreshToken,
-            accessTokenPrefix: accessToken.substring(0, 20),
-            refreshTokenPrefix: refreshToken.substring(0, 20),
           });
           try {
             const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -229,11 +225,11 @@ export async function signInWithGoogleExpoGo() {
             ]) as { data: any; error: any } | null;
 
             if (setSessionResult === null) {
-              console.warn("[Google認証] setSessionタイムアウト、セッションを確認中...", { timeoutMs });
+              console.warn("[Google認証] setSessionタイムアウト、セッションを確認中...");
               await waitForAuthEvent(20000);
               const timeoutSession = await getSessionWithRetry(20, 1000);
               if (timeoutSession?.user) {
-                console.log("[Google認証] タイムアウト後: セッション確認成功", { userId: timeoutSession.user.id });
+                debugLog("[Google認証] タイムアウト後: セッション確認成功");
                 return timeoutSession;
               }
               console.warn("[Google認証] タイムアウト後もセッション未確立、callback.tsxでの処理を待ちます");
@@ -244,35 +240,35 @@ export async function signInWithGoogleExpoGo() {
             const { data: sessionData, error: sessionError } = setSessionResult;
 
             if (sessionError) {
-              console.error("[Google認証] セッション設定エラー:", sessionError);
+              console.error("[Google認証] セッション設定エラー");
               // エラー時もセッションを確認してみる
               const fallbackSession = await getSessionWithRetry(8, 800);
               if (fallbackSession?.user) {
-                console.log("[Google認証] フォールバック: セッション確認成功", { userId: fallbackSession.user.id });
+                debugLog("[Google認証] フォールバック: セッション確認成功");
                 return { session: fallbackSession, url: result.url };
               }
               Alert.alert("認証エラー", "セッションの設定に失敗しました。もう一度お試しください。");
               return { session: null, url: result.url };
             }
 
-            console.log("[Google認証] セッション設定成功:", { userId: sessionData?.user?.id });
+            debugLog("[Google認証] セッション設定成功");
             // セッションが確立されるまで少し待つ
             await new Promise(resolve => setTimeout(resolve, 300));
             // onAuthStateChangeが発火するのを待つ
-            console.log("[Google認証] セッション設定完了、onAuthStateChangeを待機中...");
+            debugLog("[Google認証] セッション設定完了、onAuthStateChangeを待機中...");
             // セッションが確立されたことを確認
             const { data: { session: verifiedSession } } = await supabase.auth.getSession();
             if (verifiedSession?.user) {
-              console.log("[Google認証] セッション確認成功:", { userId: verifiedSession.user.id });
+              debugLog("[Google認証] セッション確認成功");
               return { session: verifiedSession, url: result.url };
             } else {
               console.warn("[Google認証] セッション確認失敗、callback.tsxでの処理を待ちます");
-              console.log("[Google認証] callback.tsxでの処理を待機中...");
+              debugLog("[Google認証] callback.tsxでの処理を待機中...");
               await openCallbackUrl("session_verify_failed");
               return { session: null, url: result.url };
             }
           } catch (setSessionError: any) {
-            console.error("[Google認証] セッション設定例外:", setSessionError);
+            console.error("[Google認証] セッション設定例外");
             Alert.alert("認証エラー", "セッションの設定中にエラーが発生しました。もう一度お試しください。");
             return { session: null, url: result.url };
           }
@@ -281,25 +277,23 @@ export async function signInWithGoogleExpoGo() {
         // トークンもコードも取得できない場合
         // callback.tsx で処理される可能性があるため、エラーを表示しない
         console.warn("[Google認証] トークンもコードも取得できませんでした");
-        console.log("[Google認証] URL全体:", result.url);
-        console.log("[Google認証] callback.tsxでの処理を待ちます");
+        debugLog("[Google認証] callback.tsxでの処理を待ちます");
         await openCallbackUrl("no_tokens");
         return { session: null, url: result.url };
       } catch (parseError: any) {
-        console.error("[Google認証] 処理エラー:", parseError);
-        console.error("[Google認証] エラー詳細:", parseError.message);
+        console.error("[Google認証] 処理エラー");
         Alert.alert("認証エラー", "認証情報の処理に失敗しました。もう一度お試しください。");
         return { session: null, url: result.url };
       }
     }
 
     // その他のエラー（dismiss, error など）
-    console.error("[Google認証] 予期しない結果:", result.type);
+    console.error("[Google認証] 予期しない結果");
     Alert.alert("認証エラー", "認証が完了できませんでした。もう一度お試しください。");
     return { session: null, url: null };
   } catch (error: any) {
     // 予期しないエラーをキャッチしてクラッシュを防ぐ
-    console.error("[Google認証] 予期しないエラー:", error);
+    console.error("[Google認証] 予期しないエラー");
     Alert.alert("認証エラー", "予期しないエラーが発生しました。もう一度お試しください。");
     return { session: null, url: null };
   }

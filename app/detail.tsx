@@ -25,7 +25,7 @@ import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
-import { uploadImage, deleteImage } from '@/utils/imageUpload';
+import { uploadImage, deleteImage, getSignedImageUrl } from '@/utils/imageUpload';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
 
@@ -43,6 +43,9 @@ export default function DetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [scoreError, setScoreError] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [panEnabled, setPanEnabled] = useState(false);
+  const [resolvedRecordPhotoUrl, setResolvedRecordPhotoUrl] = useState<string | null>(null);
+  const [resolvedEditPhotoUrl, setResolvedEditPhotoUrl] = useState<string | null>(null);
 
   const baseScale = useRef(new Animated.Value(1)).current;
   const pinchScale = useRef(new Animated.Value(1)).current;
@@ -66,6 +69,7 @@ export default function DetailScreen() {
       lastScaleRef.current = clampedScale;
       baseScale.setValue(clampedScale);
       pinchScale.setValue(1);
+      setPanEnabled(clampedScale > 1);
     }
   };
 
@@ -96,6 +100,7 @@ export default function DetailScreen() {
       baseTranslateY.setValue(0);
       translateX.setValue(0);
       translateY.setValue(0);
+      setPanEnabled(false);
     }
   }, [showImageModal, baseScale, pinchScale, baseTranslateX, baseTranslateY, translateX, translateY]);
 
@@ -117,6 +122,22 @@ export default function DetailScreen() {
   const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 
   useEffect(() => {
+    const resolveEditPhoto = async () => {
+      if (!photoUri) {
+        setResolvedEditPhotoUrl(null);
+        return;
+      }
+      if (isValidImageUri(photoUri)) {
+        setResolvedEditPhotoUrl(null);
+        return;
+      }
+      const resolved = await getSignedImageUrl(photoUri);
+      setResolvedEditPhotoUrl(resolved);
+    };
+    resolveEditPhoto();
+  }, [photoUri]);
+
+  useEffect(() => {
     if (params.id && isFamilyReady && familyId) {
       loadRecord(params.id as string);
     }
@@ -134,6 +155,8 @@ export default function DetailScreen() {
     if (data) {
       setRecord(data);
       initializeEditForm(data);
+      const resolved = await getSignedImageUrl(data.photo_uri);
+      setResolvedRecordPhotoUrl(resolved);
     }
     setLoading(false);
   };
@@ -348,7 +371,7 @@ export default function DetailScreen() {
       return;
     }
 
-    if (photoUri) {
+    if (photoUri && isValidImageUri(photoUri)) {
       try {
         validateImageUri(photoUri);
         if (!isValidImageUri(photoUri)) {
@@ -364,7 +387,7 @@ export default function DetailScreen() {
     setIsSaving(true);
 
     try {
-      let uploadedImageUrl: string | null = photoUri;
+      let uploadedImagePath: string | null = photoUri;
 
       if (photoUri && photoUri !== record.photo_uri) {
         if (!photoUri.startsWith('http')) {
@@ -374,13 +397,14 @@ export default function DetailScreen() {
               setIsSaving(false);
               return;
             }
-            uploadedImageUrl = await uploadImage(photoUri, user.id);
+            uploadedImagePath = await uploadImage(photoUri, user.id);
 
             if (record.photo_uri) {
               await deleteImage(record.photo_uri);
             }
           } catch (uploadError: any) {
-            Alert.alert('エラー', uploadError.message || '画像のアップロードに失敗しました');
+            console.error('[記録更新] 画像アップロードエラー');
+            Alert.alert('エラー', '画像のアップロードに失敗しました');
             setIsSaving(false);
             return;
           }
@@ -396,7 +420,7 @@ export default function DetailScreen() {
           max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
           stamp: evaluationType === 'stamp' ? stamp : null,
           memo: memo.trim() || null,
-          photo_uri: uploadedImageUrl,
+          photo_uri: uploadedImagePath,
           photo_rotation: 0,
         })
         .eq('id', record.id)
@@ -408,7 +432,8 @@ export default function DetailScreen() {
       setEditMode(false);
       Alert.alert('成功', '記録を更新しました');
     } catch (error: any) {
-      Alert.alert('エラー', error.message || '保存に失敗しました');
+      console.error('[記録更新] 保存エラー');
+      Alert.alert('エラー', '保存に失敗しました');
     } finally {
       setIsSaving(false);
     }
@@ -483,6 +508,11 @@ export default function DetailScreen() {
     return colors[subject] || '#95A5A6';
   };
 
+  const recordPhotoDisplayUri =
+    resolvedRecordPhotoUrl || (record?.photo_uri && isValidImageUri(record.photo_uri) ? record.photo_uri : null);
+  const editPhotoDisplayUri =
+    photoUri && isValidImageUri(photoUri) ? photoUri : resolvedEditPhotoUrl;
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -530,11 +560,15 @@ export default function DetailScreen() {
                   <X size={20} color="#fff" />
                 </TouchableOpacity>
                 <View style={styles.photoWrapper}>
-                  <Image
-                    source={{ uri: photoUri }}
-                    style={styles.photo}
-                    resizeMode="contain"
-                  />
+                  {editPhotoDisplayUri ? (
+                    <Image
+                      source={{ uri: editPhotoDisplayUri }}
+                      style={styles.photo}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <ActivityIndicator size="large" color="#4A90E2" />
+                  )}
                 </View>
                 {isProcessingImage && (
                   <View style={styles.processingOverlay}>
@@ -887,14 +921,14 @@ export default function DetailScreen() {
           style={styles.scrollView}
           contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
           showsVerticalScrollIndicator={false}>
-          {record.photo_uri && isValidImageUri(record.photo_uri) && (
+          {recordPhotoDisplayUri && (
             <TouchableOpacity
               onPress={() => setShowImageModal(true)}
               activeOpacity={0.9}
               style={styles.imageContainer}>
               <View style={styles.imageWrapper}>
                 <Image
-                  source={{ uri: record.photo_uri }}
+                  source={{ uri: recordPhotoDisplayUri }}
                   style={styles.image}
                   resizeMode="contain"
                 />
@@ -993,17 +1027,21 @@ export default function DetailScreen() {
               activeOpacity={0.7}>
               <X size={28} color="#fff" />
             </TouchableOpacity>
-            {record.photo_uri && isValidImageUri(record.photo_uri) && (
+          {recordPhotoDisplayUri && (
               <View style={styles.modalImageWrapper}>
                 <PanGestureHandler
                   ref={panRef}
+                  enabled={panEnabled}
                   simultaneousHandlers={pinchRef}
+                  waitFor={pinchRef}
                   onGestureEvent={onPanEvent}
                   onHandlerStateChange={onPanStateChange}>
                   <Animated.View style={styles.pinchWrapper}>
                     <PinchGestureHandler
                       ref={pinchRef}
                       simultaneousHandlers={panRef}
+                      minPointers={2}
+                      maxPointers={2}
                       onGestureEvent={onPinchEvent}
                       onHandlerStateChange={onPinchStateChange}>
                       <Animated.View
@@ -1018,7 +1056,7 @@ export default function DetailScreen() {
                           },
                         ]}>
                         <Image
-                          source={{ uri: record.photo_uri }}
+                          source={{ uri: recordPhotoDisplayUri }}
                           style={styles.modalImage}
                           resizeMode="contain"
                         />

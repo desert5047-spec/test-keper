@@ -16,6 +16,7 @@ import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
+import { getSignedImageUrl } from '@/utils/imageUpload';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 
 interface Section {
@@ -30,6 +31,7 @@ export default function ListScreen() {
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
   const [sections, setSections] = useState<Section[]>([]);
+  const [resolvedImageUrls, setResolvedImageUrls] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     if (params.year && params.month) {
@@ -82,10 +84,41 @@ export default function ListScreen() {
         }));
 
       setSections(sectionsData);
+      setResolvedImageUrls({});
     } else {
       setSections([]);
+      setResolvedImageUrls({});
     }
   };
+
+  useEffect(() => {
+    const loadResolvedImageUrls = async () => {
+      const allRecords = sections.flatMap((section) => section.data);
+      const targets = allRecords.filter((record) => record.photo_uri && !resolvedImageUrls[record.id]);
+      if (targets.length === 0) return;
+
+      const entries = await Promise.all(
+        targets.map(async (record) => {
+          const resolved = await getSignedImageUrl(record.photo_uri);
+          return [record.id, resolved];
+        })
+      );
+
+      const nextMap: { [key: string]: string } = {};
+      entries.forEach(([id, url]) => {
+        if (typeof id === 'string' && url) {
+          nextMap[id] = url;
+        }
+      });
+      if (Object.keys(nextMap).length > 0) {
+        setResolvedImageUrls((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    if (sections.length > 0) {
+      loadResolvedImageUrls();
+    }
+  }, [sections, resolvedImageUrls]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -116,10 +149,11 @@ export default function ListScreen() {
 
   const renderItem = (item: TestRecord) => {
     const subjectColor = getSubjectColor(item.subject);
-    const hasPhoto = !!item.photo_uri && isValidImageUri(item.photo_uri);
+    const resolvedUrl = resolvedImageUrls[item.id];
+    const hasPhoto = !!resolvedUrl && isValidImageUri(resolvedUrl);
 
-    if (item.photo_uri && !isValidImageUri(item.photo_uri)) {
-      console.warn('[画像警告] 無効な画像URIが検出されました:', item.photo_uri);
+    if (item.photo_uri && resolvedUrl && !isValidImageUri(resolvedUrl)) {
+      console.warn('[画像警告] 無効な画像URIが検出されました');
     }
 
     return (
@@ -137,13 +171,17 @@ export default function ListScreen() {
                 },
               ]}>
               <Image
-                source={{ uri: item.photo_uri! }}
+                source={{ uri: resolvedUrl! }}
                 style={styles.thumbnail}
                 resizeMode="contain"
               />
             </View>
+          ) : item.photo_uri ? (
+            <ActivityIndicator size="small" color="#999" />
           ) : (
-            <View style={styles.placeholderThumbnail} />
+            <View style={styles.placeholderThumbnail}>
+              <Text style={styles.placeholderText}>なし</Text>
+            </View>
           )}
         </View>
         <View style={styles.recordContent}>
@@ -278,6 +316,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#e8e8e8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#999',
   },
   recordContent: {
     flex: 1,

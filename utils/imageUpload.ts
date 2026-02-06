@@ -3,6 +3,67 @@ import { Platform } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 
+const STORAGE_BUCKET = 'test-images';
+const SIGNED_URL_EXPIRES_IN = 60 * 60;
+
+const isHttpUrl = (value: string) => value.startsWith('http://') || value.startsWith('https://');
+
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
+export const getStoragePathFromUrl = (url: string): string | null => {
+  try {
+    if (!isHttpUrl(url)) return null;
+    const marker = '/storage/v1/object/';
+    const index = url.indexOf(marker);
+    if (index === -1) return null;
+    const after = url.substring(index + marker.length);
+    const parts = after.split('/');
+    if (parts[0] === 'public') {
+      parts.shift();
+    }
+    const bucket = parts.shift();
+    if (!bucket || bucket !== STORAGE_BUCKET) return null;
+    const path = parts.join('/');
+    return path ? path : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getSignedImageUrl = async (
+  uriOrPath: string | null,
+  expiresIn = SIGNED_URL_EXPIRES_IN
+): Promise<string | null> => {
+  if (!uriOrPath) return null;
+  if (isHttpUrl(uriOrPath)) {
+    const storagePath = getStoragePathFromUrl(uriOrPath);
+    if (!storagePath) {
+      return uriOrPath;
+    }
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(storagePath, expiresIn);
+    if (error || !data?.signedUrl) {
+      console.warn('[画像URL] 署名付きURL取得失敗');
+      return uriOrPath;
+    }
+    return data.signedUrl;
+  }
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(uriOrPath, expiresIn);
+  if (error || !data?.signedUrl) {
+    console.warn('[画像URL] 署名付きURL取得失敗');
+    return null;
+  }
+  return data.signedUrl;
+};
+
 const convertBlobToArrayBuffer = async (blob: Blob): Promise<ArrayBuffer> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -108,9 +169,7 @@ const base64ToUint8Array = (base64: string): Uint8Array => {
     
     return result;
   } catch (error: any) {
-    console.error('[base64ToUint8Array] エラー:', error);
-    console.error('[base64ToUint8Array] base64長さ:', base64?.length);
-    console.error('[base64ToUint8Array] Platform:', Platform.OS);
+    console.error('[base64ToUint8Array] エラー');
     throw new Error(`base64デコードに失敗しました: ${error.message || '不明なエラー'}`);
   }
 };
@@ -210,7 +269,7 @@ const compressImage = async (imageUri: string): Promise<string> => {
 
       return result.uri;
     } catch (error: any) {
-      console.error('[画像圧縮エラー]', error);
+      console.error('[画像圧縮エラー]');
       // 圧縮に失敗した場合は元のURIを返す
       return imageUri;
     }
@@ -221,10 +280,8 @@ export const uploadImage = async (
   imageUri: string,
   userId: string
 ): Promise<string> => {
-  console.log('[画像アップロード開始]', {
+  debugLog('[画像アップロード開始]', {
     platform: Platform.OS,
-    uriPrefix: imageUri?.substring?.(0, 50) || 'N/A',
-    userId,
   });
 
   if (!imageUri || imageUri.trim() === '') {
@@ -239,18 +296,18 @@ export const uploadImage = async (
 
   try {
     // 画像を圧縮（JPEG形式、長辺1600px、圧縮率0.5）
-    console.log('[画像圧縮開始]');
+    debugLog('[画像圧縮開始]');
     try {
       compressedUri = await compressImage(imageUri);
       if (!compressedUri || compressedUri.trim() === '') {
         throw new Error('圧縮後のURIが空です');
       }
-      console.log('[画像圧縮完了]', { compressedUri: compressedUri.substring(0, 50) });
+      debugLog('[画像圧縮完了]');
     } catch (compressError: any) {
-      console.error('[画像圧縮エラー]', compressError);
+      console.error('[画像圧縮エラー]');
       // 圧縮に失敗した場合は元のURIを使用
       compressedUri = imageUri;
-      console.log('[画像圧縮] 元のURIを使用:', compressedUri.substring(0, 50));
+      debugLog('[画像圧縮] 元のURIを使用');
     }
 
     if (!compressedUri || compressedUri.trim() === '') {
@@ -262,12 +319,12 @@ export const uploadImage = async (
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${userId}/${fileName}`;
 
-    console.log('[ファイル情報]', { fileName, filePath, fileExt });
+    debugLog('[ファイル情報]', { fileName, fileExt });
 
     let bytes: Uint8Array;
 
     if (Platform.OS === 'web') {
-      console.log('[Web] blobとして画像を読み込み中...');
+      debugLog('[Web] blobとして画像を読み込み中...');
       try {
         const response = await fetch(compressedUri);
 
@@ -276,18 +333,18 @@ export const uploadImage = async (
         }
 
         const blob = await response.blob();
-        console.log('[Web] blob取得成功', { size: blob.size, type: blob.type });
+        debugLog('[Web] blob取得成功', { size: blob.size, type: blob.type });
 
         const arrayBuffer = await convertBlobToArrayBuffer(blob);
         bytes = new Uint8Array(arrayBuffer);
-        console.log('[Web] ArrayBuffer変換成功', { byteLength: bytes.length });
+        debugLog('[Web] ArrayBuffer変換成功', { byteLength: bytes.length });
       } catch (error: any) {
-        console.error('[Web] fetchエラー、フォールバック処理:', error);
+        console.error('[Web] fetchエラー、フォールバック処理');
         throw new Error(`画像の読み込みに失敗しました: ${error.message}`);
       }
     } else {
       // Native環境（Android/iOS Expo Go含む）
-      console.log('[Native] 画像を読み込み中...', { uri: compressedUri.substring(0, 50) });
+      debugLog('[Native] 画像を読み込み中...');
       
       // Expo Goではfetchがfile://スキームで失敗する可能性があるため、FileSystemを優先
       let readSuccess = false;
@@ -297,7 +354,7 @@ export const uploadImage = async (
       
       // まずFileSystemを試す（Expo Goでより確実）
       try {
-        console.log('[Native] FileSystemで読み込みを試行...', { 
+        debugLog('[Native] FileSystemで読み込みを試行...', { 
           uri: compressedUri?.substring?.(0, 50) || 'N/A',
           platform: Platform.OS 
         });
@@ -317,7 +374,7 @@ export const uploadImage = async (
           throw new Error('base64データが空です');
         }
         
-        console.log('[Native] FileSystemでbase64取得成功', { 
+        debugLog('[Native] FileSystemでbase64取得成功', { 
           length: base64.length,
           platform: Platform.OS 
         });
@@ -331,7 +388,7 @@ export const uploadImage = async (
           
           bytes = await Promise.race([decodePromise, decodeTimeoutPromise]);
           
-          console.log('[Native] base64からUint8Array変換成功', { 
+          debugLog('[Native] base64からUint8Array変換成功', { 
             byteLength: bytes.length,
             platform: Platform.OS 
           });
@@ -342,18 +399,12 @@ export const uploadImage = async (
           
           readSuccess = true;
         } catch (decodeError: any) {
-          console.error('[Native] base64デコードエラー:', decodeError);
-          console.error('[Native] base64デコードエラー詳細:', {
-            message: decodeError?.message,
-            stack: decodeError?.stack,
-            name: decodeError?.name,
-            platform: Platform.OS,
-          });
+          console.error('[Native] base64デコードエラー');
           lastError = new Error(`base64デコードに失敗しました: ${decodeError.message || '不明なエラー'}`);
           throw lastError;
         }
       } catch (fileSystemError: any) {
-        console.log('[Native] FileSystem読み込み失敗、fetchを試行:', {
+        debugLog('[Native] FileSystem読み込み失敗、fetchを試行:', {
           message: fileSystemError?.message,
           platform: Platform.OS,
         });
@@ -361,7 +412,7 @@ export const uploadImage = async (
         
         // FileSystemが失敗した場合、fetchを試す（フォールバック）
         try {
-          console.log('[Native] fetchで読み込みを試行...', { platform: Platform.OS });
+          debugLog('[Native] fetchで読み込みを試行...', { platform: Platform.OS });
           
           const fetchPromise = fetch(compressedUri);
           const fetchTimeoutPromise = new Promise<never>((_, reject) => {
@@ -376,7 +427,7 @@ export const uploadImage = async (
           
           const arrayBuffer = await response.arrayBuffer();
           bytes = new Uint8Array(arrayBuffer);
-          console.log('[Native] fetchで取得成功', { 
+          debugLog('[Native] fetchで取得成功', { 
             byteLength: bytes.length,
             platform: Platform.OS 
           });
@@ -388,12 +439,7 @@ export const uploadImage = async (
           readSuccess = true;
           lastError = null; // 成功したのでエラーをクリア
         } catch (fetchError: any) {
-          console.error('[Native] fetchも失敗:', {
-            message: fetchError?.message,
-            stack: fetchError?.stack,
-            name: fetchError?.name,
-            platform: Platform.OS,
-          });
+          console.error('[Native] fetchも失敗');
           lastError = fetchError;
           throw new Error(`画像の読み込みに失敗しました: ${fileSystemError?.message || fetchError?.message || '不明なエラー'}`);
         }
@@ -405,8 +451,7 @@ export const uploadImage = async (
       }
     }
 
-    console.log('[Supabase] ストレージへアップロード中...', { 
-      filePath, 
+    debugLog('[Supabase] ストレージへアップロード中...', { 
       byteLength: bytes.length,
       platform: Platform.OS 
     });
@@ -414,7 +459,7 @@ export const uploadImage = async (
     try {
       // アップロード処理にタイムアウトを設定（120秒）
       const uploadPromise = supabase.storage
-        .from('test-images')
+        .from(STORAGE_BUCKET)
         .upload(filePath, bytes, {
           contentType: 'image/jpeg',
           upsert: false,
@@ -427,13 +472,7 @@ export const uploadImage = async (
       const { data, error } = await Promise.race([uploadPromise, uploadTimeoutPromise]);
 
       if (error) {
-        console.error('[Supabase] アップロードエラー', error);
-        console.error('[Supabase] アップロードエラー詳細:', {
-          message: error.message,
-          statusCode: error.statusCode,
-          error: error.error,
-          platform: Platform.OS,
-        });
+        console.error('[Supabase] アップロードエラー');
         throw new Error(`アップロードエラー: ${error.message || '不明なエラー'}`);
       }
 
@@ -441,53 +480,27 @@ export const uploadImage = async (
         throw new Error('アップロードデータが取得できませんでした');
       }
 
-      console.log('[Supabase] アップロード成功', { 
-        path: data.path,
+      debugLog('[Supabase] アップロード成功', { 
         platform: Platform.OS 
       });
 
       // 公開URLの取得
-      const { data: urlData } = supabase.storage
-        .from('test-images')
-        .getPublicUrl(filePath);
-
-      if (!urlData || !urlData.publicUrl) {
-        throw new Error('公開URLの取得に失敗しました');
-      }
-
-      console.log('[完了] 公開URL取得', { 
-        publicUrl: urlData.publicUrl.substring(0, 80),
-        platform: Platform.OS 
-      });
-
       // Web環境でblob URLをクリーンアップ
       if (Platform.OS === 'web' && compressedUri && compressedUri.startsWith('blob:')) {
         try {
           URL.revokeObjectURL(compressedUri);
         } catch (revokeError) {
-          console.warn('[Web] blob URLクリーンアップエラー:', revokeError);
+          console.warn('[Web] blob URLクリーンアップエラー');
         }
       }
 
-      return urlData.publicUrl;
+      return filePath;
     } catch (uploadError: any) {
-      console.error('[Supabase] アップロード処理エラー:', uploadError);
-      console.error('[Supabase] アップロード処理エラー詳細:', {
-        message: uploadError?.message,
-        stack: uploadError?.stack,
-        name: uploadError?.name,
-        platform: Platform.OS,
-      });
+      console.error('[Supabase] アップロード処理エラー');
       throw uploadError;
     }
   } catch (error: any) {
-    console.error('[エラー] 画像アップロード失敗:', error);
-    console.error('[エラー] エラー詳細:', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-      toString: error?.toString(),
-    });
+    console.error('[エラー] 画像アップロード失敗');
     
     // エラーメッセージを構築（安全に）
     let errorMessage = '画像のアップロードに失敗しました';
@@ -501,7 +514,7 @@ export const uploadImage = async (
         }
       }
     } catch (msgError: any) {
-      console.error('[エラー] エラーメッセージ構築エラー:', msgError);
+      console.error('[エラー] エラーメッセージ構築エラー');
       // デフォルトメッセージを使用
     }
     
@@ -516,19 +529,23 @@ export const uploadImage = async (
 
 export const deleteImage = async (imageUrl: string): Promise<void> => {
   try {
-    const urlParts = imageUrl.split('/test-images/');
-    if (urlParts.length < 2) return;
-
-    const filePath = urlParts[1];
+    if (!imageUrl) return;
+    let filePath: string | null = null;
+    if (isHttpUrl(imageUrl)) {
+      filePath = getStoragePathFromUrl(imageUrl);
+      if (!filePath) return;
+    } else {
+      filePath = imageUrl;
+    }
 
     const { error } = await supabase.storage
-      .from('test-images')
+      .from(STORAGE_BUCKET)
       .remove([filePath]);
 
     if (error) {
-      console.error('Image deletion error:', error);
+      console.error('Image deletion error');
     }
   } catch (error) {
-    console.error('Image deletion error:', error);
+    console.error('Image deletion error');
   }
 };

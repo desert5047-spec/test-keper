@@ -20,15 +20,17 @@ export default function ConsentScreen() {
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
   const lpBaseUrl = process.env.EXPO_PUBLIC_LP_URL ?? 'https://example.com';
+  const privacyPolicyUrl = 'https://www.test-album.jp/privacy';
+  const termsUrl = 'https://www.test-album.jp/terms';
 
   const openExternalLink = (path: '/terms' | '/privacy') => {
-    const url = `${lpBaseUrl}${path}`;
+    const url = path === '/privacy' ? privacyPolicyUrl : termsUrl;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
     Linking.openURL(url).catch((error) => {
-      console.warn('[Consent] 外部リンクを開けませんでした:', error);
+      console.warn('[Consent] 外部リンクを開けませんでした');
     });
   };
 

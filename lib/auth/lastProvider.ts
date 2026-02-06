@@ -3,6 +3,12 @@ import { Platform } from 'react-native';
 
 const LAST_AUTH_PROVIDER_KEY = 'last_auth_provider';
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
 export type AuthProvider = 'google' | 'email';
 
 /**
@@ -19,9 +25,9 @@ export async function saveLastAuthProvider(provider: AuthProvider): Promise<void
     } else {
       await SecureStore.setItemAsync(LAST_AUTH_PROVIDER_KEY, provider);
     }
-    console.log('[認証手段] 保存:', provider);
+    debugLog('[認証手段] 保存:', provider);
   } catch (error) {
-    console.error('[認証手段] 保存エラー:', error);
+    console.error('[認証手段] 保存エラー');
     // エラーが発生してもアプリの動作を止めない
   }
 }
@@ -48,7 +54,7 @@ export async function getLastAuthProvider(): Promise<AuthProvider | null> {
     }
     return null;
   } catch (error) {
-    console.error('[認証手段] 取得エラー:', error);
+    console.error('[認証手段] 取得エラー');
     return null;
   }
 }
@@ -61,7 +67,7 @@ export async function wasLastLoginGoogle(): Promise<boolean> {
   const provider = await getLastAuthProvider();
   const result = provider === 'google';
   if (provider) {
-    console.log('[認証手段] 前回:', provider === 'google' ? 'Google' : 'Email');
+    debugLog('[認証手段] 前回:', provider === 'google' ? 'Google' : 'Email');
   }
   return result;
 }
@@ -78,9 +84,9 @@ export async function clearLastAuthProvider(): Promise<void> {
     } else {
       await SecureStore.deleteItemAsync(LAST_AUTH_PROVIDER_KEY);
     }
-    console.log('[認証手段] 削除完了');
+    debugLog('[認証手段] 削除完了');
   } catch (error) {
-    console.error('[認証手段] 削除エラー:', error);
+    console.error('[認証手段] 削除エラー');
     // エラーが発生してもアプリの動作を止めない
   }
 }

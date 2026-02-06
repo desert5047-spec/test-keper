@@ -1,5 +1,11 @@
 import { Platform } from 'react-native';
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
 export function validateImageUri(uri: string | null): void {
   if (!uri) {
     console.warn('[画像検証] URIがnullまたは空です');
@@ -7,14 +13,14 @@ export function validateImageUri(uri: string | null): void {
   }
 
   if (typeof uri !== 'string') {
-    console.error('[画像検証] URIが文字列ではありません:', typeof uri);
+    console.error('[画像検証] URIが文字列ではありません');
     throw new Error('画像のURIが無効です（型エラー）');
   }
 
   // Web環境ではblob: URLは正常
   if (uri.startsWith('blob:')) {
     if (Platform.OS === 'web') {
-      console.log('[画像検証] Web環境のblob URLを許可:', uri.substring(0, 50));
+      debugLog('[画像検証] Web環境のblob URLを許可');
       return;
     }
 
@@ -22,7 +28,7 @@ export function validateImageUri(uri: string | null): void {
       ? `[画像エラー] blob: URL が検出されました。Expo Go では blob: URI は使えません。file:// または content:// を使用してください。URI: ${uri.substring(0, 100)}`
       : '画像の読み込みに失敗しました。もう一度選択してください。';
     
-    console.error('[画像検証] blob URLエラー:', { uri: uri.substring(0, 100), platform: Platform.OS });
+    console.error('[画像検証] blob URLエラー');
     throw new Error(errorMessage);
   }
 
@@ -33,7 +39,7 @@ export function validateImageUri(uri: string | null): void {
     
     if (!hasValidScheme) {
       const errorMessage = `無効な画像URIスキーム: ${uri.substring(0, 50)}`;
-      console.error('[画像検証] 無効なスキーム:', { uri: uri.substring(0, 100), platform: Platform.OS });
+      console.error('[画像検証] 無効なスキーム');
       throw new Error(errorMessage);
     }
   }

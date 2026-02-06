@@ -28,6 +28,13 @@ export default function InviteScreen() {
     if (!inviteToken) {
       return;
     }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch (historyError) {
+        console.warn('[Invite] URL履歴のクリアに失敗');
+      }
+    }
     if (!user) {
       AsyncStorage.setItem(PENDING_INVITE_KEY, inviteToken).finally(() => {
         router.replace('/(auth)/login');
@@ -179,7 +186,7 @@ export default function InviteScreen() {
     });
 
     if (acceptError) {
-      console.error('[Invite] 招待受諾エラー:', acceptError);
+      console.error('[Invite] 招待受諾エラー');
       if ((acceptError as any)?.code === '23505') {
         const recovered = await tryRecoverFromInviteError();
         if (recovered) {

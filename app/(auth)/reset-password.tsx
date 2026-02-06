@@ -73,7 +73,7 @@ export default function ResetPasswordScreen() {
             'exchangeCodeForSession'
           );
           if (exchangeError) {
-            console.error('コード検証エラー:', exchangeError);
+            console.error('コード検証エラー');
             setError('無効または期限切れのリンクです。');
             setIsValidToken(false);
             setCheckingToken(false);
@@ -107,7 +107,7 @@ export default function ResetPasswordScreen() {
           setIsValidToken(false);
         }
       } catch (err) {
-        console.error('トークンチェックエラー:', err);
+        console.error('トークンチェックエラー');
         setError('リンクの検証に失敗しました。');
         setIsValidToken(false);
       } finally {
@@ -169,7 +169,7 @@ export default function ResetPasswordScreen() {
         }
       }
     } catch (updateError: any) {
-      console.error('パスワード更新エラー:', updateError);
+      console.error('パスワード更新エラー');
       setError('パスワードの更新に失敗しました。もう一度お試しください。');
       setLoading(false);
       return;

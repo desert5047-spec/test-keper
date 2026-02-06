@@ -1,4 +1,4 @@
-package com.yourname.boltexponativewind
+package jp.testalbum.app
 
 import android.app.Application
 import android.content.res.Configuration

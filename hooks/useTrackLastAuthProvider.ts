@@ -3,6 +3,12 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
 /**
  * Supabase Auth の状態変更を監視し、最後の認証プロバイダーを自動保存するhook
  * 
@@ -12,26 +18,26 @@ import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
  */
 export function useTrackLastAuthProvider() {
   useEffect(() => {
-    console.log('[認証手段] hook初期化');
+    debugLog('[認証手段] hook初期化');
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[認証手段] イベント検出:', { event, hasUser: !!session?.user });
+      debugLog('[認証手段] イベント検出:', { event, hasUser: !!session?.user });
       
       // INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED のいずれでも認証プロバイダーを保存
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         if (session?.user) {
-          console.log('[認証手段] ログイン検出、処理開始');
+          debugLog('[認証手段] ログイン検出、処理開始');
           await handleSignedIn(session.user);
         } else {
-          console.log('[認証手段] セッションにユーザーが存在しません');
+          debugLog('[認証手段] セッションにユーザーが存在しません');
         }
       } else if (event === 'SIGNED_OUT') {
-        console.log('[認証手段] ログアウト検出（削除は行いません）');
+        debugLog('[認証手段] ログアウト検出（削除は行いません）');
       }
     });
 
     return () => {
-      console.log('[認証手段] hookクリーンアップ');
+      debugLog('[認証手段] hookクリーンアップ');
       subscription.unsubscribe();
     };
   }, []);
@@ -70,15 +76,11 @@ async function handleSignedIn(user: User) {
       }
     }
     
-    console.log('[認証手段] 判定:', {
-      identities: user.identities?.map(i => i.provider),
-      appMetadata: user.app_metadata?.provider,
-      result: authProvider,
-    });
+    debugLog('[認証手段] 判定:', { result: authProvider });
     
     await saveLastAuthProvider(authProvider);
   } catch (error) {
-    console.error('[認証手段] 保存エラー:', error);
+    console.error('[認証手段] 保存エラー');
   }
 }
 

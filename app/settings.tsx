@@ -118,7 +118,7 @@ export default function SettingsScreen() {
       await supabase
         .from('subjects')
         .delete()
-        .eq('user_id', user.id);
+        .eq('family_id', familyId);
 
       const { error: childrenError } = await supabase
         .from('children')
@@ -126,7 +126,7 @@ export default function SettingsScreen() {
         .eq('family_id', familyId);
 
       if (childrenError) {
-        throw new Error('初期化に失敗しました: ' + childrenError.message);
+        throw new Error('初期化に失敗しました');
       }
 
       const { error: displayNameResetError } = await supabase
@@ -136,7 +136,7 @@ export default function SettingsScreen() {
         .eq('user_id', user.id);
 
       if (displayNameResetError) {
-        throw new Error('呼称の初期化に失敗しました: ' + displayNameResetError.message);
+        throw new Error('呼称の初期化に失敗しました');
       }
 
       await AsyncStorage.removeItem('hasCompletedOnboarding');
@@ -178,7 +178,7 @@ export default function SettingsScreen() {
       .maybeSingle();
 
     if (error) {
-      console.error('[Settings] family role 取得エラー:', error);
+      console.error('[Settings] family role 取得エラー');
       setFamilyRole(null);
       return;
     }
@@ -191,7 +191,7 @@ export default function SettingsScreen() {
     setIsLoadingInvites(true);
     const { data, error } = await supabase.rpc('list_invites');
     if (error) {
-      console.error('[Settings] 招待一覧取得エラー:', error);
+      console.error('[Settings] 招待一覧取得エラー');
       setInviteList([]);
     } else {
       setInviteList(data ?? []);
@@ -211,7 +211,7 @@ export default function SettingsScreen() {
       .eq('family_id', familyId)
       .order('created_at', { ascending: true });
     if (error) {
-      console.error('[Settings] 家族メンバー取得エラー:', error);
+      console.error('[Settings] 家族メンバー取得エラー');
       setFamilyMembers([]);
     } else {
       setFamilyMembers(
@@ -250,7 +250,7 @@ export default function SettingsScreen() {
       await Clipboard.setStringAsync(text);
       return true;
     } catch (error) {
-      console.warn('[Settings] クリップボードコピー失敗:', error);
+      console.warn('[Settings] クリップボードコピー失敗');
       return false;
     }
   };
@@ -274,7 +274,7 @@ export default function SettingsScreen() {
     });
 
     if (error) {
-      console.error('[Settings] 招待作成エラー:', error);
+      console.error('[Settings] 招待作成エラー');
       setInviteError(getCreateInviteErrorMessage(error.message || ''));
     } else {
       const token = data ?? '';
@@ -310,7 +310,7 @@ export default function SettingsScreen() {
       });
       setInviteMessage('招待リンクを共有しました');
     } catch (error) {
-      console.warn('[Settings] 招待リンク共有失敗:', error);
+      console.warn('[Settings] 招待リンク共有失敗');
       const ok = await copyToClipboard(inviteUrl);
       if (ok) {
         setInviteMessage('共有に失敗したため、招待リンクをコピーしました');
@@ -334,7 +334,7 @@ export default function SettingsScreen() {
     });
 
     if (error) {
-      console.error('[Settings] 招待受諾エラー:', error);
+      console.error('[Settings] 招待受諾エラー');
       setAcceptError(getAcceptInviteErrorMessage(error.message || ''));
     } else {
       const nextFamilyId = data as string | null;
@@ -375,7 +375,7 @@ export default function SettingsScreen() {
     });
 
     if (error) {
-      console.error('[Settings] display_name 更新エラー:', error);
+      console.error('[Settings] display_name 更新エラー');
       setDisplayNameError('保存に失敗しました');
     } else {
       setDisplayNameMessage('呼称を保存しました');
@@ -440,13 +440,38 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const openPrivacyPolicy = () => {
+    const url = 'https://www.test-album.jp/privacy';
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    Linking.openURL(url).catch((error) => {
+      console.warn('[Settings] プライバシーポリシーを開けませんでした');
+    });
+  };
+
+  const openTerms = () => {
+    const url = 'https://www.test-album.jp/terms';
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    Linking.openURL(url).catch((error) => {
+      console.warn('[Settings] 利用規約を開けませんでした');
+    });
+  };
+
   return (
     <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 12) + 120 },
+        ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>機能</Text>
@@ -681,7 +706,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => router.push('/privacy-policy')}
+            onPress={openPrivacyPolicy}
             activeOpacity={0.7}>
             <View style={styles.menuItemLeft}>
               <View style={styles.iconContainer}>
@@ -697,7 +722,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={[styles.menuItem, styles.menuItemSpacing]}
-            onPress={() => router.push('/terms-of-service')}
+            onPress={openTerms}
             activeOpacity={0.7}>
             <View style={styles.menuItemLeft}>
               <View style={styles.iconContainer}>

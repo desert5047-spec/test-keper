@@ -44,7 +44,7 @@ export default function ForgotPasswordScreen() {
     const { error: resetError } = await resetPassword(email);
 
     if (resetError) {
-      console.error('[パスワードリセット] エラー:', resetError);
+      console.error('[パスワードリセット] エラー');
       // エラーメッセージを詳細に表示
       let errorMessage = 'パスワードリセットメールの送信に失敗しました。';
       
