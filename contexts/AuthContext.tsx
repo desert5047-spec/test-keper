@@ -2,15 +2,12 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, Re
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSegments } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
 import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
-
-// OAuthリダイレクト後の処理を完了させる
-WebBrowser.maybeCompleteAuthSession();
+import { getHandlingAuthCallback } from '@/lib/authCallbackState';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -906,6 +903,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       debugLog('[AuthContext] 認証状態変更:', { event, platform: Platform.OS });
+      const isHandlingAuthCallback = getHandlingAuthCallback();
       
       // トークンリフレッシュエラーを処理
       if (event === 'TOKEN_REFRESHED') {
@@ -913,6 +911,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        return;
+      }
+
+      if (event === 'PASSWORD_RECOVERY') {
+        debugLog('[AuthContext] PASSWORD_RECOVERY 検出', { platform: Platform.OS });
+        setLoading(false);
+        if (!isHandlingAuthCallback) {
+          router.replace('/(auth)/reset-password');
+        }
         return;
       }
       
@@ -933,14 +940,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const hasPendingInvite = await navigateToPendingInvite();
         if (!hasPendingInvite) {
           // 少し遅延を入れて、segmentsが更新されるのを待つ
-          setTimeout(() => {
-            checkAndRedirectRef.current(session.user);
-          }, 200);
+          if (!isHandlingAuthCallback) {
+            setTimeout(() => {
+              checkAndRedirectRef.current(session.user);
+            }, 200);
+          }
         }
       }
       
       // SIGNED_OUTイベントの場合は、ログイン画面にリダイレクト
       if (event === 'SIGNED_OUT') {
+        if (isHandlingAuthCallback) {
+          debugLog('[AuthContext] 認証コールバック処理中のためリダイレクトを抑止', { platform: Platform.OS });
+          return;
+        }
         debugLog('[AuthContext] ログアウト検出、ログイン画面にリダイレクト', { platform: Platform.OS });
         setLoading(false);
         setFamilyId(null);
@@ -969,6 +982,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsFamilyReady(false);
         setIsConsentReady(false);
         setNeedsConsent(false);
+            if (isHandlingAuthCallback) {
+              debugLog('[AuthContext] 認証コールバック処理中のためログイン遷移を抑止', { platform: Platform.OS });
+            }
           }
           debugLog('[AuthContext] INITIAL_SESSION処理完了:', { 
             hasUser: !!currentSession?.user,
@@ -978,7 +994,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    const handleDeepLink = async ({ url }: { url: string }) => {
+      if (!url || !url.includes('auth-callback')) {
+        return;
+      }
+      debugLog('[AuthContext] 深いリンク受信', { hasUrl: !!url, platform: Platform.OS });
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await ensureProfileConsent(session.user);
+          setTimeout(() => {
+            checkAndRedirectRef.current(session.user);
+          }, 200);
+        }
+      } catch (error) {
+        console.warn('[AuthContext] 深いリンクの再取得に失敗');
+      }
+    };
+
+    const linkingSubscription = Linking.addEventListener('url', handleDeepLink);
+
+    return () => {
+      subscription.unsubscribe();
+      linkingSubscription.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -1227,14 +1268,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     consent?: { agreedTerms: boolean; agreedPrivacy: boolean }
   ) => {
     const agreedAt = consent ? new Date().toISOString() : undefined;
+    console.log('[AuthContext] emailRedirectTo:', 'https://www.test-album.jp/auth/callback');
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        // メール確認のリダイレクトURLを設定
-        emailRedirectTo: Platform.OS === 'web' 
-          ? (typeof window !== 'undefined' ? `${window.location.origin}/callback` : undefined)
-          : undefined,
+        // メール確認のリダイレクトURLを固定
+        emailRedirectTo: 'https://www.test-album.jp/auth/callback',
         data: consent
           ? {
               agreed_terms: consent.agreedTerms,
@@ -1260,48 +1300,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
-  // Web専用のGoogle認証関数
-  // iOS/Androidでは signInWithGoogleExpoGo() を使用すること
   const signInWithGoogle = async () => {
-    try {
-      // Web専用の処理
-      if (Platform.OS !== 'web') {
-        console.error('[Google認証] signInWithGoogle はWeb専用です。');
-        return { error: new Error('この関数はWeb専用です') };
-      }
-
-      // リダイレクトURLを構築
-      // Supabase DashboardでこのURLを許可済みリダイレクトURLに追加する必要があります
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-      
-      if (!supabaseUrl) {
-        return { error: new Error('Supabase URLが設定されていません') };
-      }
-
-      // Web環境では window.location.origin を使用
-      const redirectUrl = typeof window !== 'undefined' 
-        ? `${window.location.origin}/callback` 
-        : `${supabaseUrl}/auth/v1/callback`;
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: false, // Web環境では false（ブラウザが自動的にリダイレクト）
-        },
-      });
-
-      if (error) {
-        return { error };
-      }
-
-      // Web環境では、ブラウザが自動的にリダイレクトするため、ここで処理終了
-      // リダイレクト後にonAuthStateChangeが自動的に発火する
-      return { error: null };
-    } catch (err: any) {
-      console.error('Google認証エラー');
-      return { error: err instanceof Error ? err : new Error('Google認証中にエラーが発生しました') };
-    }
+    console.warn('[Google認証] 一時的に無効化しています');
+    return { error: new Error('Google認証は一時的に無効化しています') };
   };
 
   const signOut = async () => {
@@ -1429,19 +1430,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string) => {
     try {
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-      let redirectUrl: string | undefined;
-
-      if (Platform.OS === 'web') {
-        redirectUrl = typeof window !== 'undefined' 
-          ? `${window.location.origin}/reset-password`
-          : undefined;
-      } else {
-        // ネイティブ環境では、deep linkを使用
-        const scheme = 'myapp';
-        redirectUrl = `${scheme}://reset-password`;
-      }
-
+      const redirectUrl = 'https://www.test-album.jp/auth/callback';
+      console.log('[AuthContext] resetPassword redirectTo:', redirectUrl);
       debugLog('[パスワードリセット] リクエスト開始', { platform: Platform.OS });
 
       const { error, data } = await supabase.auth.resetPasswordForEmail(email, {

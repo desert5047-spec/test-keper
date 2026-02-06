@@ -170,7 +170,9 @@ export default function ResetPasswordScreen() {
       }
     } catch (updateError: any) {
       console.error('パスワード更新エラー');
-      setError('パスワードの更新に失敗しました。もう一度お試しください。');
+      const message =
+        updateError?.message || 'パスワードの更新に失敗しました。もう一度お試しください。';
+      setError(message);
       setLoading(false);
       return;
     }

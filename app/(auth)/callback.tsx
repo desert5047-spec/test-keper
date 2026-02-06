@@ -7,7 +7,7 @@ import * as Linking from 'expo-linking';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
-  const { url: paramUrlRaw } = useLocalSearchParams();
+  const { url: paramUrlRaw, access_token, refresh_token, code, type } = useLocalSearchParams();
   const [errorMessage, setErrorMessage] = useState('');
   const isProcessingRef = useRef(false);
   const pendingUrlRef = useRef<string | null>(null);
@@ -180,6 +180,17 @@ export default function AuthCallbackScreen() {
               });
             }
           }
+        } else if (Platform.OS !== 'web') {
+          accessToken = typeof access_token === 'string' ? access_token : null;
+          refreshToken = typeof refresh_token === 'string' ? refresh_token : null;
+          authCode = typeof code === 'string' ? code : null;
+          authType = typeof type === 'string' ? type : null;
+          debugLog('[コールバック] クエリパラメータから取得:', {
+            hasCode: !!authCode,
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+            hasType: !!authType,
+          });
         } else {
           debugLog('[コールバック] URLがありません。セッションを確認します。');
         }

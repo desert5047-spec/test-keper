@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
+import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -57,6 +58,16 @@ export default function RootLayout() {
     // フォントエラーがあってもアプリを続行
   }
 
+  if (!isSupabaseConfigured) {
+    console.error('[RootLayout] Supabase設定がありません');
+    return (
+      <View style={styles.configErrorContainer}>
+        <Text style={styles.configErrorTitle}>設定エラー</Text>
+        <Text style={styles.configErrorText}>{supabaseConfigError}</Text>
+      </View>
+    );
+  }
+
   debugLog('[RootLayout] レンダリング開始', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
 
   return (
@@ -99,3 +110,25 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  configErrorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#fff',
+  },
+  configErrorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    color: '#111',
+  },
+  configErrorText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333',
+    textAlign: 'center',
+  },
+});

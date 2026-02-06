@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "Test Album",
-    "slug": "bolt-expo-nativewind",
+    "slug": "test-album",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
-    "scheme": "myapp",
+    "scheme": "testalbum",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "jp.testalbum.app",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "写真を撮影して記録に追加するためにカメラを使用します。",
         "NSPhotoLibraryUsageDescription": "記録に写真を追加するためにフォトライブラリにアクセスします。",
@@ -18,23 +18,24 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "myapp",
+              "testalbum",
               "com.googleusercontent.apps.810982918990-kuld3n986ifhnbtjl1m3c7426n7bs1rk"
             ]
           }
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "jp.testalbum.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
             {
-              "scheme": "myapp"
+              "scheme": "testalbum"
             }
           ],
           "category": [
@@ -60,8 +61,10 @@
     },
     "extra": {
       "router": {},
+      "EXPO_PUBLIC_SUPABASE_URL": "https://dzqzkwoxfciuhikvnlmg.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_rbyn5OYRcxTARliQAn8B7g_y5pkgOby",
       "eas": {
-        "projectId": "dbc2a7be-a89c-43d1-b4b9-fdedf0a155ac"
+        "projectId": "0643ee82-1950-44d5-836b-0c7a6221a675"
       }
     },
     "owner": "guretaiki"
