@@ -48,9 +48,8 @@ export const supabase = isSupabaseConfigured
         storage: createAuthStorage(),
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: Platform.OS === 'web',
-        // WebはImplicitフローを使用してcode_verifier問題を回避
-        ...(Platform.OS === 'web' ? { flowType: 'implicit' as const } : {}),
+        detectSessionInUrl: false,
+        flowType: 'pkce',
       },
       global: {
         // リフレッシュトークンエラーを適切に処理

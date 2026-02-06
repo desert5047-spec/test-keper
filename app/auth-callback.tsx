@@ -26,11 +26,8 @@ const parseAuthParams = (url: string) => {
   const pick = (key: string) => hashParams.get(key) || queryParams.get(key) || '';
 
   return {
-    accessToken: safeDecode(pick('access_token')),
-    refreshToken: safeDecode(pick('refresh_token')),
     code: safeDecode(pick('code')),
     type: safeDecode(pick('type')),
-    token: safeDecode(pick('token')),
   };
 };
 
@@ -44,16 +41,13 @@ export default function AuthCallbackDeepLink() {
   const [sessionUserId, setSessionUserId] = useState('');
   const [tokenLengths, setTokenLengths] = useState({
     urlLen: 0,
-    accessLen: 0,
-    refreshLen: 0,
     codeLen: 0,
   });
+  const [exchangeResult, setExchangeResult] = useState('未実行');
 
   const maskUrl = (url: string) => {
     if (!url) return '';
     return url
-      .replace(/access_token=[^&]+/g, 'access_token=***')
-      .replace(/refresh_token=[^&]+/g, 'refresh_token=***')
       .replace(/code=[^&]+/g, 'code=***')
       .replace(/token=[^&]+/g, 'token=***');
   };
@@ -61,47 +55,32 @@ export default function AuthCallbackDeepLink() {
   const handleUrl = async (url: string) => {
     console.warn('[AuthCallback] deep link received:', url);
     setReceivedUrl(maskUrl(url));
-    const { accessToken, refreshToken, code, type } = parseAuthParams(url);
+    const { code, type } = parseAuthParams(url);
     setDetectedType(type || '(未検出)');
     setTokenLengths({
       urlLen: url.length,
-      accessLen: accessToken?.length ?? 0,
-      refreshLen: refreshToken?.length ?? 0,
       codeLen: code?.length ?? 0,
     });
 
     try {
       setHandlingAuthCallback(true);
-      if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (error) {
-          setStatus('error');
-          setMessage(`setSession エラー: ${error.message}`);
-          return;
-        }
-        setStatus('success');
-        setMessage('setSession 成功');
-      }
-
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          setStatus('error');
-          setMessage(`exchangeCodeForSession エラー: ${error.message}`);
-          return;
-        }
-        setStatus('success');
-        setMessage('exchangeCodeForSession 成功');
-      }
-
-      if (!accessToken && !refreshToken && !code) {
+      if (!code) {
         setStatus('error');
-        setMessage('トークン/コードが見つかりません。');
+        setMessage('code がありません。');
+        setExchangeResult('失敗: codeなし');
         return;
       }
+
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        setStatus('error');
+        setMessage(`exchangeCodeForSession エラー: ${error.message}`);
+        setExchangeResult(`失敗: ${error.message}`);
+        return;
+      }
+      setStatus('success');
+      setMessage('exchangeCodeForSession 成功');
+      setExchangeResult('成功');
 
       const { data } = await supabase.auth.getSession();
       const hasSession = !!data.session?.user;
@@ -174,8 +153,10 @@ export default function AuthCallbackDeepLink() {
           <Text style={styles.debugValue}>{detectedType || '(未検出)'}</Text>
           <Text style={styles.debugLabel}>文字数</Text>
           <Text style={styles.debugValue}>
-            urlLen={tokenLengths.urlLen} / accessLen={tokenLengths.accessLen} / refreshLen={tokenLengths.refreshLen} / codeLen={tokenLengths.codeLen}
+            urlLen={tokenLengths.urlLen} / codeLen={tokenLengths.codeLen}
           </Text>
+          <Text style={styles.debugLabel}>exchange 結果</Text>
+          <Text style={styles.debugValue}>{exchangeResult}</Text>
           <Text style={styles.debugLabel}>getSession 結果</Text>
           <Text style={styles.debugValue}>
             {sessionStatus}{sessionUserId ? ` (user=${sessionUserId})` : ''}
