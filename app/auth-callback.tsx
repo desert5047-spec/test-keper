@@ -7,6 +7,15 @@ import { setHandlingAuthCallback } from '@/lib/authCallbackState';
 
 type SessionStatus = 'processing' | 'success' | 'error';
 
+const safeDecode = (value: string) => {
+  if (!value) return '';
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
 const parseAuthParams = (url: string) => {
   const hashIndex = url.indexOf('#');
   const queryIndex = url.indexOf('?');
@@ -17,11 +26,11 @@ const parseAuthParams = (url: string) => {
   const pick = (key: string) => hashParams.get(key) || queryParams.get(key) || '';
 
   return {
-    accessToken: pick('access_token'),
-    refreshToken: pick('refresh_token'),
-    code: pick('code'),
-    type: pick('type'),
-    token: pick('token'),
+    accessToken: safeDecode(pick('access_token')),
+    refreshToken: safeDecode(pick('refresh_token')),
+    code: safeDecode(pick('code')),
+    type: safeDecode(pick('type')),
+    token: safeDecode(pick('token')),
   };
 };
 
@@ -33,6 +42,12 @@ export default function AuthCallbackDeepLink() {
   const [detectedType, setDetectedType] = useState('');
   const [sessionStatus, setSessionStatus] = useState('未確認');
   const [sessionUserId, setSessionUserId] = useState('');
+  const [tokenLengths, setTokenLengths] = useState({
+    urlLen: 0,
+    accessLen: 0,
+    refreshLen: 0,
+    codeLen: 0,
+  });
 
   const maskUrl = (url: string) => {
     if (!url) return '';
@@ -48,6 +63,12 @@ export default function AuthCallbackDeepLink() {
     setReceivedUrl(maskUrl(url));
     const { accessToken, refreshToken, code, type } = parseAuthParams(url);
     setDetectedType(type || '(未検出)');
+    setTokenLengths({
+      urlLen: url.length,
+      accessLen: accessToken?.length ?? 0,
+      refreshLen: refreshToken?.length ?? 0,
+      codeLen: code?.length ?? 0,
+    });
 
     try {
       setHandlingAuthCallback(true);
@@ -151,6 +172,10 @@ export default function AuthCallbackDeepLink() {
           <Text style={styles.debugValue}>{receivedUrl || '(未取得)'}</Text>
           <Text style={styles.debugLabel}>検出した type</Text>
           <Text style={styles.debugValue}>{detectedType || '(未検出)'}</Text>
+          <Text style={styles.debugLabel}>文字数</Text>
+          <Text style={styles.debugValue}>
+            urlLen={tokenLengths.urlLen} / accessLen={tokenLengths.accessLen} / refreshLen={tokenLengths.refreshLen} / codeLen={tokenLengths.codeLen}
+          </Text>
           <Text style={styles.debugLabel}>getSession 結果</Text>
           <Text style={styles.debugValue}>
             {sessionStatus}{sessionUserId ? ` (user=${sessionUserId})` : ''}
