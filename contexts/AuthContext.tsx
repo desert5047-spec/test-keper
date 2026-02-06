@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { useRouter, useSegments } from 'expo-router';
+import { useRouter, useSegments, usePathname } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -84,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsConsent, setNeedsConsent] = useState(false);
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
   const ensureFamilyInFlightRef = useRef(false);
   const ensuredUserIdRef = useRef<string | null>(null);
   const familyEnsureRetryRef = useRef(0);
@@ -904,6 +905,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       debugLog('[AuthContext] 認証状態変更:', { event, platform: Platform.OS });
       const isHandlingAuthCallback = getHandlingAuthCallback();
+      const shouldSuppressLoginRedirect =
+        isHandlingAuthCallback || pathname === '/auth-callback';
       
       // トークンリフレッシュエラーを処理
       if (event === 'TOKEN_REFRESHED') {
@@ -917,7 +920,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'PASSWORD_RECOVERY') {
         debugLog('[AuthContext] PASSWORD_RECOVERY 検出', { platform: Platform.OS });
         setLoading(false);
-        if (!isHandlingAuthCallback) {
+        if (!shouldSuppressLoginRedirect) {
           router.replace('/(auth)/reset-password');
         }
         return;
@@ -940,7 +943,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const hasPendingInvite = await navigateToPendingInvite();
         if (!hasPendingInvite) {
           // 少し遅延を入れて、segmentsが更新されるのを待つ
-          if (!isHandlingAuthCallback) {
+          if (!shouldSuppressLoginRedirect) {
             setTimeout(() => {
               checkAndRedirectRef.current(session.user);
             }, 200);
@@ -950,7 +953,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // SIGNED_OUTイベントの場合は、ログイン画面にリダイレクト
       if (event === 'SIGNED_OUT') {
-        if (isHandlingAuthCallback) {
+        if (shouldSuppressLoginRedirect) {
           debugLog('[AuthContext] 認証コールバック処理中のためリダイレクトを抑止', { platform: Platform.OS });
           return;
         }
@@ -1059,8 +1062,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isTabs = segments[0] === '(tabs)';
     const isInvite = segments[0] === 'invite';
 
+    const shouldSuppressLoginRedirect =
+      getHandlingAuthCallback() || pathname === '/auth-callback';
+
     // 未ログインの場合
     if (!user && !inAuthGroup) {
+      if (shouldSuppressLoginRedirect) {
+        return;
+      }
       router.replace('/(auth)/login');
       return;
     }
@@ -1069,7 +1078,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) {
       checkAndRedirect(user);
     }
-  }, [user, segments, loading, checkingOnboarding, checkAndRedirect]);
+  }, [user, segments, pathname, loading, checkingOnboarding, checkAndRedirect]);
 
   useEffect(() => {
     let cancelled = false;

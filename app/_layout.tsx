@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, SplashScreen } from 'expo-router';
+import { Stack, SplashScreen, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -9,6 +9,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
 import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
+import * as Linking from 'expo-linking';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -27,6 +28,7 @@ export default function RootLayout() {
     console.error('[RootLayout] useFrameworkReadyエラー');
   }
 
+  const router = useRouter();
   const [fontsLoaded, fontError] = useFonts({
     'Nunito-Regular': Nunito_400Regular,
     'Nunito-SemiBold': Nunito_600SemiBold,
@@ -57,6 +59,33 @@ export default function RootLayout() {
     console.error('[RootLayout] フォント読み込みエラー');
     // フォントエラーがあってもアプリを続行
   }
+
+  useEffect(() => {
+    const handleUrl = (url: string | null, source: 'initial' | 'event') => {
+      console.warn(`[DL] ${source}`, url);
+      if (!url || !url.includes('auth-callback')) return;
+      let code: string | undefined;
+      let type: string | undefined;
+      try {
+        const parsed = new URL(url);
+        code = parsed.searchParams.get('code') ?? undefined;
+        type = parsed.searchParams.get('type') ?? undefined;
+      } catch (error) {
+        const parsed = Linking.parse(url);
+        code = typeof parsed.queryParams?.code === 'string' ? parsed.queryParams.code : undefined;
+        type = typeof parsed.queryParams?.type === 'string' ? parsed.queryParams.type : undefined;
+      }
+      if (code || type) {
+        router.replace({ pathname: '/auth-callback', params: { ...(code ? { code } : {}), ...(type ? { type } : {}) } });
+      } else {
+        router.replace('/auth-callback');
+      }
+    };
+
+    Linking.getInitialURL().then((url) => handleUrl(url, 'initial'));
+    const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url, 'event'));
+    return () => subscription.remove();
+  }, [router]);
 
   if (!isSupabaseConfigured) {
     console.error('[RootLayout] Supabase設定がありません');

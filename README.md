@@ -53,3 +53,12 @@ Supabase ダッシュボードで以下を設定してください。
    - `testalbum://auth-callback` でアプリが起動
    - 新しいパスワード入力画面へ遷移
 3. 新規登録メールのリンクも `/auth/callback` に戻ることを確認
+
+## scheme 確認
+ビルド前に以下を確認してください。
+
+```bash
+npx expo config --type public
+```
+
+出力に `scheme: 'testalbum'` が含まれていることを確認します。

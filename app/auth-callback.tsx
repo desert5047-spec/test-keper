@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { setHandlingAuthCallback } from '@/lib/authCallbackState';
@@ -44,6 +44,9 @@ export default function AuthCallbackDeepLink() {
     codeLen: 0,
   });
   const [exchangeResult, setExchangeResult] = useState('未実行');
+  const [initialUrl, setInitialUrl] = useState('');
+  const [lastUrl, setLastUrl] = useState('');
+  const params = useLocalSearchParams();
 
   const maskUrl = (url: string) => {
     if (!url) return '';
@@ -55,6 +58,7 @@ export default function AuthCallbackDeepLink() {
   const handleUrl = async (url: string) => {
     console.warn('[AuthCallback] deep link received:', url);
     setReceivedUrl(maskUrl(url));
+    setLastUrl(maskUrl(url));
     const { code, type } = parseAuthParams(url);
     const normalizedType = (type || 'recovery').trim();
     setDetectedType(normalizedType || '(未検出)');
@@ -114,7 +118,22 @@ export default function AuthCallbackDeepLink() {
 
       const initialUrl = await Linking.getInitialURL();
       if (initialUrl) {
+        setInitialUrl(maskUrl(initialUrl));
         handleUrl(initialUrl);
+        return;
+      }
+      const paramCode = typeof params.code === 'string' ? params.code : '';
+      const paramType = typeof params.type === 'string' ? params.type : '';
+      if (paramCode || paramType) {
+        const syntheticUrl = `testalbum://auth-callback?${[
+          paramCode ? `code=${encodeURIComponent(paramCode)}` : '',
+          paramType ? `type=${encodeURIComponent(paramType)}` : '',
+        ]
+          .filter(Boolean)
+          .join('&')}`;
+        setInitialUrl(maskUrl(syntheticUrl));
+        handleUrl(syntheticUrl);
+        return;
       } else {
         setStatus('error');
         setMessage('深いリンクが取得できませんでした。');
@@ -124,6 +143,7 @@ export default function AuthCallbackDeepLink() {
     init();
 
     const subscription = Linking.addEventListener('url', (event) => {
+      setLastUrl(maskUrl(event.url));
       handleUrl(event.url);
     });
 
@@ -150,6 +170,10 @@ export default function AuthCallbackDeepLink() {
           <Text style={styles.debugTitle}>デバッグ</Text>
           <Text style={styles.debugLabel}>受信URL（伏字）</Text>
           <Text style={styles.debugValue}>{receivedUrl || '(未取得)'}</Text>
+          <Text style={styles.debugLabel}>initialUrl（伏字）</Text>
+          <Text style={styles.debugValue}>{initialUrl || '(未取得)'}</Text>
+          <Text style={styles.debugLabel}>lastUrl（伏字）</Text>
+          <Text style={styles.debugValue}>{lastUrl || '(未取得)'}</Text>
           <Text style={styles.debugLabel}>検出した type</Text>
           <Text style={styles.debugValue}>{detectedType || '(未検出)'}</Text>
           <Text style={styles.debugLabel}>文字数</Text>
