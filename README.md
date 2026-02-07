@@ -62,3 +62,15 @@ npx expo config --type public
 ```
 
 出力に `scheme: 'testalbum'` が含まれていることを確認します。
+
+## New Architecture 確認
+`npx expo config --type public` の出力に以下が含まれることを確認してください。
+
+- `newArchEnabled: false`
+- `ios.newArchEnabled: false`
+- `android.newArchEnabled: false`
+
+もし true のままなら、`app.config.ts` の設定位置が違う可能性があります。
+
+### iOS ビルドログ確認
+iOS ビルドログ内で `RCT_NEW_ARCH_ENABLED=0` になっているか確認してください。
