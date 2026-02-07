@@ -8,10 +8,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     slug: 'test-album',
     scheme: 'testalbum',
-    newArchEnabled: false,
+    newArchEnabled: true,
     ios: {
       ...config.ios,
-      newArchEnabled: false,
+      newArchEnabled: true,
       bundleIdentifier: 'jp.testalbum.app',
       buildNumber: '14',
       infoPlist: {
@@ -28,7 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: {
       ...config.android,
-      newArchEnabled: false,
+      newArchEnabled: true,
       package: 'jp.testalbum.app',
       versionCode: 4,
       intentFilters: [
