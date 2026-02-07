@@ -7,7 +7,6 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
 import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
-import { getHandlingAuthCallback } from '@/lib/authCallbackState';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -903,8 +902,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       debugLog('[AuthContext] 認証状態変更:', { event, platform: Platform.OS });
-      const isHandlingAuthCallback = getHandlingAuthCallback();
-      
       // トークンリフレッシュエラーを処理
       if (event === 'TOKEN_REFRESHED') {
         debugLog('[AuthContext] トークンがリフレッシュされました', { platform: Platform.OS });
@@ -917,9 +914,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'PASSWORD_RECOVERY') {
         debugLog('[AuthContext] PASSWORD_RECOVERY 検出', { platform: Platform.OS });
         setLoading(false);
-        if (!isHandlingAuthCallback) {
-          router.replace('/(auth)/reset-password');
-        }
+        router.replace('/(auth)/reset-password');
         return;
       }
       
@@ -940,20 +935,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const hasPendingInvite = await navigateToPendingInvite();
         if (!hasPendingInvite) {
           // 少し遅延を入れて、segmentsが更新されるのを待つ
-          if (!isHandlingAuthCallback) {
-            setTimeout(() => {
-              checkAndRedirectRef.current(session.user);
-            }, 200);
-          }
+          setTimeout(() => {
+            checkAndRedirectRef.current(session.user);
+          }, 200);
         }
       }
       
       // SIGNED_OUTイベントの場合は、ログイン画面にリダイレクト
       if (event === 'SIGNED_OUT') {
-        if (isHandlingAuthCallback) {
-          debugLog('[AuthContext] 認証コールバック処理中のためリダイレクトを抑止', { platform: Platform.OS });
-          return;
-        }
         debugLog('[AuthContext] ログアウト検出、ログイン画面にリダイレクト', { platform: Platform.OS });
         setLoading(false);
         setFamilyId(null);
