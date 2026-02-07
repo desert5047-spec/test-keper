@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
-import { createAuthStorage } from '@/lib/authStorage';
 import Constants from 'expo-constants';
 
 const getExtraString = (key: string) => {
@@ -45,12 +45,11 @@ const createUnavailableClient = () => {
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        storage: createAuthStorage(),
+        storage: AsyncStorage,
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: Platform.OS === 'web',
-        // WebはImplicitフローを使用してcode_verifier問題を回避
-        ...(Platform.OS === 'web' ? { flowType: 'implicit' as const } : {}),
+        detectSessionInUrl: false,
+        flowType: 'pkce',
       },
       global: {
         // リフレッシュトークンエラーを適切に処理

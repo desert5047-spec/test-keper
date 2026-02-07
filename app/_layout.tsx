@@ -1,3 +1,5 @@
+import 'react-native-url-polyfill/auto';
+import 'react-native-get-random-values';
 import { useEffect } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -90,7 +92,8 @@ export default function RootLayout() {
         <ChildProvider>
           <DateProvider>
             <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(auth)" />
+            <Stack.Screen name="auth-callback" />
+            <Stack.Screen name="(auth)" />
               <Stack.Screen name="onboarding" />
               <Stack.Screen name="consent" />
               <Stack.Screen name="(tabs)" />

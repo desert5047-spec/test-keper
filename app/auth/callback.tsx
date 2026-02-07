@@ -66,7 +66,7 @@ export default function WebAuthCallback() {
     if (error) nextParams.set('error', error);
     if (errorDescription) nextParams.set('error_description', errorDescription);
 
-    const nextLink = `testalbum://auth-callback${nextParams.toString() ? `?${nextParams}` : ''}`;
+    const nextLink = `testalbum:///auth-callback${nextParams.toString() ? `?${nextParams}` : ''}`;
     setDeepLink(nextLink);
     setStatus('ready');
 
@@ -98,15 +98,38 @@ export default function WebAuthCallback() {
       )}
 
       {deepLink ? (
-        <TouchableOpacity
-          style={styles.openButton}
-          onPress={() => {
-            if (isWeb) window.location.href = deepLink;
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.openButtonText}>アプリを開く</Text>
-        </TouchableOpacity>
+        isWeb ? (
+          <a
+            href={deepLink}
+            onClick={(event) => {
+              event.preventDefault();
+              window.location.assign(deepLink);
+            }}
+            style={{
+              display: 'inline-block',
+              paddingVertical: 12,
+              paddingHorizontal: 20,
+              borderRadius: 8,
+              backgroundColor: '#111',
+              marginBottom: 16,
+              color: '#fff',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            アプリを開く
+          </a>
+        ) : (
+          <TouchableOpacity
+            style={styles.openButton}
+            onPress={() => {
+              if (isWeb) window.location.assign(deepLink);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.openButtonText}>アプリを開く</Text>
+          </TouchableOpacity>
+        )
       ) : null}
 
       <View style={styles.debugBox}>

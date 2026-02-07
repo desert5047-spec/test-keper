@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { useRouter, useSegments } from 'expo-router';
+import { usePathname, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
 import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
+import { getHandlingAuthCallback, isBootHold } from '@/lib/authCallbackState';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -83,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsConsent, setNeedsConsent] = useState(false);
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
   const ensureFamilyInFlightRef = useRef(false);
   const ensuredUserIdRef = useRef<string | null>(null);
   const familyEnsureRetryRef = useRef(0);
@@ -94,6 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pendingInviteNavigationRef = useRef(false);
   const pendingInviteKey = 'pendingInviteToken';
   const pendingConsentKey = 'pendingConsent';
+  const shouldHoldAuthRedirect = () =>
+    getHandlingAuthCallback() || isBootHold() || pathname?.includes('auth-callback') === true;
   const extractInviteTokenFromUrl = async () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -950,6 +954,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ensuredUserIdRef.current = null;
         ensureFamilyInFlightRef.current = false;
         pendingInviteNavigationRef.current = false;
+        if (shouldHoldAuthRedirect()) {
+          debugLog('[AuthContext] 認証コールバック処理中のためリダイレクトを抑止', { platform: Platform.OS });
+          return;
+        }
         // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
         const delay = Platform.OS === 'android' ? 300 : 100;
         setTimeout(() => {
@@ -971,7 +979,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsFamilyReady(false);
         setIsConsentReady(false);
         setNeedsConsent(false);
-            if (isHandlingAuthCallback) {
+            if (shouldHoldAuthRedirect()) {
               debugLog('[AuthContext] 認証コールバック処理中のためログイン遷移を抑止', { platform: Platform.OS });
             }
           }
@@ -1048,8 +1056,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isTabs = segments[0] === '(tabs)';
     const isInvite = segments[0] === 'invite';
 
+    const isPublicAuthRoute =
+      pathname?.includes('auth-callback') === true ||
+      pathname?.includes('forgot-password') === true ||
+      pathname?.includes('reset-password') === true;
+
     // 未ログインの場合
-    if (!user && !inAuthGroup) {
+    if (!session) {
+      // auth-callback 処理中は最優先で抑止
+      if (getHandlingAuthCallback()) return;
+
+      // 起動直後の deep link 処理猶予
+      if (isBootHold()) return;
+
+      // public auth routes は抑止
+      if (isPublicAuthRoute) return;
+
       router.replace('/(auth)/login');
       return;
     }
@@ -1380,6 +1402,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // ログイン画面にリダイレクト
       // Web環境では、window.locationを使う方が確実
+      if (shouldHoldAuthRedirect()) {
+        debugLog('[AuthContext] 認証コールバック処理中のためログイン遷移を抑止', { platform: Platform.OS });
+        return;
+      }
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         // 少し遅延を入れて、状態更新と認証プロバイダー情報の削除を確実にする
         setTimeout(() => {
@@ -1409,6 +1435,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // エラーが発生しても、ローカルの状態をクリアしてリダイレクト
       setSession(null);
       setUser(null);
+      if (shouldHoldAuthRedirect()) {
+        debugLog('[AuthContext] 認証コールバック処理中のためログイン遷移を抑止', { platform: Platform.OS });
+        return;
+      }
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.location.href = '/(auth)/login';
       } else {

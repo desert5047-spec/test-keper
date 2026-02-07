@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "jp.testalbum.app",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSCameraUsageDescription": "写真を撮影して記録に追加するためにカメラを使用します。",
         "NSPhotoLibraryUsageDescription": "記録に写真を追加するためにフォトライブラリにアクセスします。",
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "jp.testalbum.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "intentFilters": [
         {
           "action": "VIEW",
