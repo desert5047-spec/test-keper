@@ -66,30 +66,34 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    const handleUrl = (url: string | null, source: 'initial' | 'event') => {
-      console.warn(`[DL] ${source}`, url);
-      if (!url || !url.includes('auth-callback')) return;
-      let code: string | undefined;
-      let type: string | undefined;
-      try {
-        const parsed = new URL(url);
-        code = parsed.searchParams.get('code') ?? undefined;
-        type = parsed.searchParams.get('type') ?? undefined;
-      } catch (error) {
-        const parsed = Linking.parse(url);
-        code = typeof parsed.queryParams?.code === 'string' ? parsed.queryParams.code : undefined;
-        type = typeof parsed.queryParams?.type === 'string' ? parsed.queryParams.type : undefined;
-      }
-      if (code || type) {
-        router.replace({ pathname: '/auth-callback', params: { ...(code ? { code } : {}), ...(type ? { type } : {}) } });
-      } else {
-        router.replace('/auth-callback');
-      }
-    };
+    try {
+      const handleUrl = (url: string | null, source: 'initial' | 'event') => {
+        console.warn(`[DL] ${source}`, url);
+        if (!url || !url.includes('auth-callback')) return;
+        let code: string | undefined;
+        let type: string | undefined;
+        try {
+          const parsed = new URL(url);
+          code = parsed.searchParams.get('code') ?? undefined;
+          type = parsed.searchParams.get('type') ?? undefined;
+        } catch (error) {
+          const parsed = Linking.parse(url);
+          code = typeof parsed.queryParams?.code === 'string' ? parsed.queryParams.code : undefined;
+          type = typeof parsed.queryParams?.type === 'string' ? parsed.queryParams.type : undefined;
+        }
+        if (code || type) {
+          router.replace({ pathname: '/auth-callback', params: { ...(code ? { code } : {}), ...(type ? { type } : {}) } });
+        } else {
+          router.replace('/auth-callback');
+        }
+      };
 
-    Linking.getInitialURL().then((url) => handleUrl(url, 'initial'));
-    const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url, 'event'));
-    return () => subscription.remove();
+      Linking.getInitialURL().then((url) => handleUrl(url, 'initial'));
+      const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url, 'event'));
+      return () => subscription.remove();
+    } catch (error) {
+      console.warn('[DL] Linking error', error);
+    }
   }, [router]);
 
   if (!isSupabaseConfigured) {
