@@ -3,7 +3,7 @@ import 'react-native-get-random-values';
 import { useEffect, useState } from 'react';
 import { Stack, SplashScreen, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
@@ -24,8 +24,6 @@ const DebugHud = ({ initialUrl }: { initialUrl: string | null }) => {
   const pathname = usePathname();
   const { authLoading, sessionUserId } = useAuth();
 
-  if (!__DEV__) return null;
-
   return (
     <View pointerEvents="none" style={styles.debugHud}>
       <Text style={styles.debugHudText}>path: {pathname || '(none)'}</Text>
@@ -34,6 +32,23 @@ const DebugHud = ({ initialUrl }: { initialUrl: string | null }) => {
       <Text style={styles.debugHudText}>sessionUserId: {sessionUserId ?? '(none)'}</Text>
       <Text style={styles.debugHudText}>handlingAuthCb: {String(getHandlingAuthCallback())}</Text>
       <Text style={styles.debugHudText}>bootHold: {String(isBootHold())}</Text>
+    </View>
+  );
+};
+
+const AuthFallback = () => {
+  const { authLoading } = useAuth();
+
+  return (
+    <View pointerEvents="none" style={styles.authFallback}>
+      {authLoading ? (
+        <View style={styles.authFallbackRow}>
+          <ActivityIndicator size="small" color="#333" />
+          <Text style={styles.authFallbackText}>Auth loading...</Text>
+        </View>
+      ) : (
+        <Text style={styles.authFallbackText}>App ready (authLoading=false)</Text>
+      )}
     </View>
   );
 };
@@ -84,7 +99,6 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) {
     debugLog('[RootLayout] フォント読み込み中...', { platform: Platform.OS });
-    return null;
   }
 
   if (fontError) {
@@ -138,6 +152,7 @@ export default function RootLayout() {
               <Stack.Screen name="terms-of-service" />
               <Stack.Screen name="+not-found" />
             </Stack>
+            <AuthFallback />
             <DebugHud initialUrl={initialUrl} />
             <StatusBar style="auto" />
           </DateProvider>
@@ -181,5 +196,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     lineHeight: 13,
+  },
+  authFallback: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    zIndex: 9998,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 6,
+  },
+  authFallbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  authFallbackText: {
+    color: '#111',
+    fontSize: 11,
+    lineHeight: 14,
   },
 });
