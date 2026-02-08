@@ -19,6 +19,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  authLoading: boolean;
+  sessionUserId: string | null;
   familyId: string | null;
   isFamilyReady: boolean;
   familyDisplayName: string | null;
@@ -47,6 +49,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  authLoading: true,
+  sessionUserId: null,
   familyId: null,
   isFamilyReady: false,
   familyDisplayName: null,
@@ -73,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [isFamilyReady, setIsFamilyReady] = useState(false);
@@ -91,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const familyEnsureRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cachedFamilyIdAppliedRef = useRef(false);
   const refreshSetupCallRef = useRef(0);
+  const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const familyIdCacheKey = (userId: string) => `familyId:${userId}`;
   const pendingInviteNavigationRef = useRef(false);
@@ -98,6 +104,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pendingConsentKey = 'pendingConsent';
   const shouldHoldAuthRedirect = () =>
     getHandlingAuthCallback() || isBootHold() || pathname?.includes('auth-callback') === true;
+
+  const clearInitTimer = () => {
+    if (initTimerRef.current) {
+      clearTimeout(initTimerRef.current);
+      initTimerRef.current = null;
+    }
+  };
+
+  const markAuthReady = () => {
+    clearInitTimer();
+    setLoading(false);
+    setAuthLoading(false);
+  };
   const extractInviteTokenFromUrl = async () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -824,6 +843,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkAndRedirect]);
 
   useEffect(() => {
+    clearInitTimer();
+    initTimerRef.current = setTimeout(() => {
+      console.warn('[AuthContext] Auth init timeout');
+      markAuthReady();
+    }, 4000);
+
     const initAuthSession = async () => {
       debugLog('[AuthContext][Session] getSession 開始', { platform: Platform.OS });
       try {
@@ -846,13 +871,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ensuredUserIdRef.current = null;
             ensureFamilyInFlightRef.current = false;
           }
-          setLoading(false);
+          markAuthReady();
           return;
         }
 
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        markAuthReady();
 
         if (session?.user) {
           const profileStart = Date.now();
@@ -898,7 +923,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setFamilyId(null);
           setIsFamilyReady(false);
         }
-        setLoading(false);
+        markAuthReady();
       }
     };
 
@@ -911,13 +936,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         debugLog('[AuthContext] トークンがリフレッシュされました', { platform: Platform.OS });
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        markAuthReady();
         return;
       }
 
       if (event === 'PASSWORD_RECOVERY') {
         debugLog('[AuthContext] PASSWORD_RECOVERY 検出', { platform: Platform.OS });
-        setLoading(false);
+        markAuthReady();
         router.replace('/(auth)/reset-password');
         return;
       }
@@ -928,13 +953,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // INITIAL_SESSIONイベントの場合は、getSession()の結果を待つため、loadingをfalseにしない
       // 他のイベントの場合は、loadingをfalseにする
       if (event !== 'INITIAL_SESSION') {
-        setLoading(false);
+        markAuthReady();
       }
       
       // SIGNED_INイベントの場合は、オンボーディング/子供登録チェックを実行
       if (event === 'SIGNED_IN' && session?.user) {
         debugLog('[AuthContext] ログイン検出、オンボーディングチェックを実行', { platform: Platform.OS });
-        setLoading(false);
+        markAuthReady();
         await ensureProfileConsent(session.user);
         const hasPendingInvite = await navigateToPendingInvite();
         if (!hasPendingInvite) {
@@ -948,7 +973,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // SIGNED_OUTイベントの場合は、ログイン画面にリダイレクト
       if (event === 'SIGNED_OUT') {
         debugLog('[AuthContext] ログアウト検出、ログイン画面にリダイレクト', { platform: Platform.OS });
-        setLoading(false);
+        markAuthReady();
         setFamilyId(null);
         setIsFamilyReady(false);
         ensuredUserIdRef.current = null;
@@ -973,7 +998,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
-          setLoading(false);
+          markAuthReady();
           if (!currentSession?.user) {
             setFamilyId(null);
             setIsFamilyReady(false);
@@ -1014,6 +1039,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const linkingSubscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {
+      clearInitTimer();
       subscription.unsubscribe();
       linkingSubscription.remove();
     };
@@ -1490,6 +1516,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         loading,
+        authLoading,
+        sessionUserId: session?.user?.id ?? null,
         familyId,
         isFamilyReady,
         familyDisplayName,

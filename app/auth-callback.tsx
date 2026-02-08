@@ -95,7 +95,7 @@ export default function AuthCallbackDeepLink() {
     }
   };
 
-  const makeTimeout = (label: string, ms = 10000) => {
+  const makeTimeout = (label: string, ms = 6000) => {
     let timerId: ReturnType<typeof setTimeout> | null = null;
     const promise = new Promise<never>((_, reject) => {
       timerId = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
@@ -138,6 +138,13 @@ export default function AuthCallbackDeepLink() {
     if (isMountedRef.current) {
       setSource(input.source);
     }
+
+    const scheduleFailureReturn = () => {
+      setTimeout(() => {
+        if (!isMountedRef.current) return;
+        router.replace('/(auth)/login');
+      }, 1000);
+    };
 
     try {
       setHandlingAuthCallback(true);
@@ -198,6 +205,7 @@ export default function AuthCallbackDeepLink() {
               setMessage(`exchangeCodeForSession エラー: ${error.message}`);
               setErrorDetail(`${error.name || 'Error'}: ${error.message}`);
             }
+            scheduleFailureReturn();
             return;
           }
           if (isMountedRef.current) {
@@ -211,6 +219,7 @@ export default function AuthCallbackDeepLink() {
             setMessage(messageText);
             setErrorDetail(messageText);
           }
+          scheduleFailureReturn();
           return;
         } finally {
           timeout.cancel();
@@ -234,6 +243,7 @@ export default function AuthCallbackDeepLink() {
               setMessage(`setSession エラー: ${error.message}`);
               setErrorDetail(`${error.name || 'Error'}: ${error.message}`);
             }
+            scheduleFailureReturn();
             return;
           }
           if (isMountedRef.current) {
@@ -247,6 +257,7 @@ export default function AuthCallbackDeepLink() {
             setMessage(messageText);
             setErrorDetail(messageText);
           }
+          scheduleFailureReturn();
           return;
         } finally {
           timeout.cancel();
@@ -257,6 +268,7 @@ export default function AuthCallbackDeepLink() {
           setMessage('コード/トークンが見つかりません。ログイン画面へ戻ります。');
           setErrorDetail('Error: missing code/token');
         }
+        scheduleFailureReturn();
         return;
       }
 
@@ -296,8 +308,10 @@ export default function AuthCallbackDeepLink() {
         setErrorDetail(error instanceof Error ? `${error.name}: ${error.message}` : 'Unknown');
       }
       hasProcessedRef.current = false;
+      scheduleFailureReturn();
     } finally {
       setHandlingAuthCallback(false);
+      clearGuardTimer();
       clearOverallTimer();
     }
   };
