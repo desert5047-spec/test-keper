@@ -11,6 +11,7 @@ import {
   Image,
   Switch,
   Alert,
+  Linking,
 } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -202,11 +203,11 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
             <TouchableOpacity
-              onPress={() => router.push('/(auth)/forgot-password')}
+              onPress={() => Linking.openURL('https://www.test-album.jp/reset-password')}
               disabled={loading}
               style={styles.forgotPasswordLink}
               activeOpacity={0.7}>
-              <Text style={styles.forgotPasswordText}>パスワードを忘れた場合</Text>
+              <Text style={styles.forgotPasswordText}>パスワードを忘れた方</Text>
             </TouchableOpacity>
           </View>
 
@@ -247,6 +248,14 @@ export default function LoginScreen() {
               <Text style={styles.signupLink}>新規登録</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            onPress={() => Linking.openURL('https://www.test-album.jp/contact')}
+            disabled={loading}
+            style={styles.contactLink}
+            activeOpacity={0.7}>
+            <Text style={styles.contactText}>お問い合わせ</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -446,6 +455,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#4A90E2',
+  },
+  contactLink: {
+    marginTop: 16,
+    alignSelf: 'center',
+  },
+  contactText: {
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#4A90E2',
