@@ -13,6 +13,7 @@ import { DateProvider } from '@/contexts/DateContext';
 import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
 import { getHandlingAuthCallback, isBootHold } from '@/lib/authCallbackState';
+import DebugHudOverlay from '@/components/DebugHud';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -139,6 +140,7 @@ export default function RootLayout() {
               <Stack.Screen name="+not-found" />
             </Stack>
             <DebugHud initialUrl={initialUrl} />
+            <DebugHudOverlay />
             <StatusBar style="auto" />
           </DateProvider>
         </ChildProvider>

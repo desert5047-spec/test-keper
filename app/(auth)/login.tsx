@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Image,
   Switch,
+  Alert,
 } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getLastAuthProvider } from '@/lib/auth/lastProvider';
 import { getRememberMe, setRememberMe } from '@/lib/authStorage';
 import { Eye, EyeOff } from 'lucide-react-native';
+import { appendLog, setDebugLoginPressed, setDebugLoginResult } from '@/lib/debugLog';
+import { supabase } from '@/lib/supabase';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -33,7 +36,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signIn } = useAuth();
+  const { session, initializing } = useAuth();
   const [lastLoginMethod, setLastLoginMethod] = useState<string | null>(null);
   const [rememberMe, setRememberMeState] = useState(true);
 
@@ -70,7 +73,17 @@ export default function LoginScreen() {
     await setRememberMe(value);
   };
 
+  useEffect(() => {
+    if (initializing) return;
+    if (session?.user) {
+      router.replace('/(tabs)');
+    }
+  }, [initializing, session?.user, router]);
+
   const handleLogin = async () => {
+    console.log('LOGIN PRESSED');
+    appendLog('LOGIN PRESSED');
+    setDebugLoginPressed();
     if (!email || !password) {
       setError('メールアドレスとパスワードを入力してください');
       return;
@@ -82,7 +95,18 @@ export default function LoginScreen() {
 
     try {
       const trimmedEmail = email.trim();
-      const { error: signInError } = await signIn(trimmedEmail, password);
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password,
+      });
+      console.log('[LOGIN] error:', signInError);
+      console.log('[LOGIN] data.session exists:', !!data?.session);
+      console.log('[LOGIN] getSession:', !!(await supabase.auth.getSession()).data.session);
+      console.log('LOGIN RESULT', { hasSession: !!data?.session, error: signInError?.message });
+      appendLog(
+        `LOGIN RESULT hasSession=${!!data?.session} error=${signInError?.message || 'none'}`
+      );
+      setDebugLoginResult(!!data?.session, signInError?.message);
 
       if (signInError) {
         const message = (signInError as any)?.message ?? '';
@@ -93,17 +117,21 @@ export default function LoginScreen() {
           console.error('[Login] ログインエラー');
         }
         setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。');
-        setLoading(false);
+        Alert.alert('ログインできませんでした', signInError?.message ?? 'もう一度お試しください。');
         return;
       }
 
-      debugLog('[Login] ログイン成功、onAuthStateChangeを待機中...');
-      // onAuthStateChangeが発火するまで少し待つ
-      // リダイレクトはAuthContextのonAuthStateChangeで処理される
-      setLoading(false);
+      console.log('[LOGIN] success -> replace /(tabs)');
+      router.replace('/(tabs)');
+      setTimeout(() => {
+        console.log('[LOGIN] fallback replace /(tabs)');
+        router.replace('/(tabs)');
+      }, 1000);
     } catch (err: any) {
       console.error('[Login] ログイン処理例外');
       setError('ログイン中にエラーが発生しました。もう一度お試しください。');
+      Alert.alert('ログイン中にエラーが発生しました', err?.message ?? 'もう一度お試しください。');
+    } finally {
       setLoading(false);
     }
   };

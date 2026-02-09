@@ -6,8 +6,14 @@ import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
-import { saveLastAuthProvider } from '@/lib/auth/lastProvider';
+import { clearLastAuthProvider, saveLastAuthProvider } from '@/lib/auth/lastProvider';
 import { getHandlingAuthCallback, isBootHold } from '@/lib/authCallbackState';
+import {
+  appendLog,
+  setDebugAuthEvent,
+  setDebugInitializing,
+  setDebugWatchdogFired,
+} from '@/lib/debugLog';
 
 const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -15,11 +21,14 @@ const debugLog = (...args: unknown[]) => {
   }
 };
 
+const AUTH_CONTEXT_ROUTING_ENABLED = false;
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
   authLoading: boolean;
+  initializing: boolean;
   sessionUserId: string | null;
   familyId: string | null;
   isFamilyReady: boolean;
@@ -33,7 +42,10 @@ interface AuthContextType {
   refreshSetupStatus: () => Promise<void>;
   saveConsent: (consent: { agreedTerms: boolean; agreedPrivacy: boolean }) => Promise<void>;
   setActiveFamilyId: (familyId: string | null) => void;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ data: { session: Session | null } | null; error: Error | null }>;
   signUp: (
     email: string,
     password: string,
@@ -50,6 +62,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   authLoading: true,
+  initializing: true,
   sessionUserId: null,
   familyId: null,
   isFamilyReady: false,
@@ -63,7 +76,7 @@ const AuthContext = createContext<AuthContextType>({
   refreshSetupStatus: async () => {},
   saveConsent: async () => {},
   setActiveFamilyId: () => {},
-  signIn: async () => ({ error: null }),
+  signIn: async () => ({ data: null, error: null }),
   signUp: async () => ({ error: null }),
   signInWithGoogle: async () => ({ error: null }),
   resetPassword: async () => ({ error: null }),
@@ -78,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [isFamilyReady, setIsFamilyReady] = useState(false);
@@ -843,13 +857,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkAndRedirect]);
 
   useEffect(() => {
+    setInitializing(true);
+    setAuthLoading(true);
+    setDebugInitializing(true);
+    setDebugWatchdogFired(false);
     clearInitTimer();
     initTimerRef.current = setTimeout(() => {
-      console.warn('[AuthContext] Auth init timeout');
+      console.warn('[AuthContext] Auth init timeout (forced unlock)');
+      appendLog('Auth init timeout (forced unlock)');
+      setDebugWatchdogFired(true);
+      setDebugInitializing(false);
+      setInitializing(false);
       markAuthReady();
-    }, 4000);
+    }, 8000);
 
     const initAuthSession = async () => {
+      console.log('[AuthContext][Session] getSession start');
+      appendLog('getSession start');
       debugLog('[AuthContext][Session] getSession 開始', { platform: Platform.OS });
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -861,6 +885,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         if (error) {
           console.error('[AuthContext] セッション取得エラー');
+          appendLog('getSession error');
           // リフレッシュトークンエラーの場合は、セッションをクリアしてログイン画面へ
           if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
             console.warn('[AuthContext] リフレッシュトークンエラーを検出、セッションをクリアします');
@@ -878,6 +903,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         markAuthReady();
+        appendLog(`getSession done hasUser=${!!session?.user}`);
 
         if (session?.user) {
           const profileStart = Date.now();
@@ -915,6 +941,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('[AuthContext] セッション取得例外');
+        appendLog('getSession exception');
         // リフレッシュトークンエラーの場合は、セッションをクリア
         if ((error as any)?.message?.includes('Refresh Token') || (error as any)?.message?.includes('refresh_token')) {
           console.warn('[AuthContext] リフレッシュトークンエラー例外を検出、セッションをクリアします');
@@ -924,13 +951,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsFamilyReady(false);
         }
         markAuthReady();
+      } finally {
+        console.log('[AuthContext][Session] getSession done');
+        setDebugInitializing(false);
+        setInitializing(false);
+        setAuthLoading(false);
       }
     };
 
     initAuthSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[AuthContext][onAuthStateChange]', event);
+      appendLog(`onAuthStateChange ${event}`);
+      setDebugAuthEvent(event);
       debugLog('[AuthContext] 認証状態変更:', { event, platform: Platform.OS });
+      setInitializing(false);
+      setAuthLoading(false);
       // トークンリフレッシュエラーを処理
       if (event === 'TOKEN_REFRESHED') {
         debugLog('[AuthContext] トークンがリフレッシュされました', { platform: Platform.OS });
@@ -943,7 +980,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'PASSWORD_RECOVERY') {
         debugLog('[AuthContext] PASSWORD_RECOVERY 検出', { platform: Platform.OS });
         markAuthReady();
-        router.replace('/(auth)/reset-password');
+        if (AUTH_CONTEXT_ROUTING_ENABLED) {
+          router.replace('/(auth)/reset-password');
+        }
         return;
       }
       
@@ -962,7 +1001,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         markAuthReady();
         await ensureProfileConsent(session.user);
         const hasPendingInvite = await navigateToPendingInvite();
-        if (!hasPendingInvite) {
+        if (!hasPendingInvite && AUTH_CONTEXT_ROUTING_ENABLED) {
           // 少し遅延を入れて、segmentsが更新されるのを待つ
           setTimeout(() => {
             checkAndRedirectRef.current(session.user);
@@ -983,12 +1022,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           debugLog('[AuthContext] 認証コールバック処理中のためリダイレクトを抑止', { platform: Platform.OS });
           return;
         }
-        // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
-        const delay = Platform.OS === 'android' ? 300 : 100;
-        setTimeout(() => {
-          debugLog('[AuthContext] リダイレクト実行:', { platform: Platform.OS });
-          router.replace('/(auth)/login');
-        }, delay);
+        if (AUTH_CONTEXT_ROUTING_ENABLED) {
+          // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
+          const delay = Platform.OS === 'android' ? 300 : 100;
+          setTimeout(() => {
+            debugLog('[AuthContext] リダイレクト実行:', { platform: Platform.OS });
+            router.replace('/(auth)/login');
+          }, delay);
+        }
       }
       
       // INITIAL_SESSIONイベントの場合は、getSession()の結果を待つ
@@ -1042,6 +1083,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearInitTimer();
       subscription.unsubscribe();
       linkingSubscription.remove();
+      setInitializing(false);
+      setDebugInitializing(false);
     };
   }, []);
 
@@ -1074,7 +1117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router, segments]);
 
   useEffect(() => {
+    if (!AUTH_CONTEXT_ROUTING_ENABLED) return;
     if (loading || checkingOnboarding) return;
+    if (initializing) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const isOnboarding = segments[0] === 'onboarding';
@@ -1281,7 +1326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('[AuthContext] signIn エラー');
-        return { error };
+        return { data: null, error };
       }
 
       debugLog('[AuthContext] signIn 成功', { platform: Platform.OS });
@@ -1292,10 +1337,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // セッションが確立されるまで少し待つ
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      return { error: null };
+      return { data: { session: data.session ?? null }, error: null };
     } catch (err: any) {
       console.error('[AuthContext] signIn 例外');
-      return { error: err instanceof Error ? err : new Error('ログイン中にエラーが発生しました') };
+      return { data: null, error: err instanceof Error ? err : new Error('ログイン中にエラーが発生しました') };
     }
   };
 
@@ -1423,39 +1468,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn('[AuthContext] AsyncStorageクリアエラー');
         }
       }
+
+      await clearLastAuthProvider();
       
       debugLog('[AuthContext] ログアウト処理完了、ログイン画面にリダイレクト', { platform: Platform.OS });
       
-      // ログイン画面にリダイレクト
-      // Web環境では、window.locationを使う方が確実
       if (shouldHoldAuthRedirect()) {
         debugLog('[AuthContext] 認証コールバック処理中のためログイン遷移を抑止', { platform: Platform.OS });
         return;
       }
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        // 少し遅延を入れて、状態更新と認証プロバイダー情報の削除を確実にする
-        setTimeout(() => {
-          debugLog('[AuthContext] ログイン画面にリダイレクト実行', { platform: Platform.OS });
-          window.location.href = '/(auth)/login';
-        }, 200);
-      } else {
-        // Android/iOS環境では、router.replaceを使用
-        // Androidでは、より確実にリダイレクトするため、少し長めの遅延を入れる
-        const delay = Platform.OS === 'android' ? 300 : 100;
-        setTimeout(() => {
-          debugLog('[AuthContext] Android/iOSリダイレクト実行:', { platform: Platform.OS });
-          // Androidでは、複数回試行する
-          if (Platform.OS === 'android') {
-            router.replace('/(auth)/login');
-            // 念のため、もう一度試行
-            setTimeout(() => {
-              router.replace('/(auth)/login');
-            }, 200);
-          } else {
-            router.replace('/(auth)/login');
-          }
-        }, delay);
-      }
+      debugLog('[AuthContext] ログイン画面へ遷移:', { platform: Platform.OS });
+      router.replace('/(auth)/login');
     } catch (error) {
       console.error('[AuthContext] ログアウト処理中に予期しないエラー');
       // エラーが発生しても、ローカルの状態をクリアしてリダイレクト
@@ -1517,6 +1540,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         loading,
         authLoading,
+        initializing,
         sessionUserId: session?.user?.id ?? null,
         familyId,
         isFamilyReady,

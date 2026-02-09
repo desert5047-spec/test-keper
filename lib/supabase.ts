@@ -18,6 +18,10 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || getExtraString('EXPO
 const supabaseAnonKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || getExtraString('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('[Supabase] EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY が未設定です');
+}
+
 const isPlaceholder = (v: string) =>
   !v ||
   v === 'your_supabase_project_url' ||
