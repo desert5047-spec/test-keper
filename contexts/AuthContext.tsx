@@ -843,13 +843,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkAndRedirect]);
 
   useEffect(() => {
-    setAuthLoading(true);
     clearInitTimer();
     initTimerRef.current = setTimeout(() => {
-      console.warn('[AuthContext] Auth init timeout (forced unlock)');
-      clearInitTimer();
-      setAuthLoading(false);
-    }, 3000);
+      console.warn('[AuthContext] Auth init timeout');
+      markAuthReady();
+    }, 4000);
 
     const initAuthSession = async () => {
       debugLog('[AuthContext][Session] getSession 開始', { platform: Platform.OS });
