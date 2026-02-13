@@ -1,4 +1,5 @@
 let isHandlingAuthCallback = false;
+
 let bootHoldUntil = 0;
 
 export const setHandlingAuthCallback = (value: boolean) => {

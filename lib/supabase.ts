@@ -14,7 +14,8 @@ const getExtraString = (key: string) => {
   return typeof value === 'string' ? value : '';
 };
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || getExtraString('EXPO_PUBLIC_SUPABASE_URL');
+export const supabaseUrl =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || getExtraString('EXPO_PUBLIC_SUPABASE_URL');
 const supabaseAnonKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || getExtraString('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 

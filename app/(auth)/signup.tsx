@@ -86,10 +86,11 @@ export default function SignupScreen() {
 
     setError('');
     setSuccessMessage('');
+    setShowSuccess(false);
     setLoading(true);
     await persistPendingConsent();
 
-    const { error: signUpError } = await signUp(email, password, {
+    const { error: signUpError, status } = await signUp(email, password, {
       agreedTerms: agreed,
       agreedPrivacy: agreed,
     });
@@ -105,15 +106,29 @@ export default function SignupScreen() {
       return;
     }
 
-    setLoading(false);
-    setSuccessMessage('登録ありがとうございます。メールアドレスに認証用メールを送信しましたので、メールを確認して承認してください。');
-    setShowSuccess(true);
-
-    // 5秒後にログイン画面に遷移
-    setTimeout(() => {
+    if (status === 'existing') {
+      setLoading(false);
+      setError('登録済みです。ログインまたはパスワードリセットをご利用ください。');
+      setSuccessMessage('');
       setShowSuccess(false);
-      router.replace('/(auth)/login');
-    }, 5000);
+      Alert.alert(
+        'このメールは登録済みです',
+        'ログインまたはパスワードリセットをご利用ください。'
+      );
+      return;
+    }
+
+    if (status === 'email_sent') {
+      setLoading(false);
+      setSuccessMessage('確認メールを送信しました。メールのリンクから登録を完了してください。');
+      setShowSuccess(true);
+      return;
+    }
+
+    setLoading(false);
+    if (status === 'signed_in') {
+      return;
+    }
   };
 
   return (
@@ -129,7 +144,13 @@ export default function SignupScreen() {
         showsVerticalScrollIndicator={false}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack?.()) {
+              router.back();
+            } else {
+              router.replace('/(auth)/login');
+            }
+          }}
           disabled={loading}
           activeOpacity={0.7}>
           <ChevronLeft size={24} color="#333" strokeWidth={2} />

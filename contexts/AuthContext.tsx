@@ -3,7 +3,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { usePathname, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTrackLastAuthProvider } from '@/hooks/useTrackLastAuthProvider';
 import { clearLastAuthProvider, saveLastAuthProvider } from '@/lib/auth/lastProvider';
@@ -20,6 +20,20 @@ const debugLog = (...args: unknown[]) => {
     console.log(...args);
   }
 };
+
+/** 無効なリフレッシュトークンによるエラーかどうかを判定する */
+function isInvalidRefreshTokenError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const msg = (error as { message?: string })?.message ?? '';
+  const name = (error as { name?: string })?.name ?? '';
+  return (
+    name === 'AuthApiError' ||
+    msg.includes('Refresh Token') ||
+    msg.includes('refresh_token') ||
+    msg.includes('Refresh Token Not Found') ||
+    msg.includes('Invalid Refresh Token')
+  );
+}
 
 const AUTH_CONTEXT_ROUTING_ENABLED = false;
 
@@ -50,7 +64,7 @@ interface AuthContextType {
     email: string,
     password: string,
     consent?: { agreedTerms: boolean; agreedPrivacy: boolean }
-  ) => Promise<{ error: Error | null }>;
+  ) => Promise<{ error: Error | null; status: 'existing' | 'email_sent' | 'signed_in' | 'error' }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
@@ -77,7 +91,7 @@ const AuthContext = createContext<AuthContextType>({
   saveConsent: async () => {},
   setActiveFamilyId: () => {},
   signIn: async () => ({ data: null, error: null }),
-  signUp: async () => ({ error: null }),
+  signUp: async () => ({ error: null, status: 'error' }),
   signInWithGoogle: async () => ({ error: null }),
   resetPassword: async () => ({ error: null }),
   updatePassword: async () => ({ error: null }),
@@ -167,6 +181,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ) => {
       const now = new Date().toISOString();
       const agreedAt = consent.agreedAt ?? now;
+      try {
+        const { data } = await supabase.auth.getSession();
+        const session = data.session;
+        console.log('[AUTH][PRE_UPSERT] hasSession=' + String(!!session));
+        console.log('[AUTH][PRE_UPSERT] hasAccessToken=' + String(!!session?.access_token));
+        console.log('[AUTH][PRE_UPSERT] userId=' + String(session?.user?.id ?? ''));
+        if (!session) {
+          return;
+        }
+      } catch (error) {
+        console.warn('[AUTH][PRE_UPSERT] getSession failed');
+        return;
+      }
       const { error } = await supabase.from('profiles').upsert(
         {
           user_id: userId,
@@ -180,6 +207,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.warn('[AuthContext] profiles upsert 失敗');
+        if ((error as { status?: number })?.status === 401) {
+          console.log('[AUTH][UPSERT_FAIL]', error.status, error.message);
+        }
       }
     },
     []
@@ -886,8 +916,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error('[AuthContext] セッション取得エラー');
           appendLog('getSession error');
-          // リフレッシュトークンエラーの場合は、セッションをクリアしてログイン画面へ
-          if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
+          // リフレッシュトークンエラーの場合は、セッションをクリアしてストレージもクリア
+          if (isInvalidRefreshTokenError(error)) {
             console.warn('[AuthContext] リフレッシュトークンエラーを検出、セッションをクリアします');
             setSession(null);
             setUser(null);
@@ -895,6 +925,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsFamilyReady(false);
             ensuredUserIdRef.current = null;
             ensureFamilyInFlightRef.current = false;
+            supabase.auth.signOut().catch(() => {});
           }
           markAuthReady();
           return;
@@ -942,13 +973,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('[AuthContext] セッション取得例外');
         appendLog('getSession exception');
-        // リフレッシュトークンエラーの場合は、セッションをクリア
-        if ((error as any)?.message?.includes('Refresh Token') || (error as any)?.message?.includes('refresh_token')) {
+        // リフレッシュトークンエラー（Invalid Refresh Token 等）の場合はセッションをクリアしストレージも削除
+        if (isInvalidRefreshTokenError(error)) {
           console.warn('[AuthContext] リフレッシュトークンエラー例外を検出、セッションをクリアします');
           setSession(null);
           setUser(null);
           setFamilyId(null);
           setIsFamilyReady(false);
+          ensuredUserIdRef.current = null;
+          ensureFamilyInFlightRef.current = false;
+          supabase.auth.signOut().catch(() => {});
         }
         markAuthReady();
       } finally {
@@ -1036,6 +1070,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // getSession()が完了したら、loadingをfalseにする
       if (event === 'INITIAL_SESSION') {
         // getSession()の結果を待つ（既に実行されているが、念のため）
+        // getSession()がリフレッシュトークンエラーで例外を投げる場合があるため .catch で処理
         supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
@@ -1043,8 +1078,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!currentSession?.user) {
             setFamilyId(null);
             setIsFamilyReady(false);
-        setIsConsentReady(false);
-        setNeedsConsent(false);
+            setIsConsentReady(false);
+            setNeedsConsent(false);
             if (shouldHoldAuthRedirect()) {
               debugLog('[AuthContext] 認証コールバック処理中のためログイン遷移を抑止', { platform: Platform.OS });
             }
@@ -1053,6 +1088,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             hasUser: !!currentSession?.user,
             platform: Platform.OS 
           });
+        }).catch((err) => {
+          if (isInvalidRefreshTokenError(err)) {
+            console.warn('[AuthContext] INITIAL_SESSION getSession でリフレッシュトークンエラー、セッションをクリアします');
+            setSession(null);
+            setUser(null);
+            setFamilyId(null);
+            setIsFamilyReady(false);
+            ensuredUserIdRef.current = null;
+            ensureFamilyInFlightRef.current = false;
+            setIsConsentReady(false);
+            setNeedsConsent(false);
+            supabase.auth.signOut().catch(() => {});
+          }
+          markAuthReady();
         });
       }
     });
@@ -1367,11 +1416,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
+    console.log('[AuthContext][signUp] error:', error);
+    console.log('[AuthContext][signUp] sessionExists:', !!data?.session);
+
     if (error) {
-      return { error };
+      const message = error.message || '登録に失敗しました。';
+      const lower = message.toLowerCase();
+      const isAlreadyRegistered =
+        lower.includes('already') || lower.includes('registered');
+      if (isAlreadyRegistered) {
+        Alert.alert(
+          'このメールは登録済みです',
+          `${message}\n\nこのメールは登録済みです。ログインしてください。`
+        );
+      } else {
+        Alert.alert('登録に失敗しました', message);
+      }
+      return { error, status: isAlreadyRegistered ? 'existing' : 'error' };
     }
 
-    if (data?.user && consent) {
+    if (!data?.session) {
+      const identitiesCount = data?.user?.identities?.length;
+      console.log('[AuthContext][signUp] identitiesCount:', identitiesCount ?? 'undefined');
+      const isExistingEmail = identitiesCount === 0 || identitiesCount === undefined;
+      if (isExistingEmail) {
+        Alert.alert(
+          'このメールは登録済みです',
+          'このメールは登録済みです。ログインしてください。'
+        );
+        return { error: null, status: 'existing' };
+      }
+      Alert.alert(
+        '確認メールを送信しました',
+        'メールのリンクから登録を完了してください。'
+      );
+      return { error: null, status: 'email_sent' };
+    }
+
+    if (data.user && consent) {
       await upsertProfileConsent(data.user.id, {
         agreedTerms: consent.agreedTerms,
         agreedPrivacy: consent.agreedPrivacy,
@@ -1379,7 +1461,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    return { error: null };
+    router.replace('/(tabs)');
+    return { error: null, status: 'signed_in' };
   };
 
   const signInWithGoogle = async () => {

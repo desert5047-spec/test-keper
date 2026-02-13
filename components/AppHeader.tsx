@@ -191,8 +191,8 @@ export function AppHeader({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 0,
-    left: 0,
+    top: -1,
+    left: 1,
     right: 0,
     backgroundColor: '#FFF',
     paddingTop: Platform.select({

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLastAuthProvider } from '@/lib/auth/lastProvider';
@@ -34,6 +35,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -77,62 +79,63 @@ export default function LoginScreen() {
   useEffect(() => {
     if (initializing) return;
     if (session?.user) {
-      router.replace('/(tabs)');
+      // index でオンボーディング要否を判定してから遷移するため / へ
+      router.replace('/');
     }
   }, [initializing, session?.user, router]);
 
-  const handleLogin = async () => {
-    console.log('LOGIN PRESSED');
-    appendLog('LOGIN PRESSED');
-    setDebugLoginPressed();
-    if (!email || !password) {
-      setError('メールアドレスとパスワードを入力してください');
+  const submitLogin = async () => {
+    console.log('[LOGIN:0] pressed');
+
+    if (isSubmitting) {
+      console.log('[LOGIN:0.1] blocked by isSubmitting');
       return;
     }
 
-    debugLog('[Login] ログイン処理開始', { platform: Platform.OS });
+    const e = (email ?? '').trim();
+    const p = (password ?? '').trim();
+
+    console.log('[LOGIN:1] inputs', { emailLen: e.length, passwordLen: p.length });
+
+    if (!e || !p) {
+      console.log('[LOGIN:2] missing input', { email: !!e, password: !!p });
+      Alert.alert('入力が必要です', 'メールアドレスとパスワードを入力してください');
+      return;
+    }
+
+    setIsSubmitting(true);
+    appendLog('LOGIN PRESSED');
+    setDebugLoginPressed();
     setError('');
     setLoading(true);
 
     try {
-      const trimmedEmail = email.trim();
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
-        password,
+      console.log('[LOGIN:3] before signInWithPassword');
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: e,
+        password: p,
       });
-      console.log('[LOGIN] error:', signInError);
-      console.log('[LOGIN] data.session exists:', !!data?.session);
-      console.log('[LOGIN] getSession:', !!(await supabase.auth.getSession()).data.session);
-      console.log('LOGIN RESULT', { hasSession: !!data?.session, error: signInError?.message });
-      appendLog(
-        `LOGIN RESULT hasSession=${!!data?.session} error=${signInError?.message || 'none'}`
-      );
-      setDebugLoginResult(!!data?.session, signInError?.message);
 
-      if (signInError) {
-        const message = (signInError as any)?.message ?? '';
-        const isInvalidCredentials = message.includes('Invalid login credentials');
-        if (isInvalidCredentials) {
-          console.warn('[Login] ログイン失敗（認証情報不一致）');
-        } else {
-          console.error('[Login] ログインエラー');
-        }
-        setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。');
-        Alert.alert('ログインできませんでした', signInError?.message ?? 'もう一度お試しください。');
+      console.log('[LOGIN:4] error:', error);
+      console.log('[LOGIN:5] data.session exists:', !!data?.session);
+
+      const s = await supabase.auth.getSession();
+      console.log('[LOGIN:6] getSession:', { hasSession: !!s.data.session, error: s.error });
+
+      appendLog(
+        `LOGIN RESULT hasSession=${!!data?.session} error=${error?.message || 'none'}`
+      );
+      setDebugLoginResult(!!data?.session, error?.message);
+
+      if (error) {
+        Alert.alert('ログインできませんでした', error.message);
         return;
       }
 
-      console.log('[LOGIN] success -> replace /(tabs)');
-      router.replace('/(tabs)');
-      setTimeout(() => {
-        console.log('[LOGIN] fallback replace /(tabs)');
-        router.replace('/(tabs)');
-      }, 1000);
-    } catch (err: any) {
-      console.error('[Login] ログイン処理例外');
-      setError('ログイン中にエラーが発生しました。もう一度お試しください。');
-      Alert.alert('ログイン中にエラーが発生しました', err?.message ?? 'もう一度お試しください。');
+      console.log('[LOGIN:7] success -> replace / (index でオンボーディング判定)');
+      router.replace('/');
     } finally {
+      setIsSubmitting(false);
       setLoading(false);
     }
   };
@@ -170,6 +173,9 @@ export default function LoginScreen() {
               placeholderTextColor="#999"
               value={email}
               onChangeText={setEmail}
+              onBlur={() =>
+                console.log('[LOGIN] email blur', { len: (email ?? '').trim().length })
+              }
               autoCapitalize="none"
               keyboardType="email-address"
               autoComplete="email"
@@ -187,6 +193,9 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                onBlur={() =>
+                  console.log('[LOGIN] password blur', { len: (password ?? '').trim().length })
+                }
                 autoCapitalize="none"
                 autoComplete="password"
                 editable={!loading}
@@ -228,9 +237,12 @@ export default function LoginScreen() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
+            style={[
+              styles.loginButton,
+              (loading || isSubmitting) && styles.loginButtonDisabled,
+            ]}
+            onPress={submitLogin}
+            disabled={loading || isSubmitting}
             activeOpacity={0.8}>
             {loading ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -242,12 +254,13 @@ export default function LoginScreen() {
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>アカウントをお持ちでないですか？</Text>
             <TouchableOpacity
-              onPress={() => router.push('/(auth)/signup')}
+              onPress={() => WebBrowser.openBrowserAsync('https://www.test-album.jp/signup')}
               disabled={loading}
               activeOpacity={0.7}>
-              <Text style={styles.signupLink}>新規登録</Text>
+              <Text style={styles.signupLink}>Webで新規登録</Text>
             </TouchableOpacity>
           </View>
+          <Text style={styles.signupNote}>新規登録はWebで行います</Text>
 
           <TouchableOpacity
             onPress={() => Linking.openURL('https://www.test-album.jp/contact')}
@@ -404,6 +417,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#4A90E2',
+  },
+  signupNote: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#888',
   },
   divider: {
     flexDirection: 'row',
