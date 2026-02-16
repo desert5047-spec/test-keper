@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookOpen, ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
+import { warn, error as logError } from '@/lib/logger';
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');
@@ -45,7 +46,7 @@ export default function SignupScreen() {
       return;
     }
     Linking.openURL(url).catch((error) => {
-      console.warn('[Signup] 外部リンクを開けませんでした');
+      warn('[Signup] 外部リンクを開けませんでした');
     });
   };
 
@@ -60,7 +61,7 @@ export default function SignupScreen() {
       };
       await AsyncStorage.setItem(pendingConsentKey, JSON.stringify(payload));
     } catch (error) {
-      console.warn('[Signup] 同意情報の保存に失敗');
+      warn('[Signup] 同意情報の保存に失敗');
     }
   };
 
@@ -96,7 +97,7 @@ export default function SignupScreen() {
     });
 
     if (signUpError) {
-      console.error('[Signup] 登録エラー');
+      logError('[Signup] 登録エラー');
       if (signUpError.message?.toLowerCase().includes('already registered')) {
         setError('既に登録されています。ログインをお試しください。');
       } else {

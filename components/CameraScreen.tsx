@@ -10,12 +10,9 @@ import {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { X, RotateCw } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { log, error as logError } from '@/lib/logger';
 
-const debugLog = (...args: unknown[]) => {
-  if (__DEV__) {
-    console.log(...args);
-  }
-};
+const debugLog = log;
 
 interface CameraScreenProps {
   onCapture: (uri: string) => void;
@@ -82,7 +79,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         throw new Error('写真のURIが取得できませんでした');
       }
     } catch (error: any) {
-      console.error('[CameraScreen] 撮影エラー');
+      logError('[CameraScreen] 撮影エラー');
       // エラーは親コンポーネントで処理
     } finally {
       setIsCapturing(false);

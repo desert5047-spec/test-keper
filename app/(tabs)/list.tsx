@@ -1,28 +1,101 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Platform,
+  Alert,
+  RefreshControl,
 } from 'react-native';
-import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
-import { getSignedImageUrl } from '@/utils/imageUpload';
+import { getSignedImageUrl } from '@/lib/storage';
+import { getStoragePathFromUrl } from '@/utils/imageUpload';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { log, error as logError } from '@/lib/logger';
+
+type RecordWithImageUrl = TestRecord & { imageUrl: string | null };
 
 interface Section {
   title: string;
-  data: TestRecord[];
+  data: RecordWithImageUrl[];
 }
+
+const SUBJECT_COLORS: { [key: string]: string } = {
+  '国語': '#E74C3C',
+  '算数': '#3498DB',
+  '理科': '#27AE60',
+  '社会': '#E67E22',
+  '英語': '#2C3E50',
+  '生活': '#9B59B6',
+  '図工': '#F39C12',
+  '音楽': '#1ABC9C',
+  '体育': '#E91E63',
+};
+const getSubjectColor = (subject: string) => SUBJECT_COLORS[subject] || '#95A5A6';
+
+const THUMB_SIZE = 96;
+
+interface ListRecordCardProps {
+  item: RecordWithImageUrl;
+  onPress: (id: string) => void;
+}
+const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: ListRecordCardProps) {
+  const formatEvaluation = (r: TestRecord) =>
+    r.score !== null ? `${r.score}点（${r.max_score}点中）` : (r.stamp || '');
+  const subjectColor = getSubjectColor(item.subject);
+  const photoUrl = item.imageUrl && isValidImageUri(item.imageUrl) ? item.imageUrl : null;
+
+  return (
+    <TouchableOpacity
+      style={styles.recordItem}
+      onPress={() => onPress(item.id)}
+      activeOpacity={0.8}>
+      <View style={styles.thumbWrap}>
+        {photoUrl ? (
+          <View style={[styles.thumbRotateWrap, { transform: [{ rotate: `${item.photo_rotation ?? 0}deg` }] }]}>
+            <Image
+              source={{ uri: photoUrl }}
+              style={styles.thumbImg}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
+              recyclingKey={item.id}
+              onError={(e) => {
+                log('[THUMB][ImageError]', { id: item.id, url: item.imageUrl, error: e?.error });
+              }}
+            />
+          </View>
+        ) : item.photo_uri ? (
+          <View style={styles.thumbPlaceholder}>
+            <ActivityIndicator size="small" color="#999" />
+          </View>
+        ) : (
+          <View style={styles.thumbPlaceholder}>
+            <Text style={styles.thumbPlaceholderText}>写真なし</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.recordContent}>
+        <View style={styles.recordFirstRow}>
+          <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
+            <Text style={styles.subjectChipText}>{item.subject}</Text>
+          </View>
+          <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 export default function ListScreen() {
   const router = useRouter();
@@ -31,7 +104,10 @@ export default function ListScreen() {
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
   const [sections, setSections] = useState<Section[]>([]);
-  const [resolvedImageUrls, setResolvedImageUrls] = useState<{ [key: string]: string }>({});
+  const [stableSections, setStableSections] = useState<Section[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (params.year && params.month) {
@@ -39,172 +115,114 @@ export default function ListScreen() {
       const newMonth = parseInt(params.month as string);
       setYearMonth(newYear, newMonth);
     }
-  }, [params]);
+  }, [params, setYearMonth]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (selectedChildId && isFamilyReady && familyId) {
-        loadRecords();
-      }
-    }, [year, month, selectedChildId, isFamilyReady, familyId])
-  );
-
-  const loadRecords = async () => {
-    if (!selectedChildId || !isFamilyReady || !familyId) return;
-
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month, 0);
-    const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-
-    const { data } = await supabase
-      .from('records')
-      .select('*')
-      .eq('child_id', selectedChildId)
-      .eq('family_id', familyId)
-      .gte('date', startDate)
-      .lte('date', endDateStr)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    if (data) {
-      const grouped = data.reduce((acc, record) => {
-        const dateKey = record.date;
-        if (!acc[dateKey]) {
-          acc[dateKey] = [];
-        }
-        acc[dateKey].push(record);
-        return acc;
-      }, {} as Record<string, TestRecord[]>);
-
-      const sectionsData: Section[] = Object.keys(grouped)
-        .sort((a, b) => b.localeCompare(a))
-        .map((date) => ({
-          title: date,
-          data: grouped[date],
-        }));
-
-      setSections(sectionsData);
-      setResolvedImageUrls({});
-    } else {
-      setSections([]);
-      setResolvedImageUrls({});
+  const loadRecords = useCallback(async (opts: { isRefresh?: boolean } = {}) => {
+    const isRefresh = opts.isRefresh === true;
+    if (!selectedChildId || !isFamilyReady || !familyId) {
+      if (!isRefresh) setIsInitialLoading(false);
+      return;
     }
-  };
+
+    if (!isRefresh) setIsInitialLoading(true);
+    else setRefreshing(true);
+
+    try {
+      const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+      const endDate = new Date(year, month, 0);
+      const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+
+      const { data, error } = await supabase
+        .from('records')
+        .select('*')
+        .eq('child_id', selectedChildId)
+        .eq('family_id', familyId)
+        .or('score.not.is.null,stamp.not.is.null,photo_uri.not.is.null')
+        .gte('date', startDate)
+        .lte('date', endDateStr)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        logError('[記録読み込みエラー]', error.message);
+        if (isRefresh) {
+          Alert.alert('エラー', '一覧の取得に失敗しました。しばらくしてからお試しください。');
+        }
+        return;
+      }
+
+      if (data) {
+        const recordsWithImage: RecordWithImageUrl[] = await Promise.all(
+          data.map(async (r) => {
+            let imageUrl: string | null = null;
+            if (r.photo_uri) {
+              const path = /^https?:\/\//.test(r.photo_uri) ? getStoragePathFromUrl(r.photo_uri) : r.photo_uri;
+              if (path) {
+                try {
+                  imageUrl = await getSignedImageUrl(path);
+                } catch {
+                  imageUrl = null;
+                }
+              }
+            }
+            return { ...r, imageUrl };
+          })
+        );
+        log('[LIST][records sample]', recordsWithImage.slice(0, 3).map((r) => ({ id: r.id, photo_uri: r.photo_uri, imageUrl: r.imageUrl ? 'signed' : null })));
+        const grouped = recordsWithImage.reduce((acc, record) => {
+          const dateKey = record.date;
+          if (!acc[dateKey]) acc[dateKey] = [];
+          acc[dateKey].push(record);
+          return acc;
+        }, {} as Record<string, RecordWithImageUrl[]>);
+
+        const sectionsData: Section[] = Object.keys(grouped)
+          .sort((a, b) => b.localeCompare(a))
+          .map((date) => ({ title: date, data: grouped[date] }));
+        setSections(sectionsData);
+        setStableSections(sectionsData);
+      }
+    } catch (e) {
+      logError('[記録読み込みエラー]', e);
+      if (isRefresh) {
+        Alert.alert('エラー', '一覧の取得に失敗しました。しばらくしてからお試しください。');
+      }
+    } finally {
+      setHasLoadedOnce(true);
+      if (isRefresh) setRefreshing(false);
+      else setIsInitialLoading(false);
+    }
+  }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
   useEffect(() => {
-    const loadResolvedImageUrls = async () => {
-      const allRecords = sections.flatMap((section) => section.data);
-      const targets = allRecords.filter((record) => record.photo_uri && !resolvedImageUrls[record.id]);
-      if (targets.length === 0) return;
+    loadRecords();
+  }, [loadRecords]);
 
-      const entries = await Promise.all(
-        targets.map(async (record) => {
-          const resolved = await getSignedImageUrl(record.photo_uri);
-          return [record.id, resolved];
-        })
-      );
-
-      const nextMap: { [key: string]: string } = {};
-      entries.forEach(([id, url]) => {
-        if (typeof id === 'string' && url) {
-          nextMap[id] = url;
-        }
-      });
-      if (Object.keys(nextMap).length > 0) {
-        setResolvedImageUrls((prev) => ({ ...prev, ...nextMap }));
-      }
-    };
-
-    if (sections.length > 0) {
-      loadResolvedImageUrls();
-    }
-  }, [sections, resolvedImageUrls]);
+  const handlePress = useCallback(
+    (id: string) => {
+      router.push(`/detail?id=${id}`);
+    },
+    [router]
+  );
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return `${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
-  const formatEvaluation = (record: TestRecord) => {
-    if (record.score !== null) {
-      return `${record.score}点（${record.max_score}点中）`;
-    }
-    return record.stamp || '';
-  };
-
-  const getSubjectColor = (subject: string) => {
-    const colors: { [key: string]: string } = {
-      '国語': '#E74C3C',
-      '算数': '#3498DB',
-      '理科': '#27AE60',
-      '社会': '#E67E22',
-      '英語': '#2C3E50',
-      '生活': '#9B59B6',
-      '図工': '#F39C12',
-      '音楽': '#1ABC9C',
-      '体育': '#E91E63',
-    };
-    return colors[subject] || '#95A5A6';
-  };
-
-  const renderItem = (item: TestRecord) => {
-    const subjectColor = getSubjectColor(item.subject);
-    const resolvedUrl = resolvedImageUrls[item.id];
-    const hasPhoto = !!resolvedUrl && isValidImageUri(resolvedUrl);
-
-    if (item.photo_uri && resolvedUrl && !isValidImageUri(resolvedUrl)) {
-      console.warn('[画像警告] 無効な画像URIが検出されました');
-    }
-
-    return (
-      <TouchableOpacity
-        style={styles.recordItem}
-        onPress={() => router.push(`/detail?id=${item.id}`)}
-        activeOpacity={0.8}>
-        <View style={styles.thumbnailContainer}>
-          {hasPhoto ? (
-            <View
-              style={[
-                styles.thumbnailWrapper,
-                {
-                  transform: [{ rotate: `${item.photo_rotation}deg` }],
-                },
-              ]}>
-              <Image
-                source={{ uri: resolvedUrl! }}
-                style={styles.thumbnail}
-                resizeMode="contain"
-              />
-            </View>
-          ) : item.photo_uri ? (
-            <ActivityIndicator size="small" color="#999" />
-          ) : (
-            <View style={styles.placeholderThumbnail}>
-              <Text style={styles.placeholderText}>なし</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.recordContent}>
-          <View style={styles.recordFirstRow}>
-            <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
-              <Text style={styles.subjectChipText}>{item.subject}</Text>
-            </View>
-            <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const showSpinner =
+    !isFamilyReady || (stableSections.length === 0 && (!hasLoadedOnce || isInitialLoading));
+  const showEmptyState = isFamilyReady && hasLoadedOnce && !refreshing && stableSections.length === 0;
 
   return (
     <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
-      {!isFamilyReady ? (
-        <View style={styles.loadingContainer}>
+      {showSpinner ? (
+        <View style={[styles.loadingContainer, { paddingTop: isFamilyReady ? HEADER_HEIGHT : 0 }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
-      ) : sections.length === 0 ? (
+      ) : showEmptyState ? (
         <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
           <Text style={styles.emptyText}>
             {year}年{month}月の記録はありません
@@ -213,8 +231,14 @@ export default function ListScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 12 }]}
-          showsVerticalScrollIndicator={false}>
-          {sections.map((section) => (
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadRecords({ isRefresh: true })}
+            />
+          }>
+          {stableSections.map((section) => (
             <View key={section.title} style={styles.daySection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>
@@ -222,7 +246,7 @@ export default function ListScreen() {
               <View style={styles.dayRecords}>
                 {section.data.map((item) => (
                   <View key={item.id} style={styles.dayRecordWrapper}>
-                    {renderItem(item)}
+                    <ListRecordCard item={item} onPress={handlePress} />
                   </View>
                 ))}
               </View>
@@ -292,35 +316,31 @@ const styles = StyleSheet.create({
     }),
     minHeight: 80,
   },
-  thumbnailContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 8,
-    backgroundColor: '#fff',
+  thumbWrap: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: 10,
     overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#eee',
+    flexShrink: 0,
     margin: 8,
   },
-  thumbnailWrapper: {
+  thumbRotateWrap: {
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
+  },
+  thumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbPlaceholder: {
+    flex: 1,
     alignItems: 'center',
-  },
-  thumbnail: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholderThumbnail: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#e8e8e8',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  placeholderText: {
+  thumbPlaceholderText: {
     fontSize: 12,
+    opacity: 0.6,
     fontFamily: 'Nunito-SemiBold',
     color: '#999',
   },

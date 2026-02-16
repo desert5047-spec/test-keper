@@ -1,16 +1,16 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   RefreshControl,
   Dimensions,
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
@@ -18,264 +18,253 @@ import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
-import { getSignedImageUrl } from '@/utils/imageUpload';
+import { getSignedImageUrl } from '@/lib/storage';
+import { getStoragePathFromUrl } from '@/utils/imageUpload';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { log, error as logError } from '@/lib/logger';
+
+type RecordWithImageUrl = TestRecord & { imageUrl: string | null };
+
+const SUBJECT_COLORS: { [key: string]: string } = {
+  '国語': '#E74C3C',
+  '算数': '#3498DB',
+  '理科': '#27AE60',
+  '社会': '#E67E22',
+  '英語': '#2C3E50',
+  '生活': '#9B59B6',
+  '図工': '#F39C12',
+  '音楽': '#1ABC9C',
+  '体育': '#E91E63',
+};
+const getSubjectColor = (subject: string) => SUBJECT_COLORS[subject] || '#95A5A6';
+
+const CARD_IMAGE_SIZE = Dimensions.get('window').width - 32;
+const CARD_IMAGE_HEIGHT_PHOTO = CARD_IMAGE_SIZE;
+const CARD_IMAGE_HEIGHT_NO_PHOTO = 160;
+
+interface HomeRecordCardProps {
+  item: RecordWithImageUrl;
+  onPress: (id: string) => void;
+  imageError: boolean | undefined;
+  onImageError: (id: string, hasError: boolean) => void;
+}
+const HomeRecordCard = React.memo(function HomeRecordCard({
+  item,
+  onPress,
+  imageError,
+  onImageError,
+}: HomeRecordCardProps) {
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  const formatEvaluation = (r: TestRecord) =>
+    r.score !== null ? `${r.score}点（${r.max_score}点中）` : (r.stamp || '');
+  const subjectColor = getSubjectColor(item.subject);
+  const hasPhoto = !!(item.imageUrl && isValidImageUri(item.imageUrl));
+  const shouldShowPhoto = hasPhoto && !imageError;
+  const imageHeight = shouldShowPhoto ? CARD_IMAGE_HEIGHT_PHOTO : CARD_IMAGE_HEIGHT_NO_PHOTO;
+
+  return (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => onPress(item.id)}
+      activeOpacity={0.8}>
+      <View
+        style={[
+          styles.imageContainer,
+          !shouldShowPhoto && styles.imageContainerNoPhoto,
+          { width: CARD_IMAGE_SIZE, height: imageHeight },
+        ]}>
+        {shouldShowPhoto ? (
+          <>
+            <View style={[styles.imageWrapper, { width: CARD_IMAGE_SIZE, height: imageHeight }]}>
+              <Image
+                source={item.imageUrl ? { uri: item.imageUrl } : undefined}
+                style={styles.cardImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={0}
+                recyclingKey={item.id}
+                onLoad={() => onImageError(item.id, false)}
+                onError={(e) => {
+                  log('[THUMB][ImageError]', { id: item.id, url: item.imageUrl, error: e?.error });
+                  onImageError(item.id, true);
+                }}
+              />
+              <Text numberOfLines={1} style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
+                {item.imageUrl ? item.imageUrl.slice(0, 80) : 'imageUrl:null'}
+              </Text>
+            </View>
+            <View style={styles.dateOverlay}>
+              <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
+            </View>
+          </>
+        ) : (
+          <>
+            {item.photo_uri && !item.imageUrl ? (
+              <ActivityIndicator size="small" color="#4A90E2" />
+            ) : (
+              <Text style={styles.noPhotoText}>
+                {imageError ? '写真の読み込みに失敗しました' : '写真なし'}
+              </Text>
+            )}
+            <View style={styles.dateOverlay}>
+              <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
+            </View>
+          </>
+        )}
+      </View>
+      <View style={styles.cardContent}>
+        <View style={styles.cardFirstRow}>
+          <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
+            <Text style={styles.subjectChipText}>{item.subject}</Text>
+          </View>
+          <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 export default function HomeScreen() {
   const debugLog = (...args: unknown[]) => {
     if (__DEV__) {
-      console.log(...args);
+      log(...args);
     }
   };
   const router = useRouter();
-  const [records, setRecords] = useState<TestRecord[]>([]);
+  const [records, setRecords] = useState<RecordWithImageUrl[]>([]);
+  const [stableRecords, setStableRecords] = useState<RecordWithImageUrl[]>([]);
+  const stableRef = useRef<RecordWithImageUrl[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [imageAspectRatios, setImageAspectRatios] = useState<{ [key: string]: number }>({});
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
-  const [resolvedImageUrls, setResolvedImageUrls] = useState<{ [key: string]: string }>({});
+  const canceledRef = useRef(false);
+
+  useEffect(() => {
+    stableRef.current = stableRecords;
+  }, [stableRecords]);
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
 
-  useFocusEffect(
-    useCallback(() => {
-      if (selectedChildId && isFamilyReady && familyId) {
-        loadRecords();
+  const loadRecords = useCallback(async (opts: { isRefresh?: boolean } = {}) => {
+    const isRefresh = opts.isRefresh === true;
+    if (!selectedChildId || !isFamilyReady || !familyId) {
+      if (!canceledRef.current) {
+        if (isRefresh) setRefreshing(false);
+        else setLoading(false);
       }
-    }, [year, month, selectedChildId, isFamilyReady, familyId])
-  );
-
-  useEffect(() => {
-    const loadResolvedImageUrls = async () => {
-      const targets = records.filter((record) => record.photo_uri && !resolvedImageUrls[record.id]);
-      if (targets.length === 0) return;
-
-      const entries = await Promise.all(
-        targets.map(async (record) => {
-          const resolved = await getSignedImageUrl(record.photo_uri);
-          return [record.id, resolved];
-        })
-      );
-
-      const nextMap: { [key: string]: string } = {};
-      entries.forEach(([id, url]) => {
-        if (typeof id === 'string' && url) {
-          nextMap[id] = url;
-        }
-      });
-      if (Object.keys(nextMap).length > 0) {
-        setResolvedImageUrls((prev) => ({ ...prev, ...nextMap }));
-      }
-    };
-
-    if (records.length > 0) {
-      loadResolvedImageUrls();
+      return;
     }
-  }, [records, resolvedImageUrls]);
 
-  // 画像のアスペクト比を事前に取得
-  useEffect(() => {
-    const loadImageAspectRatios = async () => {
-      const newAspectRatios: { [key: string]: number } = {};
-      const recordsToLoad = records.filter(
-        (record) => resolvedImageUrls[record.id] && !imageAspectRatios[record.id]
-      );
-
-      if (recordsToLoad.length === 0) return;
-
-      debugLog(`[画像アスペクト比] ${recordsToLoad.length}件の画像サイズを取得中...`);
-
-      // 並列で画像サイズを取得
-      const promises = recordsToLoad.map((record) => {
-        return new Promise<void>((resolve) => {
-          Image.getSize(
-            resolvedImageUrls[record.id]!,
-            (width, height) => {
-              if (width && height) {
-                const aspectRatio = width / height;
-                newAspectRatios[record.id] = aspectRatio;
-                debugLog(`[画像アスペクト比] ${record.id}: ${width}x${height} = ${aspectRatio.toFixed(2)}`);
-              }
-              resolve();
-            },
-            () => {
-              console.error('[画像サイズ取得エラー]');
-              // エラーを記録
-              setImageErrors((prev) => ({ ...prev, [record.id]: true }));
-              resolve();
-            }
-          );
-        });
-      });
-
-      await Promise.all(promises);
-
-      if (Object.keys(newAspectRatios).length > 0) {
-        debugLog(`[画像アスペクト比] ${Object.keys(newAspectRatios).length}件のアスペクト比を更新`);
-        setImageAspectRatios((prev) => ({
-          ...prev,
-          ...newAspectRatios,
-        }));
-      }
-    };
-
-    if (records.length > 0) {
-      loadImageAspectRatios();
+    if (!canceledRef.current) {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, resolvedImageUrls, imageAspectRatios]);
-
-  const loadRecords = async () => {
-    if (!selectedChildId || !isFamilyReady || !familyId) return;
-
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = new Date(year, month, 0);
     const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-    const { data, error } = await supabase
-      .from('records')
-      .select('*')
-      .eq('child_id', selectedChildId)
-      .eq('family_id', familyId)
-      .gte('date', startDate)
-      .lte('date', endDateStr)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('records')
+        .select('*')
+        .eq('child_id', selectedChildId)
+        .eq('family_id', familyId)
+        .or('score.not.is.null,stamp.not.is.null,photo_uri.not.is.null')
+        .gte('date', startDate)
+        .lte('date', endDateStr)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('[記録読み込みエラー]');
-      return;
+      if (canceledRef.current) return;
+      if (error) {
+        logError('[記録読み込みエラー]');
+        return;
+      }
+
+      if (data) {
+        debugLog(`[記録読み込み] ${data.length}件の記録を取得`, { platform: Platform.OS });
+        const recordsWithImage: RecordWithImageUrl[] = await Promise.all(
+          data.map(async (r) => {
+            let imageUrl: string | null = null;
+            if (r.photo_uri) {
+              const path = /^https?:\/\//.test(r.photo_uri) ? getStoragePathFromUrl(r.photo_uri) : r.photo_uri;
+              if (path) {
+                try {
+                  imageUrl = await getSignedImageUrl(path);
+                } catch {
+                  imageUrl = null;
+                }
+              }
+            }
+            return { ...r, imageUrl };
+          })
+        );
+        if (canceledRef.current) return;
+        log('[HOME][records sample]', recordsWithImage.slice(0, 3).map((r) => ({ id: r.id, photo_uri: r.photo_uri, imageUrl: r.imageUrl ? 'signed' : null })));
+        const newRows = recordsWithImage;
+        setRecords(newRows);
+        setStableRecords(newRows);
+        setImageErrors({});
+      }
+    } catch (e) {
+      if (!canceledRef.current) logError('[記録読み込みエラー]', e);
+    } finally {
+      if (!canceledRef.current) {
+        setHasLoadedOnce(true);
+        if (isRefresh) setRefreshing(false);
+        else setLoading(false);
+      }
     }
+  }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
-    if (data) {
-      debugLog(`[記録読み込み] ${data.length}件の記録を取得`, { platform: Platform.OS });
-      setRecords(data);
-      // エラー状態をリセット
-      setImageErrors({});
-      setResolvedImageUrls({});
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      canceledRef.current = false;
+      loadRecords();
+      return () => {
+        canceledRef.current = true;
+      };
+    }, [loadRecords])
+  );
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadRecords();
-    setRefreshing(false);
-  };
+  useEffect(() => {
+    loadRecords();
+  }, [loadRecords]);
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return `${date.getMonth() + 1}/${date.getDate()}`;
-  };
+  const handlePress = useCallback(
+    (id: string) => {
+      router.push(`/detail?id=${id}`);
+    },
+    [router]
+  );
 
-  const formatEvaluation = (record: TestRecord) => {
-    if (record.score !== null) {
-      return `${record.score}点（${record.max_score}点中）`;
-    }
-    return record.stamp || '';
-  };
+  const handleImageError = useCallback((id: string, hasError: boolean) => {
+    setImageErrors((prev) => {
+      if (hasError) return { ...prev, [id]: true };
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
 
-  const getSubjectColor = (subject: string) => {
-    const colors: { [key: string]: string } = {
-      '国語': '#E74C3C',
-      '算数': '#3498DB',
-      '理科': '#27AE60',
-      '社会': '#E67E22',
-      '英語': '#2C3E50',
-      '生活': '#9B59B6',
-      '図工': '#F39C12',
-      '音楽': '#1ABC9C',
-      '体育': '#E91E63',
-    };
-    return colors[subject] || '#95A5A6';
-  };
+  const renderItem = useCallback(
+    ({ item }: { item: RecordWithImageUrl }) => (
+      <HomeRecordCard
+        item={item}
+        onPress={handlePress}
+        imageError={imageErrors[item.id]}
+        onImageError={handleImageError}
+      />
+    ),
+    [handlePress, handleImageError]
+  );
 
-  const renderRecord = ({ item }: { item: TestRecord }) => {
-    const resolvedUrl = resolvedImageUrls[item.id];
-    const hasPhoto = !!resolvedUrl && isValidImageUri(resolvedUrl);
-    const isResolvingPhoto = !!item.photo_uri && !resolvedUrl;
-    const subjectColor = getSubjectColor(item.subject);
-    const hasImageError = imageErrors[item.id];
-
-    if (item.photo_uri && resolvedUrl && !isValidImageUri(resolvedUrl)) {
-      console.warn('[画像警告] 無効な画像URIが検出されました');
-    }
-
-    // 画像エラーがある場合は写真なしとして扱う
-    const shouldShowPhoto = hasPhoto && !hasImageError;
-
-    // 横幅に合わせて高さを統一（カード幅と同じ高さ）
-    const getImageContainerHeight = () => {
-      const screenWidth = Dimensions.get('window').width;
-      const cardWidth = screenWidth - 32; // 左右のパディング16px × 2
-      return cardWidth;
-    };
-    const imageContainerHeight = shouldShowPhoto ? getImageContainerHeight() : 160;
-
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push(`/detail?id=${item.id}`)}
-        activeOpacity={0.8}>
-        <View style={[
-          styles.imageContainer, 
-          !shouldShowPhoto && styles.imageContainerNoPhoto,
-          { height: imageContainerHeight }
-        ]}>
-          {shouldShowPhoto ? (
-            <>
-              <View style={styles.imageWrapper}>
-                <Image
-                  source={{ uri: resolvedUrl! }}
-                  style={styles.cardImage}
-                  resizeMode="contain"
-                  onLoad={() => {
-                    debugLog(`[画像読み込み成功] ${item.id}`);
-                    // エラー状態をクリア
-                    if (imageErrors[item.id]) {
-                      setImageErrors((prev) => {
-                        const newErrors = { ...prev };
-                        delete newErrors[item.id];
-                        return newErrors;
-                      });
-                    }
-                  }}
-                  onError={() => {
-                    console.warn('[画像読み込みエラー]');
-                    // エラーを記録
-                    setImageErrors((prev) => ({ ...prev, [item.id]: true }));
-                  }}
-                />
-              </View>
-              <View style={styles.dateOverlay}>
-                <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
-              </View>
-            </>
-          ) : (
-            <>
-              {isResolvingPhoto ? (
-                <ActivityIndicator size="small" color="#4A90E2" />
-              ) : (
-                <Text style={styles.noPhotoText}>
-                  {hasImageError ? '写真の読み込みに失敗しました' : '写真なし'}
-                </Text>
-              )}
-              <View style={styles.dateOverlay}>
-                <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
-              </View>
-            </>
-          )}
-        </View>
-        <View style={styles.cardContent}>
-          <View style={styles.cardFirstRow}>
-            <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
-              <Text style={styles.subjectChipText}>{item.subject}</Text>
-            </View>
-            <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const keyExtractor = useCallback((item: RecordWithImageUrl) => item.id, []);
 
   if (!isFamilyReady) {
     return (
@@ -285,24 +274,45 @@ export default function HomeScreen() {
     );
   }
 
+  const showSpinner = !hasLoadedOnce && loading && stableRecords.length === 0;
+  const showEmptyState = hasLoadedOnce && !loading && !refreshing && stableRecords.length === 0;
+
   return (
     <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
-      {records.length === 0 ? (
+      {showSpinner ? (
+        <View style={[styles.loadingContainer, { paddingTop: HEADER_HEIGHT }]}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      ) : showEmptyState ? (
         <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
           <Text style={styles.emptyText}>まだ記録がありません</Text>
           <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
       ) : (
         <FlatList
-          data={records}
-          renderItem={renderRecord}
-          keyExtractor={(item) => item.id}
+          data={stableRecords}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          removeClippedSubviews={false}
+          windowSize={5}
+          initialNumToRender={10}
           contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 16 }]}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            refreshing ? null : (
+              <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+                <Text style={styles.emptyText}>まだ記録がありません</Text>
+                <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
+              </View>
+            )
+          }
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadRecords({ isRefresh: true })}
+            />
           }
         />
       )}
@@ -338,14 +348,12 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: 'relative',
-    height: 240,
-    backgroundColor: '#fff',
+    backgroundColor: '#eee',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },
   imageContainerNoPhoto: {
-    height: 80,
     backgroundColor: '#FAFAFA',
     justifyContent: 'center',
     alignItems: 'center',
@@ -359,8 +367,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
   },
   imageWrapper: {
-    width: '100%',
-    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },

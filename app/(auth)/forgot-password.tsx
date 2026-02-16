@@ -10,11 +10,12 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft } from 'lucide-react-native';
+import { error as logError } from '@/lib/logger';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -44,7 +45,7 @@ export default function ForgotPasswordScreen() {
     const { error: resetError } = await resetPassword(email);
 
     if (resetError) {
-      console.error('[パスワードリセット] エラー');
+      logError('[パスワードリセット] エラー');
       // エラーメッセージを詳細に表示
       let errorMessage = 'パスワードリセットメールの送信に失敗しました。';
       
@@ -70,6 +71,15 @@ export default function ForgotPasswordScreen() {
     setEmailSent(true);
   };
 
+  // 送信完了から10秒後にトップ（index）へ
+  useEffect(() => {
+    if (!emailSent) return;
+    const timer = setTimeout(() => {
+      router.replace('/');
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [emailSent, router]);
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -90,13 +100,20 @@ export default function ForgotPasswordScreen() {
 
         <View style={styles.content}>
           <Text style={styles.title}>パスワードをリセット</Text>
-          <Text style={styles.subtitle}>
-            {emailSent
-              ? 'パスワードリセット用のメールを送信しました。メール内のリンクをクリックして、新しいパスワードを設定してください。'
-              : '登録されているメールアドレスを入力してください。パスワードリセット用のリンクを送信します。'}
-          </Text>
+          {!emailSent && (
+            <Text style={styles.subtitle}>
+              登録されているメールアドレスを入力してください。パスワードリセット用のリンクを送信します。
+            </Text>
+          )}
 
-          {!emailSent ? (
+          {emailSent ? (
+            <>
+              <View style={styles.successContainer}>
+                <Text style={styles.successText}>再設定リンクをメール送信しました。</Text>
+                <Text style={styles.successNote}>10秒後にトップページに戻ります。</Text>
+              </View>
+            </>
+          ) : (
             <>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>メールアドレス</Text>
@@ -131,12 +148,14 @@ export default function ForgotPasswordScreen() {
                 )}
               </TouchableOpacity>
             </>
-          ) : (
+          )}
+
+          {emailSent && (
             <TouchableOpacity
               style={styles.backToLoginButton}
-              onPress={() => router.replace('/(auth)/login')}
+              onPress={() => router.replace('/')}
               activeOpacity={0.8}>
-              <Text style={styles.backToLoginText}>ログイン画面に戻る</Text>
+              <Text style={styles.backToLoginText}>トップに戻る</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -174,6 +193,25 @@ const styles = StyleSheet.create({
     color: '#666',
     lineHeight: 24,
     marginBottom: 32,
+  },
+  successContainer: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  successText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#047857',
+    marginBottom: 4,
+  },
+  successNote: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#059669',
   },
   inputGroup: {
     marginBottom: 24,

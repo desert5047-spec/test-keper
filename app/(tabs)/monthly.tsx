@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
@@ -34,13 +34,11 @@ export default function MonthlyScreen() {
   const [monthlySummaries, setMonthlySummaries] = useState<MonthSummary[]>([]);
   const [displayCount, setDisplayCount] = useState(3);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (selectedChildId && isFamilyReady && familyId) {
-        loadMonthlySummaries();
-      }
-    }, [year, month, selectedChildId, isFamilyReady, familyId])
-  );
+  useEffect(() => {
+    if (selectedChildId && isFamilyReady && familyId) {
+      loadMonthlySummaries();
+    }
+  }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
   const loadMonthlySummaries = async () => {
     if (!selectedChildId || !isFamilyReady || !familyId) return;
@@ -50,6 +48,7 @@ export default function MonthlyScreen() {
       .select('*')
       .eq('child_id', selectedChildId)
       .eq('family_id', familyId)
+      .or('score.not.is.null,stamp.not.is.null,photo_uri.not.is.null')
       .order('date', { ascending: false });
 
     const monthlyData: Record<string, TestRecord[]> = {};

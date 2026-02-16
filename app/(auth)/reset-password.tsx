@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-react-native';
+import { error as logError } from '@/lib/logger';
 
 export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
@@ -75,7 +76,7 @@ export default function ResetPasswordScreen() {
             'exchangeCodeForSession'
           );
           if (exchangeError) {
-            console.error('コード検証エラー');
+            logError('コード検証エラー');
             setError('無効または期限切れのリンクです。');
             setIsValidToken(false);
             setCheckingToken(false);
@@ -108,7 +109,7 @@ export default function ResetPasswordScreen() {
           setIsValidToken(false);
         }
       } catch (err) {
-        console.error('トークンチェックエラー');
+        logError('トークンチェックエラー');
         setError('リンクの検証に失敗しました。');
         setIsValidToken(false);
       } finally {
@@ -152,7 +153,7 @@ export default function ResetPasswordScreen() {
         throw updateError;
       }
     } catch (updateError: any) {
-      console.error('パスワード更新エラー');
+      logError('パスワード更新エラー');
       const message =
         updateError?.message || 'パスワードの更新に失敗しました。もう一度お試しください。';
       setError(message);

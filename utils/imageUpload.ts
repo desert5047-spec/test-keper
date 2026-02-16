@@ -1,18 +1,26 @@
 import { supabase } from '@/lib/supabase';
-import { Platform } from 'react-native';
+import { Platform, Image as RNImage } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
+import { log, warn, error as logError } from '@/lib/logger';
+
+/** 画像サイズを取得（ネイティブで軽量、フルデコードしない） */
+const getImageSizeAsync = (uri: string): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    RNImage.getSize(
+      uri,
+      (width, height) => resolve({ width, height }),
+      (err) => reject(err ?? new Error('getSize failed'))
+    );
+  });
+};
 
 const STORAGE_BUCKET = 'test-images';
 const SIGNED_URL_EXPIRES_IN = 60 * 60;
 
 const isHttpUrl = (value: string) => value.startsWith('http://') || value.startsWith('https://');
 
-const debugLog = (...args: unknown[]) => {
-  if (__DEV__) {
-    console.log(...args);
-  }
-};
+const debugLog = log;
 
 export const getStoragePathFromUrl = (url: string): string | null => {
   try {
@@ -34,6 +42,43 @@ export const getStoragePathFromUrl = (url: string): string | null => {
   }
 };
 
+/**
+ * DBに保存する photo_uri を「path のみ」に正規化する。
+ * URL や "test-images/..." を入れないようにする。
+ */
+export const normalizePhotoUriForDb = (pathOrUri: string | null): string | null => {
+  if (!pathOrUri || typeof pathOrUri !== 'string') return null;
+  const raw = pathOrUri.trim();
+  if (!raw) return null;
+  if (/^https?:\/\//.test(raw)) return null;
+  if (raw.startsWith('file:') || raw.startsWith('content:')) return null;
+  const clean = raw.replace(/^\/+/, '').replace(new RegExp(`^${STORAGE_BUCKET}\\/`), '');
+  return clean || null;
+};
+
+/**
+ * ストレージの公開URLを返す（path/URL混在・形式ゆれを吸収）
+ */
+export const getPublicImageUrl = (pathOrUri: string | null): string | null => {
+  if (!pathOrUri) return null;
+  const raw = String(pathOrUri).trim();
+  if (!raw) return null;
+
+  if (/^https?:\/\//.test(raw)) return raw;
+
+  if (raw.startsWith('file:') || raw.startsWith('content:')) {
+    warn('[getPublicImageUrl] invalid local uri (file/content):', raw.slice(0, 80));
+    return null;
+  }
+
+  const cleanPath = raw
+    .replace(/^\/+/, '')
+    .replace(new RegExp(`^${STORAGE_BUCKET}\\/`), '');
+
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(cleanPath);
+  return data.publicUrl ?? null;
+};
+
 export const getSignedImageUrl = async (
   uriOrPath: string | null,
   expiresIn = SIGNED_URL_EXPIRES_IN
@@ -48,7 +93,7 @@ export const getSignedImageUrl = async (
       .from(STORAGE_BUCKET)
       .createSignedUrl(storagePath, expiresIn);
     if (error || !data?.signedUrl) {
-      console.warn('[画像URL] 署名付きURL取得失敗');
+      warn('[画像URL] 署名付きURL取得失敗');
       return uriOrPath;
     }
     return data.signedUrl;
@@ -58,7 +103,7 @@ export const getSignedImageUrl = async (
     .from(STORAGE_BUCKET)
     .createSignedUrl(uriOrPath, expiresIn);
   if (error || !data?.signedUrl) {
-    console.warn('[画像URL] 署名付きURL取得失敗');
+    warn('[画像URL] 署名付きURL取得失敗');
     return null;
   }
   return data.signedUrl;
@@ -169,7 +214,7 @@ const base64ToUint8Array = (base64: string): Uint8Array => {
     
     return result;
   } catch (error: any) {
-    console.error('[base64ToUint8Array] エラー');
+    logError('[base64ToUint8Array] エラー');
     throw new Error(`base64デコードに失敗しました: ${error.message || '不明なエラー'}`);
   }
 };
@@ -231,20 +276,26 @@ const compressImage = async (imageUri: string): Promise<string> => {
       img.src = imageUri;
     });
   } else {
-    // Native環境ではImageManipulatorを使用
+    // Native環境（iOS Expo Go含む）: サイズ取得は軽量な getSize、リサイズ・圧縮は1回だけ
     try {
-      // まず画像のサイズを取得
-      const { width, height } = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [],
-        { format: ImageManipulator.SaveFormat.JPEG }
-      );
-
-      // 長辺を1600pxにリサイズ
       const maxDimension = 1600;
+      let width: number;
+      let height: number;
+      try {
+        const size = await getImageSizeAsync(imageUri);
+        width = size.width;
+        height = size.height;
+      } catch (sizeErr) {
+        debugLog('[画像圧縮] getSize失敗、リサイズなしで圧縮のみ実行');
+        const result = await ImageManipulator.manipulateAsync(imageUri, [], {
+          compress: 0.5,
+          format: ImageManipulator.SaveFormat.JPEG,
+        });
+        return result.uri;
+      }
+
       let newWidth = width;
       let newHeight = height;
-
       if (width > height) {
         if (width > maxDimension) {
           newHeight = Math.round((height * maxDimension) / width);
@@ -257,7 +308,7 @@ const compressImage = async (imageUri: string): Promise<string> => {
         }
       }
 
-      // リサイズと圧縮を実行
+      // 1回だけリサイズ＋圧縮（二重処理を廃止）
       const result = await ImageManipulator.manipulateAsync(
         imageUri,
         [{ resize: { width: newWidth, height: newHeight } }],
@@ -266,19 +317,23 @@ const compressImage = async (imageUri: string): Promise<string> => {
           format: ImageManipulator.SaveFormat.JPEG,
         }
       );
-
       return result.uri;
     } catch (error: any) {
-      console.error('[画像圧縮エラー]');
-      // 圧縮に失敗した場合は元のURIを返す
+      logError('[画像圧縮エラー]');
       return imageUri;
     }
   }
 };
 
+/**
+ * 画像を Storage にアップロードする。
+ * @param imageUri - 画像のローカルURI（file:// 等）
+ * @param recordId - 記録ID。Storage のパスは "<recordId>/<timestamp>.jpg" となり、DB の photo_uri と一致させる
+ * @returns Storage の path（例: "recordId/1739123456789.jpg"）。そのまま DB の photo_uri に保存する
+ */
 export const uploadImage = async (
   imageUri: string,
-  userId: string
+  recordId: string
 ): Promise<string> => {
   debugLog('[画像アップロード開始]', {
     platform: Platform.OS,
@@ -288,8 +343,8 @@ export const uploadImage = async (
     throw new Error('画像URIが無効です');
   }
 
-  if (!userId || userId.trim() === '') {
-    throw new Error('ユーザーIDが無効です');
+  if (!recordId || recordId.trim() === '') {
+    throw new Error('recordIdが無効です');
   }
 
   let compressedUri: string | null = null;
@@ -304,7 +359,7 @@ export const uploadImage = async (
       }
       debugLog('[画像圧縮完了]');
     } catch (compressError: any) {
-      console.error('[画像圧縮エラー]');
+      logError('[画像圧縮エラー]');
       // 圧縮に失敗した場合は元のURIを使用
       compressedUri = imageUri;
       debugLog('[画像圧縮] 元のURIを使用');
@@ -314,14 +369,10 @@ export const uploadImage = async (
       throw new Error('画像URIが無効です');
     }
 
-    // JPEG形式で固定
-    const fileExt = 'jpg';
-    const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `${userId}/${fileName}`;
+    const filePath = `${recordId}/${Date.now()}.jpg`;
+    debugLog('[ファイル情報]', { filePath });
 
-    debugLog('[ファイル情報]', { fileName, fileExt });
-
-    let bytes: Uint8Array;
+    let uploadBody: Blob | Uint8Array;
 
     if (Platform.OS === 'web') {
       debugLog('[Web] blobとして画像を読み込み中...');
@@ -334,16 +385,15 @@ export const uploadImage = async (
 
         const blob = await response.blob();
         debugLog('[Web] blob取得成功', { size: blob.size, type: blob.type });
-
-        const arrayBuffer = await convertBlobToArrayBuffer(blob);
-        bytes = new Uint8Array(arrayBuffer);
-        debugLog('[Web] ArrayBuffer変換成功', { byteLength: bytes.length });
+        const mimeBlob = blob.type === 'image/jpeg' ? blob : new Blob([blob], { type: 'image/jpeg' });
+        uploadBody = mimeBlob;
       } catch (error: any) {
-        console.error('[Web] fetchエラー、フォールバック処理');
+        logError('[Web] fetchエラー、フォールバック処理');
         throw new Error(`画像の読み込みに失敗しました: ${error.message}`);
       }
     } else {
       // Native環境（Android/iOS Expo Go含む）
+      let bytes: Uint8Array;
       debugLog('[Native] 画像を読み込み中...');
       
       // Expo Goではfetchがfile://スキームで失敗する可能性があるため、FileSystemを優先
@@ -399,7 +449,7 @@ export const uploadImage = async (
           
           readSuccess = true;
         } catch (decodeError: any) {
-          console.error('[Native] base64デコードエラー');
+          logError('[Native] base64デコードエラー');
           lastError = new Error(`base64デコードに失敗しました: ${decodeError.message || '不明なエラー'}`);
           throw lastError;
         }
@@ -439,7 +489,7 @@ export const uploadImage = async (
           readSuccess = true;
           lastError = null; // 成功したのでエラーをクリア
         } catch (fetchError: any) {
-          console.error('[Native] fetchも失敗');
+          logError('[Native] fetchも失敗');
           lastError = fetchError;
           throw new Error(`画像の読み込みに失敗しました: ${fileSystemError?.message || fetchError?.message || '不明なエラー'}`);
         }
@@ -449,20 +499,28 @@ export const uploadImage = async (
         const errorMsg = lastError?.message || '画像データの読み込みに失敗しました（データが空です）';
         throw new Error(errorMsg);
       }
+      uploadBody = bytes;
     }
 
-    debugLog('[Supabase] ストレージへアップロード中...', { 
-      byteLength: bytes.length,
-      platform: Platform.OS 
+    const bodySize = uploadBody instanceof Blob ? uploadBody.size : uploadBody.length;
+    debugLog('[Supabase] ストレージへアップロード中...', { bodySize, platform: Platform.OS });
+
+    // セッションログは非同期で取得（アップロード待ちにしない）
+    supabase.auth.getSession().then(({ data, error: sessErr }) => {
+      log('[UPLOAD][session]', {
+        hasSession: !!data?.session,
+        userId: data?.session?.user?.id ?? null,
+        sessErr,
+      });
     });
-    
+
     try {
       // アップロード処理にタイムアウトを設定（120秒）
       const uploadPromise = supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(filePath, bytes, {
+        .upload(filePath, uploadBody, {
           contentType: 'image/jpeg',
-          upsert: false,
+          upsert: true,
         });
       
       const uploadTimeoutPromise = new Promise<never>((_, reject) => {
@@ -472,8 +530,9 @@ export const uploadImage = async (
       const { data, error } = await Promise.race([uploadPromise, uploadTimeoutPromise]);
 
       if (error) {
-        console.error('[Supabase] アップロードエラー');
-        throw new Error(`アップロードエラー: ${error.message || '不明なエラー'}`);
+        logError('[Supabase] アップロードエラー', error?.message, (error as { error?: string })?.error);
+        const detail = (error as { message?: string; error?: string })?.message || (error as { error?: string })?.error || '不明なエラー';
+        throw new Error(`アップロードエラー: ${detail}`);
       }
 
       if (!data) {
@@ -483,24 +542,24 @@ export const uploadImage = async (
       debugLog('[Supabase] アップロード成功', { 
         platform: Platform.OS 
       });
+      log('[uploadImage] success path:', filePath, 'bucket:', STORAGE_BUCKET);
 
-      // 公開URLの取得
       // Web環境でblob URLをクリーンアップ
       if (Platform.OS === 'web' && compressedUri && compressedUri.startsWith('blob:')) {
         try {
           URL.revokeObjectURL(compressedUri);
         } catch (revokeError) {
-          console.warn('[Web] blob URLクリーンアップエラー');
+          warn('[Web] blob URLクリーンアップエラー');
         }
       }
 
       return filePath;
     } catch (uploadError: any) {
-      console.error('[Supabase] アップロード処理エラー');
+      logError('[Supabase] アップロード処理エラー');
       throw uploadError;
     }
   } catch (error: any) {
-    console.error('[エラー] 画像アップロード失敗');
+    logError('[エラー] 画像アップロード失敗');
     
     // エラーメッセージを構築（安全に）
     let errorMessage = '画像のアップロードに失敗しました';
@@ -514,7 +573,7 @@ export const uploadImage = async (
         }
       }
     } catch (msgError: any) {
-      console.error('[エラー] エラーメッセージ構築エラー');
+      logError('[エラー] エラーメッセージ構築エラー');
       // デフォルトメッセージを使用
     }
     
@@ -543,9 +602,9 @@ export const deleteImage = async (imageUrl: string): Promise<void> => {
       .remove([filePath]);
 
     if (error) {
-      console.error('Image deletion error');
+      logError('Image deletion error');
     }
   } catch (error) {
-    console.error('Image deletion error');
+    logError('Image deletion error');
   }
 };

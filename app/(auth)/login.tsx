@@ -8,11 +8,11 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Image,
   Switch,
   Alert,
   Linking,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -23,12 +23,9 @@ import { getRememberMe, setRememberMe } from '@/lib/authStorage';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { appendLog, setDebugLoginPressed, setDebugLoginResult } from '@/lib/debugLog';
 import { supabase } from '@/lib/supabase';
+import { log } from '@/lib/logger';
 
-const debugLog = (...args: unknown[]) => {
-  if (__DEV__) {
-    console.log(...args);
-  }
-};
+const debugLog = log;
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -85,20 +82,20 @@ export default function LoginScreen() {
   }, [initializing, session?.user, router]);
 
   const submitLogin = async () => {
-    console.log('[LOGIN:0] pressed');
+    log('[LOGIN:0] pressed');
 
     if (isSubmitting) {
-      console.log('[LOGIN:0.1] blocked by isSubmitting');
+      log('[LOGIN:0.1] blocked by isSubmitting');
       return;
     }
 
     const e = (email ?? '').trim();
     const p = (password ?? '').trim();
 
-    console.log('[LOGIN:1] inputs', { emailLen: e.length, passwordLen: p.length });
+    log('[LOGIN:1] inputs', { emailLen: e.length, passwordLen: p.length });
 
     if (!e || !p) {
-      console.log('[LOGIN:2] missing input', { email: !!e, password: !!p });
+      log('[LOGIN:2] missing input', { email: !!e, password: !!p });
       Alert.alert('入力が必要です', 'メールアドレスとパスワードを入力してください');
       return;
     }
@@ -110,17 +107,17 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      console.log('[LOGIN:3] before signInWithPassword');
+      log('[LOGIN:3] before signInWithPassword');
       const { data, error } = await supabase.auth.signInWithPassword({
         email: e,
         password: p,
       });
 
-      console.log('[LOGIN:4] error:', error);
-      console.log('[LOGIN:5] data.session exists:', !!data?.session);
+      log('[LOGIN:4] error:', error);
+      log('[LOGIN:5] data.session exists:', !!data?.session);
 
       const s = await supabase.auth.getSession();
-      console.log('[LOGIN:6] getSession:', { hasSession: !!s.data.session, error: s.error });
+      log('[LOGIN:6] getSession:', { hasSession: !!s.data.session, error: s.error });
 
       appendLog(
         `LOGIN RESULT hasSession=${!!data?.session} error=${error?.message || 'none'}`
@@ -128,11 +125,19 @@ export default function LoginScreen() {
       setDebugLoginResult(!!data?.session, error?.message);
 
       if (error) {
-        Alert.alert('ログインできませんでした', error.message);
+        const isInvalidCredentials =
+          error.message?.includes('Invalid login') ||
+          error.message?.includes('invalid_credentials') ||
+          error.message?.toLowerCase().includes('invalid') && error.message?.toLowerCase().includes('password');
+        const message = isInvalidCredentials
+          ? 'メールアドレスまたはパスワードが正しくありません。もう一度ご確認ください。'
+          : error.message;
+        setError(message);
+        Alert.alert('ログインできませんでした', message);
         return;
       }
 
-      console.log('[LOGIN:7] success -> replace / (index でオンボーディング判定)');
+      log('[LOGIN:7] success -> replace / (index でオンボーディング判定)');
       router.replace('/');
     } finally {
       setIsSubmitting(false);
@@ -156,7 +161,8 @@ export default function LoginScreen() {
             <Image
               source={require('@/assets/images/app-icon.png')}
               style={styles.appIcon}
-              resizeMode="contain"
+              contentFit="contain"
+              cachePolicy="memory-disk"
             />
           </View>
           <Text style={styles.title}>テストアルバム</Text>
@@ -174,7 +180,7 @@ export default function LoginScreen() {
               value={email}
               onChangeText={setEmail}
               onBlur={() =>
-                console.log('[LOGIN] email blur', { len: (email ?? '').trim().length })
+                log('[LOGIN] email blur', { len: (email ?? '').trim().length })
               }
               autoCapitalize="none"
               keyboardType="email-address"
@@ -194,7 +200,7 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 onBlur={() =>
-                  console.log('[LOGIN] password blur', { len: (password ?? '').trim().length })
+                  log('[LOGIN] password blur', { len: (password ?? '').trim().length })
                 }
                 autoCapitalize="none"
                 autoComplete="password"
@@ -221,13 +227,17 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.rememberRow}>
-            <Text style={styles.rememberLabel}>次回のためログイン情報を保存</Text>
-            <Switch
-              value={rememberMe}
-              onValueChange={handleRememberMeChange}
-              trackColor={{ false: '#e0e0e0', true: '#A5C7F7' }}
-              thumbColor={rememberMe ? '#4A90E2' : '#f4f4f4'}
-            />
+            <View style={styles.rememberLabelWrap}>
+              <Text style={styles.rememberLabel}>次回のためログイン情報を保存</Text>
+            </View>
+            <View style={styles.rememberSwitchWrap}>
+              <Switch
+                value={rememberMe}
+                onValueChange={handleRememberMeChange}
+                trackColor={{ false: '#e0e0e0', true: '#A5C7F7' }}
+                thumbColor={rememberMe ? '#4A90E2' : '#f4f4f4'}
+              />
+            </View>
           </View>
 
           {error ? (
@@ -263,7 +273,7 @@ export default function LoginScreen() {
           <Text style={styles.signupNote}>新規登録はWebで行います</Text>
 
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://www.test-album.jp/contact')}
+            onPress={() => Linking.openURL('https://docs.google.com/forms/d/e/1FAIpQLSeNQjw8CRwEPbCD9JfvAY3dbWTdDNlyXBV8UOk4zdtGQLTOTg/viewform')}
             disabled={loading}
             style={styles.contactLink}
             activeOpacity={0.7}>
@@ -491,13 +501,21 @@ const styles = StyleSheet.create({
   rememberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  rememberLabelWrap: {
+    flex: 1,
+    flexShrink: 1,
+    marginRight: 12,
+    justifyContent: 'center',
   },
   rememberLabel: {
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  rememberSwitchWrap: {
+    flexShrink: 0,
   },
   passwordInputContainer: {
     flexDirection: 'row',

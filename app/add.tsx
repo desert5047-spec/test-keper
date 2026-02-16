@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -13,7 +12,9 @@ import {
   Modal,
   ActionSheetIOS,
   AppState,
+  InteractionManager,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Camera, RotateCw, RotateCcw, X, Calendar as CalendarIcon, Check } from 'lucide-react-native';
@@ -26,7 +27,8 @@ import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
-import { uploadImage } from '@/utils/imageUpload';
+import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
+import { log, warn, error as logError } from '@/lib/logger';
 
 // Androidでexpo-cameraを使用するため、このキーは使用されませんが、エラー回避のため定義
 const PENDING_CAMERA_RESULT_KEY = '@pending_camera_result';
@@ -42,11 +44,7 @@ interface Child {
 }
 
 export default function AddScreen() {
-  const debugLog = (...args: unknown[]) => {
-    if (__DEV__) {
-      console.log(...args);
-    }
-  };
+  const debugLog = log;
   const router = useRouter();
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
@@ -75,6 +73,7 @@ export default function AddScreen() {
   const [scoreError, setScoreError] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [photoRotation, setPhotoRotation] = useState<number>(0);
+  const [photoUploadFailed, setPhotoUploadFailed] = useState(false);
 
   useEffect(() => {
     requestPermissions();
@@ -94,7 +93,7 @@ export default function AddScreen() {
           setSelectedChildId(lastChildId);
         }
       } catch (error) {
-      console.warn('[記録保存] 前回選択の読み込み失敗');
+      warn('[記録保存] 前回選択の読み込み失敗');
       }
     };
     loadLastSelections();
@@ -162,7 +161,7 @@ export default function AddScreen() {
                 return;
               }
             } catch (validateError: any) {
-              console.error('[写真撮影] AsyncStorage URI検証エラー');
+              logError('[写真撮影] AsyncStorage URI検証エラー');
               await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
             }
           } else if (savedData === 'waiting') {
@@ -202,7 +201,7 @@ export default function AddScreen() {
                       return;
                     }
                   } catch (validateError: any) {
-                    console.error('[写真撮影] getPendingResultAsync URI検証エラー');
+                    logError('[写真撮影] getPendingResultAsync URI検証エラー');
                     await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
                   }
                 }
@@ -212,20 +211,20 @@ export default function AddScreen() {
                 await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
               }
             } catch (pendingError: any) {
-              console.error('[写真撮影] getPendingResultAsyncエラー');
+              logError('[写真撮影] getPendingResultAsyncエラー');
               // エラーが発生した場合もフラグを削除
               try {
                 await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
               } catch (removeError) {
-                console.error('[写真撮影] フラグ削除エラー');
+                logError('[写真撮影] フラグ削除エラー');
               }
             }
           }
         } catch (storageError: any) {
-          console.error('[写真撮影] AsyncStorage読み込みエラー');
+          logError('[写真撮影] AsyncStorage読み込みエラー');
         }
       } catch (error: any) {
-        console.error('[写真撮影] 保留中の結果処理エラー');
+        logError('[写真撮影] 保留中の結果処理エラー');
       } finally {
         isProcessing = false;
       }
@@ -327,7 +326,7 @@ export default function AddScreen() {
     try {
       setShowPhotoOptions(false);
     } catch (setStateError) {
-      console.error('[画像選択] setStateエラー');
+      logError('[画像選択] setStateエラー');
     }
 
     try {
@@ -349,7 +348,7 @@ export default function AddScreen() {
         const uri = result.assets[0].uri;
         
         if (!uri || typeof uri !== 'string') {
-          console.error('[画像選択] URIが無効');
+          logError('[画像選択] URIが無効');
           throw new Error('画像のURIが取得できませんでした');
         }
 
@@ -358,12 +357,12 @@ export default function AddScreen() {
         try {
           validateImageUri(uri);
         } catch (validateError: any) {
-          console.error('[画像選択] URI検証エラー');
+          logError('[画像選択] URI検証エラー');
           throw new Error(`画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         }
 
         if (!isValidImageUri(uri)) {
-          console.error('[画像選択] 無効なURI');
+          logError('[画像選択] 無効なURI');
           throw new Error('画像の形式が正しくありません');
         }
 
@@ -374,14 +373,14 @@ export default function AddScreen() {
           setPhotoRotation(0);
           debugLog('[画像選択] 画像URI設定完了', { platform: Platform.OS });
         } catch (setUriError: any) {
-          console.error('[画像選択] URI設定エラー');
+          logError('[画像選択] URI設定エラー');
           throw new Error(`画像の設定に失敗しました: ${setUriError.message || '不明なエラー'}`);
         }
       } else {
         debugLog('[画像選択] キャンセルされました', { platform: Platform.OS });
       }
     } catch (error: any) {
-      console.error('[画像選択] エラー');
+      logError('[画像選択] エラー');
       
       // エラーメッセージを表示（アプリをクラッシュさせない）
       setTimeout(() => {
@@ -393,7 +392,7 @@ export default function AddScreen() {
             { cancelable: true }
           );
         } catch (alertError: any) {
-          console.error('[画像選択] Alert表示エラー');
+          logError('[画像選択] Alert表示エラー');
           // Alert.alertも失敗した場合は、コンソールに出力するだけ
         }
       }, 100);
@@ -404,7 +403,7 @@ export default function AddScreen() {
     try {
       setShowPhotoOptions(false);
     } catch (setStateError) {
-      console.error('[写真撮影] setStateエラー');
+      logError('[写真撮影] setStateエラー');
     }
 
     // Androidではexpo-cameraを使用（Expo Goで再起動する問題を回避）
@@ -434,7 +433,7 @@ export default function AddScreen() {
         const uri = result.assets[0].uri;
         
         if (!uri || typeof uri !== 'string') {
-          console.error('[写真撮影] URIが無効');
+          logError('[写真撮影] URIが無効');
           throw new Error('画像のURIが取得できませんでした');
         }
 
@@ -443,12 +442,12 @@ export default function AddScreen() {
         try {
           validateImageUri(uri);
         } catch (validateError: any) {
-          console.error('[写真撮影] URI検証エラー');
+          logError('[写真撮影] URI検証エラー');
           throw new Error(`画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         }
 
         if (!isValidImageUri(uri)) {
-          console.error('[写真撮影] 無効なURI');
+          logError('[写真撮影] 無効なURI');
           throw new Error('画像の形式が正しくありません');
         }
 
@@ -459,14 +458,14 @@ export default function AddScreen() {
           setPhotoRotation(0);
           debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
         } catch (setUriError: any) {
-          console.error('[写真撮影] URI設定エラー');
+          logError('[写真撮影] URI設定エラー');
           throw new Error(`画像の設定に失敗しました: ${setUriError.message || '不明なエラー'}`);
         }
       } else {
         debugLog('[写真撮影] キャンセルされました', { platform: Platform.OS });
       }
     } catch (error: any) {
-      console.error('[写真撮影] エラー');
+      logError('[写真撮影] エラー');
       
       // エラーメッセージを表示（アプリをクラッシュさせない）
       setTimeout(() => {
@@ -478,7 +477,7 @@ export default function AddScreen() {
             { cancelable: true }
           );
         } catch (alertError: any) {
-          console.error('[写真撮影] Alert表示エラー');
+          logError('[写真撮影] Alert表示エラー');
         }
       }, 100);
     }
@@ -492,13 +491,13 @@ export default function AddScreen() {
       try {
         validateImageUri(uri);
       } catch (validateError: any) {
-        console.error('[写真撮影] URI検証エラー');
+        logError('[写真撮影] URI検証エラー');
         Alert.alert('エラー', `画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         return;
       }
 
       if (!isValidImageUri(uri)) {
-        console.error('[写真撮影] 無効なURI');
+        logError('[写真撮影] 無効なURI');
         Alert.alert('エラー', '画像の形式が正しくありません');
         return;
       }
@@ -508,7 +507,7 @@ export default function AddScreen() {
       setPhotoRotation(0);
       debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
     } catch (error: any) {
-      console.error('[写真撮影] カメラキャプチャ処理エラー');
+      logError('[写真撮影] カメラキャプチャ処理エラー');
       setShowCamera(false);
       Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
     }
@@ -636,7 +635,7 @@ export default function AddScreen() {
             return;
           }
         } catch (error: any) {
-          console.error('[記録保存] 画像URI検証エラー');
+          logError('[記録保存] 画像URI検証エラー');
           setErrorMessage(error?.message || '画像の形式が正しくありません');
           setTimeout(() => setErrorMessage(''), 3000);
           return;
@@ -647,7 +646,7 @@ export default function AddScreen() {
         try {
           Alert.alert('エラー', 'ログインが必要です');
         } catch (alertError) {
-          console.error('[記録保存] Alert表示エラー');
+          logError('[記録保存] Alert表示エラー');
           setErrorMessage('ログインが必要です');
         }
         return;
@@ -666,7 +665,7 @@ export default function AddScreen() {
           try {
             Alert.alert('エラー', '選択された子供が見つかりません。ページを再読み込みしてください。');
           } catch (alertError) {
-            console.error('[記録保存] Alert表示エラー');
+            logError('[記録保存] Alert表示エラー');
             setErrorMessage('選択された子供が見つかりません');
           }
           return;
@@ -676,7 +675,7 @@ export default function AddScreen() {
         try {
           Alert.alert('エラー', '子供を選択してください');
         } catch (alertError) {
-          console.error('[記録保存] Alert表示エラー');
+          logError('[記録保存] Alert表示エラー');
           setErrorMessage('子供を選択してください');
         }
         return;
@@ -686,50 +685,6 @@ export default function AddScreen() {
       setErrorMessage(''); // エラーメッセージをクリア
 
       try {
-      let uploadedImagePath: string | null = null;
-
-      if (photoUri) {
-        try {
-          debugLog('[記録保存] 画像アップロード開始', { platform: Platform.OS });
-          
-          // タイムアウトを設定（60秒）
-          const uploadPromise = uploadImage(photoUri, user.id);
-          const timeoutPromise = new Promise<string>((_, reject) => {
-            setTimeout(() => reject(new Error('画像のアップロードがタイムアウトしました（60秒）')), 60000);
-          });
-          
-          uploadedImagePath = await Promise.race([uploadPromise, timeoutPromise]);
-          
-          if (!uploadedImagePath || uploadedImagePath.trim() === '') {
-            throw new Error('画像のアップロードに失敗しました（URLが取得できませんでした）');
-          }
-          
-          debugLog('[記録保存] 画像アップロード成功');
-        } catch (uploadError: any) {
-          console.error('[記録保存] 画像アップロードエラー');
-          
-          const errorMessage = uploadError?.message || uploadError?.toString() || '画像のアップロードに失敗しました';
-          
-          // エラーメッセージを表示（アプリをクラッシュさせない）
-          try {
-            Alert.alert(
-              'エラー',
-              errorMessage,
-              [{ text: 'OK', onPress: () => {} }],
-              { cancelable: true }
-            );
-          } catch (alertError: any) {
-            // Alert.alertも失敗した場合、エラーメッセージを画面に表示
-            console.error('[記録保存] Alert表示エラー');
-            setErrorMessage(errorMessage);
-            setTimeout(() => setErrorMessage(''), 5000);
-          }
-          
-          setIsSaving(false);
-          return;
-        }
-      }
-
       const hasMethodInputFinal =
         evaluationType === 'score' ? !!score.trim() : !!stamp;
       const scoreValue = hasMethodInputFinal && evaluationType === 'score'
@@ -757,16 +712,57 @@ export default function AddScreen() {
             max_score: maxScoreValue,
             stamp: stampValue,
             memo: memo.trim() || null,
-            photo_uri: uploadedImagePath,
+            photo_uri: null,
             photo_rotation: photoRotation,
             user_id: user.id,
-          });
+          })
+          .select('id')
+          .single();
 
         if (error) {
-          console.error('[記録保存] データベース保存エラー');
+          logError('[記録保存] データベース保存エラー');
           throw new Error(`データベースへの保存に失敗しました: ${error.message || '不明なエラー'}`);
         }
 
+        const recordId = insertData?.id;
+        if (!recordId) {
+          throw new Error('記録のIDを取得できませんでした');
+        }
+
+        if (photoUri) {
+          let path: string | null = null;
+          try {
+            debugLog('[記録保存] 画像アップロード開始', { recordId });
+            const uploadPromise = uploadImage(photoUri, recordId);
+            const timeoutPromise = new Promise<string>((_, reject) => {
+              setTimeout(() => reject(new Error('画像のアップロードがタイムアウトしました（60秒）')), 60000);
+            });
+            path = await Promise.race([uploadPromise, timeoutPromise]);
+          } catch (uploadError: any) {
+            logError('[記録保存] 画像アップロードエラー');
+            const { error: deleteError } = await supabase.from('records').delete().eq('id', recordId);
+            if (deleteError) logError('[記録保存] ロールバック用レコード削除エラー', deleteError);
+            throw uploadError;
+          }
+          if (!path || !path.trim()) {
+            const { error: deleteError } = await supabase.from('records').delete().eq('id', recordId);
+            if (deleteError) logError('[記録保存] ロールバック用レコード削除エラー', deleteError);
+            throw new Error('画像のアップロードに失敗しました（pathが取得できませんでした）');
+          }
+          log('[SAVE][add] upload result path:', path);
+          const { error: updateError } = await supabase
+            .from('records')
+            .update({ photo_uri: path })
+            .eq('id', recordId);
+          if (updateError) {
+            logError('[記録保存] photo_uri 更新エラー');
+            const { error: deleteError } = await supabase.from('records').delete().eq('id', recordId);
+            if (deleteError) logError('[記録保存] ロールバック用レコード削除エラー', deleteError);
+            throw new Error(`写真の保存に失敗しました: ${updateError.message}`);
+          }
+        }
+
+        log('[SAVE][add] photo_uri to DB: path は upload 時のみ設定済み');
         debugLog('[記録保存] データベース保存成功');
 
         try {
@@ -777,41 +773,32 @@ export default function AddScreen() {
             await AsyncStorage.removeItem(LAST_CHILD_KEY);
           }
         } catch (persistError) {
-          console.warn('[記録保存] 前回選択の保存失敗');
+          warn('[記録保存] 前回選択の保存失敗');
         }
 
-        // 成功時の処理もtry-catchで保護
+        // 成功時の処理もtry-catchで保護（描画完了後にモーダル表示で遷移を確実に）
         try {
           setIsSaving(false);
           setShowToast(true);
-          setTimeout(() => {
-            try {
-              setShowToast(false);
-              setShowSaveConfirm(true);
-            } catch (navigationError: any) {
-              console.error('[記録保存] ナビゲーションエラー');
-              try {
-                resetForm();
-              } catch (resetError) {
-                console.error('[記録保存] フォームリセットエラー');
-              }
-            }
-          }, 300);
+          InteractionManager.runAfterInteractions(() => {
+            setShowSaveConfirm(true);
+          });
+          setTimeout(() => setShowToast(false), 300);
         } catch (successError: any) {
-          console.error('[記録保存] 成功処理エラー');
+          logError('[記録保存] 成功処理エラー');
           // 成功処理に失敗しても、保存は完了しているので、エラーを表示しない
         }
       } catch (dbError: any) {
-        console.error('[記録保存] データベース保存エラー');
+        logError('[記録保存] データベース保存エラー');
         throw dbError;
       }
     } catch (error: any) {
-      console.error('[記録保存] 予期しないエラー');
+      logError('[記録保存] 予期しないエラー');
       
       const errorMessage = error?.message || error?.toString() || '保存に失敗しました';
-      
-      // エラーメッセージをユーザーに表示（アプリをクラッシュさせない）
-      // 非同期で実行して、エラーが発生してもアプリが続行できるようにする
+      setErrorMessage(errorMessage);
+      setTimeout(() => setErrorMessage(''), 8000);
+
       setTimeout(() => {
         try {
           Alert.alert(
@@ -821,20 +808,7 @@ export default function AddScreen() {
             { cancelable: true }
           );
         } catch (alertError: any) {
-          // Alert.alertも失敗した場合、エラーメッセージを画面に表示
-          console.error('[記録保存] Alert表示エラー');
-          try {
-            setErrorMessage(errorMessage);
-            setTimeout(() => {
-              try {
-                setErrorMessage('');
-              } catch (clearError) {
-                console.error('[記録保存] エラーメッセージクリアエラー');
-              }
-            }, 5000);
-          } catch (setErrorError) {
-            console.error('[記録保存] エラーメッセージ設定エラー');
-          }
+          logError('[記録保存] Alert表示エラー');
         }
       }, 100);
     } finally {
@@ -842,32 +816,11 @@ export default function AddScreen() {
       try {
         setIsSaving(false);
       } catch (setStateError: any) {
-        console.error('[記録保存] setStateエラー');
+        logError('[記録保存] setStateエラー');
       }
     }
-  } catch (outerError: any) {
-      // 最外側のエラーハンドリング（すべてのエラーをキャッチ）
-      console.error('[記録保存] 最外側エラー（クラッシュ防止）');
-      
-      try {
-        setIsSaving(false);
-      } catch (finalError) {
-        console.error('[記録保存] 最終エラー処理エラー');
-      }
-      
-      // ユーザーにエラーを表示
-      setTimeout(() => {
-        try {
-          Alert.alert(
-            'エラー',
-            '保存中にエラーが発生しました。もう一度お試しください。',
-            [{ text: 'OK', onPress: () => {} }],
-            { cancelable: true }
-          );
-        } catch (finalAlertError) {
-          console.error('[記録保存] 最終Alert表示エラー');
-        }
-      }, 100);
+    } catch (_) {
+      // 最外側 try (589) 用の catch（内側で既に処理済みのため何もしない）
     }
   };
 
@@ -882,6 +835,11 @@ export default function AddScreen() {
     setMemo('');
     setDate(new Date().toISOString().split('T')[0]);
   };
+
+  const saveConfirmMessage =
+    photoUploadFailed
+      ? '記録は保存されましたが、写真のアップロードに失敗しました。続けて入力しますか？'
+      : '記録は保存されました。続けて入力しますか？';
 
   return (
     <View style={styles.container}>
@@ -912,9 +870,10 @@ export default function AddScreen() {
               </TouchableOpacity>
               <View style={styles.photoWrapper}>
                 <Image
-                  source={{ uri: photoUri }}
+                  source={photoUri}
                   style={styles.photo}
-                  resizeMode="contain"
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
                 />
               </View>
               {isProcessingImage && (
@@ -951,10 +910,10 @@ export default function AddScreen() {
           )}
         </View>
 
-        {contextChildren.length > 0 && (
+        {contextChildren.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              {contextChildren.find(c => c.id === selectedChildId)?.name || '子供'}の記録
+              {`${contextChildren.find(c => c.id === selectedChildId)?.name || '子供'}の記録`}
             </Text>
             <View style={styles.childChipContainer}>
               {contextChildren.map((child) => (
@@ -978,7 +937,7 @@ export default function AddScreen() {
               ))}
             </View>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>教科</Text>
@@ -1064,7 +1023,10 @@ export default function AddScreen() {
                 styles.evaluationTypeButton,
                 evaluationType === 'stamp' && styles.evaluationTypeButtonSelected,
               ]}
-              onPress={() => setEvaluationType('stamp')}
+              onPress={() => {
+                setEvaluationType('stamp');
+                setScoreError('');
+              }}
               activeOpacity={0.7}>
               <Text
                 style={[
@@ -1084,7 +1046,7 @@ export default function AddScreen() {
                     style={[
                       styles.scoreInput,
                       scoreError ? styles.scoreInputError : null,
-                      !scoreError && score && maxScore && styles.scoreInputValid,
+                      !scoreError && score.trim() !== '' && maxScore.trim() !== '' ? styles.scoreInputValid : null,
                     ]}
                     value={score}
                     onChangeText={(value) => {
@@ -1095,19 +1057,19 @@ export default function AddScreen() {
                     keyboardType="numeric"
                     placeholderTextColor="#999"
                   />
-                  {!scoreError && score && maxScore && (
+                  {!scoreError && score.trim() !== '' && maxScore.trim() !== '' ? (
                     <View style={styles.scoreCheckIcon}>
                       <Check size={16} color="#4CAF50" />
                     </View>
-                  )}
+                  ) : null}
                 </View>
                 <Text style={styles.scoreLabel}>点</Text>
-                <Text style={styles.scoreSeparator}>/</Text>
+                <Text style={styles.scoreSeparator}>{'/'}</Text>
                 <TextInput
                   style={[
                     styles.maxScoreInput,
                     scoreError ? styles.scoreInputError : null,
-                    !scoreError && score && maxScore && styles.scoreInputValid,
+                    !scoreError && score.trim() !== '' && maxScore.trim() !== '' ? styles.scoreInputValid : null,
                   ]}
                   value={maxScore}
                   onChangeText={(value) => {
@@ -1121,7 +1083,7 @@ export default function AddScreen() {
               </View>
               {scoreError ? (
                 <View style={styles.scoreErrorContainer}>
-                  <Text style={styles.scoreErrorText}>{scoreError}</Text>
+                  <Text style={styles.scoreErrorText}>{String(scoreError)}</Text>
                 </View>
               ) : null}
             </View>
@@ -1224,9 +1186,9 @@ export default function AddScreen() {
               <CalendarIcon size={20} color="#4A90E2" />
             </TouchableOpacity>
           </View>
-          {date && (
+          {date && date.trim() !== '' ? (
             <Text style={styles.dateDisplayText}>{formatDisplayDate(date)}</Text>
-          )}
+          ) : null}
         </View>
 
         <CalendarPicker
@@ -1263,10 +1225,10 @@ export default function AddScreen() {
         <TouchableOpacity
           style={[
             styles.bottomSaveButton,
-            (isSaving || scoreError) && styles.bottomSaveButtonDisabled,
+            (isSaving || (evaluationType === 'score' && scoreError)) && styles.bottomSaveButtonDisabled,
           ]}
           onPress={handleSave}
-          disabled={isSaving || !!scoreError}
+          disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
           activeOpacity={0.7}>
           {isSaving ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -1328,16 +1290,17 @@ export default function AddScreen() {
         visible={showSaveConfirm}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => {}}>
+        onRequestClose={() => { setShowSaveConfirm(false); setPhotoUploadFailed(false); }}>
         <View style={styles.saveConfirmOverlay}>
           <View style={styles.saveConfirmCard}>
             <Text style={styles.saveConfirmTitle}>確認</Text>
-            <Text style={styles.saveConfirmMessage}>記録は保存されました。続けて入力しますか？</Text>
+            <Text style={styles.saveConfirmMessage}>{saveConfirmMessage}</Text>
             <View style={styles.saveConfirmActions}>
               <TouchableOpacity
                 style={styles.saveConfirmSecondaryButton}
                 onPress={() => {
                   setShowSaveConfirm(false);
+                  setPhotoUploadFailed(false);
                   resetForm();
                   setTimeout(() => {
                     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -1350,6 +1313,7 @@ export default function AddScreen() {
                 style={styles.saveConfirmPrimaryButton}
                 onPress={() => {
                   setShowSaveConfirm(false);
+                  setPhotoUploadFailed(false);
                   resetForm();
                   router.push('/(tabs)');
                 }}

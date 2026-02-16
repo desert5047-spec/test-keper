@@ -10,16 +10,19 @@ import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
-import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
+import { isSupabaseConfigured, supabaseConfigError, supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
 import { getHandlingAuthCallback, isBootHold } from '@/lib/authCallbackState';
 import DebugHudOverlay from '@/components/DebugHud';
+import { log, warn, error as logError } from '@/lib/logger';
 
-const debugLog = (...args: unknown[]) => {
-  if (__DEV__) {
-    console.log(...args);
-  }
-};
+if (!__DEV__) {
+  console.log = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+}
+
+const debugLog = log;
 
 const DebugHud = ({ initialUrl }: { initialUrl: string | null }) => {
   const pathname = usePathname();
@@ -40,14 +43,28 @@ const DebugHud = ({ initialUrl }: { initialUrl: string | null }) => {
 };
 
 void SplashScreen.preventAutoHideAsync().catch((error) => {
-  console.warn('[RootLayout] SplashScreen.preventAutoHideAsyncエラー');
+  warn('[RootLayout] SplashScreen.preventAutoHideAsyncエラー');
 });
+
+/** 無効なリフレッシュトークンエラーかどうか（Expo Go 等で未処理の Promise 拒否を拾う用） */
+function isInvalidRefreshTokenError(reason: unknown): boolean {
+  if (!reason || typeof reason !== 'object') return false;
+  const msg = (reason as { message?: string })?.message ?? '';
+  const name = (reason as { name?: string })?.name ?? '';
+  return (
+    name === 'AuthApiError' ||
+    msg.includes('Refresh Token') ||
+    msg.includes('refresh_token') ||
+    msg.includes('Refresh Token Not Found') ||
+    msg.includes('Invalid Refresh Token')
+  );
+}
 
 export default function RootLayout() {
   try {
     useFrameworkReady();
   } catch (error) {
-    console.error('[RootLayout] useFrameworkReadyエラー');
+    logError('[RootLayout] useFrameworkReadyエラー');
   }
 
   const [initialUrl, setInitialUrl] = useState<string | null>(null);
@@ -57,6 +74,23 @@ export default function RootLayout() {
     'Nunito-SemiBold': Nunito_600SemiBold,
     'Nunito-Bold': Nunito_700Bold,
   });
+
+  // Expo Go 起動時にリフレッシュトークンエラーが未処理で飛ぶ場合、ストレージをクリアしてログイン画面へ
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const g = typeof globalThis !== 'undefined' ? globalThis : typeof global !== 'undefined' ? global : {};
+    const handler = (event: { reason?: unknown; preventDefault?: () => void }) => {
+      if (isInvalidRefreshTokenError(event?.reason)) {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        warn('[RootLayout] リフレッシュトークンエラーを検出、ストレージをクリアします');
+        supabase.auth.signOut().catch(() => {});
+      }
+    };
+    if (typeof (g as any).addEventListener === 'function') {
+      (g as any).addEventListener('unhandledrejection', handler);
+      return () => (g as any).removeEventListener('unhandledrejection', handler);
+    }
+  }, []);
 
   useEffect(() => {
     Linking.getInitialURL()
@@ -73,11 +107,11 @@ export default function RootLayout() {
       if (fontsLoaded || fontError) {
         debugLog('[RootLayout] フォント読み込み完了、スプラッシュ画面を非表示', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
         SplashScreen.hideAsync().catch(() => {
-          console.error('[RootLayout] SplashScreen.hideAsyncエラー');
+          logError('[RootLayout] SplashScreen.hideAsyncエラー');
         });
       }
     } catch (error) {
-      console.error('[RootLayout] useEffectエラー');
+      logError('[RootLayout] useEffectエラー');
       // エラーが発生してもスプラッシュ画面を非表示にする
       SplashScreen.hideAsync().catch(() => {});
     }
@@ -89,12 +123,12 @@ export default function RootLayout() {
   }
 
   if (fontError) {
-    console.error('[RootLayout] フォント読み込みエラー');
+    logError('[RootLayout] フォント読み込みエラー');
     // フォントエラーがあってもアプリを続行
   }
 
   if (!isSupabaseConfigured) {
-    console.error('[RootLayout] Supabase設定がありません');
+    logError('[RootLayout] Supabase設定がありません');
     return (
       <View style={styles.configErrorContainer}>
         <Text style={styles.configErrorTitle}>設定エラー</Text>

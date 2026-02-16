@@ -12,10 +12,11 @@ export default function TabLayout() {
     <DateProvider>
       <Tabs
         screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#333',
-        tabBarInactiveTintColor: '#999',
-      }}
+          headerShown: false,
+          tabBarActiveTintColor: '#333',
+          tabBarInactiveTintColor: '#999',
+          unmountOnBlur: false,
+        }}
       tabBar={(props) => {
         const { state, descriptors, navigation } = props;
 

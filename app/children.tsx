@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
 import { supabase } from '@/lib/supabase';
+import { deleteImage } from '@/utils/imageUpload';
+import { error as logError } from '@/lib/logger';
 
 interface Child {
   id: string;
@@ -115,6 +117,18 @@ export default function ChildrenScreen() {
       return;
     }
 
+    // 同じ名前は登録不可（大文字小文字・前後空白を無視して比較）
+    const nameLower = trimmedName.toLowerCase();
+    const isDuplicate = children.some(
+      (c) =>
+        c.name?.trim().toLowerCase() === nameLower &&
+        (editingChild ? c.id !== editingChild.id : true)
+    );
+    if (isDuplicate) {
+      Alert.alert('エラー', '同じ名前の子供は既に登録されています。別の名前を入力してください。');
+      return;
+    }
+
     if (editingChild) {
       const { error } = await supabase
         .from('children')
@@ -180,17 +194,72 @@ export default function ChildrenScreen() {
           text: '削除',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await supabase
-              .from('children')
-              .delete()
-              .eq('id', child.id)
-              .eq('family_id', familyId ?? '');
+            try {
+              // (1) child_id = child.id の records を SELECT（id, photo_uri）
+              const { data: records, error: selectErr } = await supabase
+                .from('records')
+                .select('id, photo_uri')
+                .eq('child_id', child.id);
+              if (selectErr) {
+                logError('[Children] records SELECT', selectErr);
+                throw selectErr;
+              }
 
-            if (error) {
-              Alert.alert('エラー', '削除に失敗しました');
-            } else {
+              if (records?.length) {
+                const recordIds = records.map((r) => r.id);
+
+                // (2) record_tags を record_id IN (...) で一括 DELETE
+                const { error: tagsErr } = await supabase
+                  .from('record_tags')
+                  .delete()
+                  .in('record_id', recordIds);
+                if (tagsErr) {
+                  logError('[Children] record_tags', tagsErr);
+                  throw tagsErr;
+                }
+
+                // (3) 各 record の Storage 写真を削除（photo_uri があるものだけ）
+                for (const r of records) {
+                  if (r.photo_uri) await deleteImage(r.photo_uri);
+                }
+
+                // (4) records を child_id = child.id で DELETE
+                const { error: recordsErr } = await supabase
+                  .from('records')
+                  .delete()
+                  .eq('child_id', child.id);
+                if (recordsErr) {
+                  logError('[Children] records', recordsErr);
+                  throw recordsErr;
+                }
+              }
+
+              // 目標を削除
+              const { error: goalsErr } = await supabase
+                .from('goals')
+                .delete()
+                .eq('child_id', child.id);
+              if (goalsErr) {
+                logError('[Children] goals', goalsErr);
+                throw goalsErr;
+              }
+
+              // 子供を削除
+              const { error } = await supabase
+                .from('children')
+                .delete()
+                .eq('id', child.id)
+                .eq('family_id', familyId ?? '');
+              if (error) {
+                logError('[Children] children', error);
+                throw error;
+              }
+
               await loadChildren();
               await loadContextChildren();
+            } catch (e: any) {
+              logError('[Children] 削除例外', e);
+              Alert.alert('エラー', e?.message || '削除に失敗しました');
             }
           }
         },

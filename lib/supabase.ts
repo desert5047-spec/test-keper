@@ -1,6 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { warn } from '@/lib/logger';
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
@@ -20,7 +21,7 @@ const supabaseAnonKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || getExtraString('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('[Supabase] EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY が未設定です');
+  warn('[Supabase] EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY が未設定です');
 }
 
 const isPlaceholder = (v: string) =>
@@ -53,7 +54,7 @@ export const supabase = isSupabaseConfigured
         storage: AsyncStorage,
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: Platform.OS === 'web',
         flowType: 'pkce',
       },
       global: {

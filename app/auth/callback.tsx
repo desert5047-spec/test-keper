@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { log } from '@/lib/logger';
 
 type CallbackStatus = 'processing' | 'ready' | 'error';
 
@@ -24,7 +25,7 @@ export default function WebAuthCallback() {
 
     const url = window.location.href;
     setDebugUrl(url);
-    console.log('[AuthCallbackWeb] opened:', url);
+    log('[AuthCallbackWeb] opened:', url);
 
     const searchParams = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));

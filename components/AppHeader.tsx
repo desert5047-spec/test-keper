@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
@@ -36,6 +36,11 @@ export function AppHeader({
   const router = useRouter();
   const { year, month, setYearMonth } = useDateContext();
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(year);
+
+  useEffect(() => {
+    if (showMonthPicker) setPickerYear(year);
+  }, [showMonthPicker, year]);
 
   const handleMonthChange = (direction: 'next' | 'prev') => {
     if (direction === 'next') {
@@ -54,8 +59,12 @@ export function AppHeader({
   };
 
   const handleMonthSelect = (selectedMonth: number) => {
-    setYearMonth(year, selectedMonth);
+    setYearMonth(pickerYear, selectedMonth);
     setShowMonthPicker(false);
+  };
+
+  const handlePickerYearChange = (direction: 'next' | 'prev') => {
+    setPickerYear((y) => (direction === 'next' ? y + 1 : y - 1));
   };
 
   return (
@@ -157,8 +166,26 @@ export function AppHeader({
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowMonthPicker(false)}>
-          <View style={styles.monthPickerContainer}>
-            <Text style={styles.monthPickerTitle}>月を選択</Text>
+          <TouchableOpacity
+            style={styles.monthPickerContainer}
+            activeOpacity={1}
+            onPress={() => {}}>
+            <Text style={styles.monthPickerTitle}>年・月を選択</Text>
+            <View style={styles.yearPickerRow}>
+              <TouchableOpacity
+                style={styles.yearPickerArrow}
+                onPress={() => handlePickerYearChange('prev')}
+                activeOpacity={0.7}>
+                <ChevronLeft size={22} color="#666" />
+              </TouchableOpacity>
+              <Text style={styles.yearPickerText}>{pickerYear}年</Text>
+              <TouchableOpacity
+                style={styles.yearPickerArrow}
+                onPress={() => handlePickerYearChange('next')}
+                activeOpacity={0.7}>
+                <ChevronRight size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
             <ScrollView style={styles.monthPickerScroll}>
               <View style={styles.monthPickerGrid}>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
@@ -166,14 +193,14 @@ export function AppHeader({
                     key={m}
                     style={[
                       styles.monthPickerItem,
-                      month === m && styles.monthPickerItemSelected,
+                      pickerYear === year && month === m && styles.monthPickerItemSelected,
                     ]}
                     onPress={() => handleMonthSelect(m)}
                     activeOpacity={0.7}>
                     <Text
                       style={[
                         styles.monthPickerItemText,
-                        month === m && styles.monthPickerItemTextSelected,
+                        pickerYear === year && month === m && styles.monthPickerItemTextSelected,
                       ]}>
                       {m}月
                     </Text>
@@ -181,7 +208,7 @@ export function AppHeader({
                 ))}
               </View>
             </ScrollView>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </>
@@ -295,6 +322,25 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  yearPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  yearPickerArrow: {
+    padding: 4,
+  },
+  yearPickerText: {
+    fontSize: 17,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    minWidth: 72,
+    textAlign: 'center',
   },
   monthPickerScroll: {
     maxHeight: 400,

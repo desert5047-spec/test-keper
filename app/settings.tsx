@@ -5,6 +5,7 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  Pressable,
   Alert,
   ActivityIndicator,
   Platform,
@@ -12,7 +13,7 @@ import {
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
-import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield } from 'lucide-react-native';
+import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield, MessageCircle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
@@ -20,6 +21,8 @@ import { AppHeader } from '@/components/AppHeader';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { deleteImage } from '@/utils/imageUpload';
+import { warn, error as logError } from '@/lib/logger';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -98,34 +101,72 @@ export default function SettingsScreen() {
         throw new Error('家族情報の取得中です。少し待ってから再度お試しください');
       }
 
-      const { data: records } = await supabase
-        .from('records')
-        .select('photo_uri')
-        .eq('family_id', familyId)
-        .not('photo_uri', 'is', null);
+      // 家族に紐づく子供一覧を取得
+      const { data: childrenList, error: childrenListErr } = await supabase
+        .from('children')
+        .select('id')
+        .eq('family_id', familyId);
+      if (childrenListErr) {
+        logError('[初期化] children SELECT', childrenListErr);
+        throw childrenListErr;
+      }
 
-      if (records && records.length > 0) {
-        const { data: listData } = await supabase.storage
-          .from('test-images')
-          .list(user.id);
+      for (const child of childrenList ?? []) {
+        // (1) child_id = child.id の records を SELECT（id, photo_uri）
+        const { data: records, error: recordsSelectErr } = await supabase
+          .from('records')
+          .select('id, photo_uri')
+          .eq('child_id', child.id);
+        if (recordsSelectErr) {
+          logError('[初期化] records SELECT', recordsSelectErr);
+          throw recordsSelectErr;
+        }
 
-        if (listData && listData.length > 0) {
-          const allUserFiles = listData.map(file => `${user.id}/${file.name}`);
-          await supabase.storage.from('test-images').remove(allUserFiles);
+        if (records && records.length > 0) {
+          const recordIds = records.map((r) => r.id);
+
+          // (2) record_tags を record_id IN (...) で DELETE
+          const { error: tagsErr } = await supabase
+            .from('record_tags')
+            .delete()
+            .in('record_id', recordIds);
+          if (tagsErr) {
+            logError('[初期化] record_tags DELETE', tagsErr);
+            throw tagsErr;
+          }
+
+          // (3) 各 record の photo_uri がある場合、Storage 削除
+          for (const r of records) {
+            if (r.photo_uri) await deleteImage(r.photo_uri);
+          }
+
+          // (4) records を child_id = child.id で DELETE
+          const { error: recordsDeleteErr } = await supabase
+            .from('records')
+            .delete()
+            .eq('child_id', child.id);
+          if (recordsDeleteErr) {
+            logError('[初期化] records DELETE', recordsDeleteErr);
+            throw recordsDeleteErr;
+          }
         }
       }
 
-      await supabase
+      const { error: subjectsErr } = await supabase
         .from('subjects')
         .delete()
         .eq('family_id', familyId);
+      if (subjectsErr) {
+        logError('[初期化] subjects DELETE', subjectsErr);
+        throw subjectsErr;
+      }
 
       const { error: childrenError } = await supabase
         .from('children')
         .delete()
         .eq('family_id', familyId);
-
       if (childrenError) {
+        logError('[初期化] children DELETE', childrenError);
         throw new Error('初期化に失敗しました');
       }
 
@@ -178,7 +219,7 @@ export default function SettingsScreen() {
       .maybeSingle();
 
     if (error) {
-      console.error('[Settings] family role 取得エラー');
+      logError('[Settings] family role 取得エラー');
       setFamilyRole(null);
       return;
     }
@@ -191,7 +232,7 @@ export default function SettingsScreen() {
     setIsLoadingInvites(true);
     const { data, error } = await supabase.rpc('list_invites');
     if (error) {
-      console.error('[Settings] 招待一覧取得エラー');
+      logError('[Settings] 招待一覧取得エラー');
       setInviteList([]);
     } else {
       setInviteList(data ?? []);
@@ -211,7 +252,7 @@ export default function SettingsScreen() {
       .eq('family_id', familyId)
       .order('created_at', { ascending: true });
     if (error) {
-      console.error('[Settings] 家族メンバー取得エラー');
+      logError('[Settings] 家族メンバー取得エラー');
       setFamilyMembers([]);
     } else {
       setFamilyMembers(
@@ -250,7 +291,7 @@ export default function SettingsScreen() {
       await Clipboard.setStringAsync(text);
       return true;
     } catch (error) {
-      console.warn('[Settings] クリップボードコピー失敗');
+      warn('[Settings] クリップボードコピー失敗');
       return false;
     }
   };
@@ -274,7 +315,7 @@ export default function SettingsScreen() {
     });
 
     if (error) {
-      console.error('[Settings] 招待作成エラー');
+      logError('[Settings] 招待作成エラー');
       setInviteError(getCreateInviteErrorMessage(error.message || ''));
     } else {
       const token = data ?? '';
@@ -310,7 +351,7 @@ export default function SettingsScreen() {
       });
       setInviteMessage('招待リンクを共有しました');
     } catch (error) {
-      console.warn('[Settings] 招待リンク共有失敗');
+      warn('[Settings] 招待リンク共有失敗');
       const ok = await copyToClipboard(inviteUrl);
       if (ok) {
         setInviteMessage('共有に失敗したため、招待リンクをコピーしました');
@@ -334,7 +375,7 @@ export default function SettingsScreen() {
     });
 
     if (error) {
-      console.error('[Settings] 招待受諾エラー');
+      logError('[Settings] 招待受諾エラー');
       setAcceptError(getAcceptInviteErrorMessage(error.message || ''));
     } else {
       const nextFamilyId = data as string | null;
@@ -375,7 +416,7 @@ export default function SettingsScreen() {
     });
 
     if (error) {
-      console.error('[Settings] display_name 更新エラー');
+      logError('[Settings] display_name 更新エラー');
       setDisplayNameError('保存に失敗しました');
     } else {
       setDisplayNameMessage('呼称を保存しました');
@@ -447,7 +488,7 @@ export default function SettingsScreen() {
       return;
     }
     Linking.openURL(url).catch((error) => {
-      console.warn('[Settings] プライバシーポリシーを開けませんでした');
+      warn('[Settings] プライバシーポリシーを開けませんでした');
     });
   };
 
@@ -458,8 +499,37 @@ export default function SettingsScreen() {
       return;
     }
     Linking.openURL(url).catch((error) => {
-      console.warn('[Settings] 利用規約を開けませんでした');
+      warn('[Settings] 利用規約を開けませんでした');
     });
+  };
+
+  const openContact = () => {
+    const url = 'https://docs.google.com/forms/d/e/1FAIpQLSeNQjw8CRwEPbCD9JfvAY3dbWTdDNlyXBV8UOk4zdtGQLTOTg/viewform';
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    Linking.openURL(url).catch((error) => {
+      warn('[Settings] お問い合わせを開けませんでした');
+    });
+  };
+
+  const openDeleteAccount = async () => {
+    const url = 'https://www.test-album.jp/delete-account';
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      const ok = await Linking.canOpenURL(url);
+      if (!ok) {
+        Alert.alert('開けませんでした', 'ブラウザでURLを開けませんでした。');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('エラー', 'ページを開けませんでした。');
+    }
   };
 
   return (
@@ -485,7 +555,7 @@ export default function SettingsScreen() {
                 <Users size={22} color="#4A90E2" />
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>子供設定</Text>
+                <Text style={styles.menuItemText}>子供設定（子供の追加はこちら）</Text>
                 <Text style={styles.menuItemSubtext} numberOfLines={1}>
                   {children.length === 0 ? 'まだ登録されていません' : `登録済み：${children.length}人`}
                 </Text>
@@ -649,13 +719,13 @@ export default function SettingsScreen() {
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>あなたの呼称</Text>
+          <Text style={styles.sectionTitle}>ユーザーネーム</Text>
           <Text style={styles.sectionDescription}>
             家族の中での呼び方を設定できます（最大4文字）
           </Text>
           <View style={styles.familyCard}>
             <Text style={styles.currentDisplayName}>
-              現在の呼称: {familyDisplayName ?? '保護者'}
+              現在のユーザーネーム: {familyDisplayName ?? '保護者'}
             </Text>
             <TextInput
               style={styles.input}
@@ -686,18 +756,6 @@ export default function SettingsScreen() {
                 <Text style={styles.primaryButtonText}>保存する</Text>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>アプリについて</Text>
-          <View style={styles.infoCard}>
-            <Text style={styles.appName}>テストアルバム</Text>
-            <Text style={styles.appVersion}>Version 1.0.0</Text>
-            <Text style={styles.appDescription}>
-              子供のテストや成績を記録して、{'\n'}
-              頑張りを見える化するアプリです。
-            </Text>
           </View>
         </View>
 
@@ -735,13 +793,29 @@ export default function SettingsScreen() {
             </View>
             <ChevronRight size={20} color="#999" style={styles.chevron} />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.menuItem, styles.menuItemSpacing]}
+            onPress={openContact}
+            activeOpacity={0.7}>
+            <View style={styles.menuItemLeft}>
+              <View style={styles.iconContainer}>
+                <MessageCircle size={22} color="#4A90E2" />
+              </View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>お問い合わせ</Text>
+                <Text style={styles.menuItemSubtext}>ご質問・ご要望はこちら</Text>
+              </View>
+            </View>
+            <ChevronRight size={20} color="#999" style={styles.chevron} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>データ管理</Text>
           <View style={styles.dangerZone}>
             <View style={styles.dangerHeader}>
-              <Trash2 size={20} color="#E74C3C" />
+              <Trash2 size={20} color="#333" />
               <Text style={styles.dangerTitle}>データを初期化</Text>
             </View>
             <Text style={styles.dangerDescription}>
@@ -758,6 +832,31 @@ export default function SettingsScreen() {
                 <Text style={styles.dangerButtonText}>初期化する</Text>
               )}
             </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>アカウント</Text>
+          <View style={styles.deleteAccountCard}>
+            <Text style={styles.deleteAccountTitle}>アカウント削除（退会）</Text>
+            <Text style={styles.deleteAccountDescription}>
+              アカウント削除をご希望の場合は、削除依頼フォームからお手続きください。
+            </Text>
+            <Pressable onPress={openDeleteAccount} style={styles.deleteAccountButton}>
+              <Text style={styles.deleteAccountButtonText}>削除依頼フォームを開く</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>アプリについて</Text>
+          <View style={styles.infoCard}>
+            <Text style={styles.appName}>テストアルバム</Text>
+            <Text style={styles.appVersion}>Version 1.0.0</Text>
+            <Text style={styles.appDescription}>
+              子供のテストや成績を記録して、{'\n'}
+              頑張りを見える化するアプリです。
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -1113,10 +1212,10 @@ const styles = StyleSheet.create({
   },
   dangerZone: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#FFE5E5',
+    borderColor: '#f0f0f0',
     ...Platform.select({
       web: {
         boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
@@ -1139,23 +1238,26 @@ const styles = StyleSheet.create({
   dangerTitle: {
     fontSize: 16,
     fontFamily: 'Nunito-Bold',
-    color: '#E74C3C',
+    fontWeight: '700',
+    color: '#333',
   },
   dangerDescription: {
-    fontSize: 13,
+    marginTop: 6,
+    fontSize: 14,
     fontFamily: 'Nunito-Regular',
-    color: '#999',
+    color: '#666',
     marginBottom: 16,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   dangerButton: {
-    backgroundColor: '#FFF5F5',
-    borderRadius: 8,
+    marginTop: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E74C3C',
+    borderColor: '#ddd',
     ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
   },
   dangerButtonDisabled: {
@@ -1164,7 +1266,56 @@ const styles = StyleSheet.create({
   dangerButtonText: {
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
-    color: '#E74C3C',
+    fontWeight: '700',
+    color: '#333',
+  },
+  deleteAccountCard: {
+    marginTop: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+      },
+    }),
+  },
+  deleteAccountTitle: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    fontWeight: '700',
+    color: '#333',
+  },
+  deleteAccountDescription: {
+    marginTop: 6,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    lineHeight: 20,
+  },
+  deleteAccountButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
+  },
+  deleteAccountButtonText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    fontWeight: '700',
+    color: '#333',
   },
   accountCard: {
     backgroundColor: '#fff',

@@ -5,14 +5,16 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Image,
+  Image as RNImage,
   Dimensions,
   PanResponder,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Check, X } from 'lucide-react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { error as logError } from '@/lib/logger';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CONTAINER_PADDING = 20;
@@ -38,7 +40,7 @@ export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: ImageCr
       if (visible && imageUri) {
         try {
           await new Promise<void>((resolve, reject) => {
-            Image.getSize(
+            RNImage.getSize(
               imageUri,
               (width, height) => {
                 setImageSize({ width, height });
@@ -69,13 +71,13 @@ export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: ImageCr
                 resolve();
               },
               (error) => {
-                console.error('画像サイズ取得エラー');
+                logError('画像サイズ取得エラー');
                 reject(error);
               }
             );
           });
         } catch (error) {
-          console.error('画像サイズ取得エラー');
+          logError('画像サイズ取得エラー');
         }
       }
     };
@@ -221,7 +223,7 @@ export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: ImageCr
       
       onCrop(result.uri);
     } catch (error: any) {
-      console.error('トリミングエラー');
+      logError('トリミングエラー');
       Alert.alert('エラー', 'トリミングに失敗しました: ' + (error.message || '不明なエラー'));
     } finally {
       setIsProcessing(false);
@@ -262,9 +264,10 @@ export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: ImageCr
             ]}
             {...panResponder.panHandlers}>
             <Image
-              source={{ uri: imageUri }}
+              source={imageUri}
               style={[styles.image, { width: displaySize.width, height: displaySize.height }]}
-              resizeMode="contain"
+              contentFit="contain"
+              cachePolicy="memory-disk"
             />
             
             {/* トリミング領域のオーバーレイ */}

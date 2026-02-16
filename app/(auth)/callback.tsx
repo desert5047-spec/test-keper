@@ -4,6 +4,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
+import { log, warn, error as logError } from '@/lib/logger';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -12,11 +13,7 @@ export default function AuthCallbackScreen() {
   const isProcessingRef = useRef(false);
   const pendingUrlRef = useRef<string | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debugLog = (...args: unknown[]) => {
-    if (__DEV__) {
-      console.log(...args);
-    }
-  };
+  const debugLog = log;
 
   useEffect(() => {
     const paramUrl =
@@ -32,7 +29,7 @@ export default function AuthCallbackScreen() {
       isProcessingRef.current = true;
       if (!watchdogRef.current) {
         watchdogRef.current = setTimeout(async () => {
-          console.warn('[コールバック] 処理監視タイムアウト、セッション再確認中');
+          warn('[コールバック] 処理監視タイムアウト、セッション再確認中');
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             debugLog('[コールバック] 監視タイムアウト後にセッション検出');
@@ -98,7 +95,7 @@ export default function AuthCallbackScreen() {
           try {
             window.history.replaceState(null, '', window.location.pathname);
           } catch (historyError) {
-            console.warn('[コールバック] URL履歴のクリアに失敗');
+            warn('[コールバック] URL履歴のクリアに失敗');
           }
         } else if (url) {
           debugLog('[コールバック] ネイティブ環境でURLを処理中');
@@ -221,7 +218,7 @@ export default function AuthCallbackScreen() {
             debugLog('[コールバック] Web: セッションの自動確立を待機中...');
             const gotEvent = await waitForAuthEvent(20000);
             if (!gotEvent) {
-              console.warn('[コールバック] Web: 認証イベント待機がタイムアウト');
+              warn('[コールバック] Web: 認証イベント待機がタイムアウト');
             }
             const autoSession = await getSessionWithRetry(30, 1000);
             if (autoSession?.user) {
@@ -232,7 +229,7 @@ export default function AuthCallbackScreen() {
               router.replace('/(tabs)');
               return;
             }
-            console.warn('[コールバック] Web: セッション確立に失敗（code_verifier不足の可能性）');
+            warn('[コールバック] Web: セッション確立に失敗（code_verifier不足の可能性）');
             setErrorMessage('認証に失敗しました。もう一度ログインしてください。');
             router.replace('/(auth)/login');
             return;
@@ -241,7 +238,7 @@ export default function AuthCallbackScreen() {
           debugLog('[コールバック] 認可コードを検出、セッション交換中...');
           const { data, error } = await supabase.auth.exchangeCodeForSession(authCode);
           if (error) {
-          console.error('[コールバック] セッション交換エラー');
+          logError('[コールバック] セッション交換エラー');
             setErrorMessage('認証に失敗しました。もう一度お試しください。');
             router.replace('/(auth)/login');
             return;
@@ -266,9 +263,9 @@ export default function AuthCallbackScreen() {
               }
             } catch (existingSessionError) {
               if (existingSessionError instanceof Error && existingSessionError.message.includes('timeout')) {
-                console.warn('[コールバック] 既存セッション確認タイムアウト、setSessionへ進みます');
+                warn('[コールバック] 既存セッション確認タイムアウト、setSessionへ進みます');
               } else {
-                console.warn('[コールバック] 既存セッション確認失敗、setSessionへ進みます');
+                warn('[コールバック] 既存セッション確認失敗、setSessionへ進みます');
               }
             }
             const autoSession = await getSessionWithRetry(3, 500);
@@ -291,7 +288,7 @@ export default function AuthCallbackScreen() {
             );
 
             if (error) {
-            console.error('[コールバック] セッション設定エラー');
+            logError('[コールバック] セッション設定エラー');
               const fallbackSession = await getSessionWithRetry(3, 500);
               if (fallbackSession?.user) {
                 debugLog('[コールバック] セッション再確認で復帰');
@@ -308,7 +305,7 @@ export default function AuthCallbackScreen() {
             router.replace('/(tabs)');
           } catch (err) {
             if (err instanceof Error && err.message.includes('timeout')) {
-              console.warn('[コールバック] セッション設定タイムアウト、セッション再確認中');
+              warn('[コールバック] セッション設定タイムアウト、セッション再確認中');
               await waitForAuthEvent(20000);
               const fallbackSession = await getSessionWithRetry(10, 700);
               if (fallbackSession?.user) {
@@ -331,14 +328,14 @@ export default function AuthCallbackScreen() {
             debugLog('[コールバック] 既存セッションを確認');
             router.replace('/(tabs)');
           } else {
-            console.error('[コールバック] セッションが見つかりません');
+            logError('[コールバック] セッションが見つかりません');
             setErrorMessage('認証に失敗しました。ログインからやり直してください。');
             router.replace('/(auth)/login');
           }
         }
       } catch (err) {
         if (err instanceof Error && err.message.includes('timeout')) {
-          console.error('[コールバック] 処理タイムアウト');
+          logError('[コールバック] 処理タイムアウト');
           const fallbackSession = await getSessionWithRetry(5, 700);
           if (fallbackSession?.user) {
             debugLog('[コールバック] タイムアウト後の再確認で復帰');
@@ -349,7 +346,7 @@ export default function AuthCallbackScreen() {
           router.replace('/(auth)/login');
           return;
         }
-        console.error('[コールバック] 処理エラー');
+        logError('[コールバック] 処理エラー');
         setErrorMessage('認証に失敗しました。ログインからやり直してください。');
         router.replace('/(auth)/login');
       } finally {
@@ -387,7 +384,7 @@ export default function AuthCallbackScreen() {
           processAuthCallback(null);
         }
       }).catch((error) => {
-        console.error('[コールバック] getInitialURLエラー');
+        logError('[コールバック] getInitialURLエラー');
         // エラー時もセッションを確認
         processAuthCallback(null);
       });
