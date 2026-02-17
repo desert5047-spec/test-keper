@@ -1,19 +1,17 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-get-random-values';
-import { useEffect, useState } from 'react';
-import { Stack, SplashScreen, usePathname } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { LogBox, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
 import { isSupabaseConfigured, supabaseConfigError, supabase } from '@/lib/supabase';
-import * as Linking from 'expo-linking';
-import { getHandlingAuthCallback, isBootHold } from '@/lib/authCallbackState';
-import DebugHudOverlay from '@/components/DebugHud';
+import { DebugLabel } from '@/components/DebugLabel';
 import { log, warn, error as logError } from '@/lib/logger';
 
 if (!__DEV__) {
@@ -24,27 +22,12 @@ if (!__DEV__) {
 
 const debugLog = log;
 
-const DebugHud = ({ initialUrl }: { initialUrl: string | null }) => {
-  const pathname = usePathname();
-  const { authLoading, sessionUserId } = useAuth();
-
-  if (!__DEV__) return null;
-
-  return (
-    <View pointerEvents="none" style={styles.debugHud}>
-      <Text style={styles.debugHudText}>path: {pathname || '(none)'}</Text>
-      <Text style={styles.debugHudText}>initialURL: {initialUrl ?? '(null)'}</Text>
-      <Text style={styles.debugHudText}>authLoading: {String(authLoading)}</Text>
-      <Text style={styles.debugHudText}>sessionUserId: {sessionUserId ?? '(none)'}</Text>
-      <Text style={styles.debugHudText}>handlingAuthCb: {String(getHandlingAuthCallback())}</Text>
-      <Text style={styles.debugHudText}>bootHold: {String(isBootHold())}</Text>
-    </View>
-  );
-};
-
 void SplashScreen.preventAutoHideAsync().catch((error) => {
   warn('[RootLayout] SplashScreen.preventAutoHideAsyncエラー');
 });
+
+// 無効なリフレッシュトークンエラーはアプリ側で signOut して処理するため、コンソールの ERROR 表示を抑制
+LogBox.ignoreLogs(['Invalid Refresh Token', 'Refresh Token Not Found', 'AuthApiError']);
 
 /** 無効なリフレッシュトークンエラーかどうか（Expo Go 等で未処理の Promise 拒否を拾う用） */
 function isInvalidRefreshTokenError(reason: unknown): boolean {
@@ -67,8 +50,6 @@ export default function RootLayout() {
     logError('[RootLayout] useFrameworkReadyエラー');
   }
 
-  const [initialUrl, setInitialUrl] = useState<string | null>(null);
-
   const [fontsLoaded, fontError] = useFonts({
     'Nunito-Regular': Nunito_400Regular,
     'Nunito-SemiBold': Nunito_600SemiBold,
@@ -90,16 +71,6 @@ export default function RootLayout() {
       (g as any).addEventListener('unhandledrejection', handler);
       return () => (g as any).removeEventListener('unhandledrejection', handler);
     }
-  }, []);
-
-  useEffect(() => {
-    Linking.getInitialURL()
-      .then((url) => {
-        setInitialUrl(url ?? null);
-      })
-      .catch(() => {
-        setInitialUrl('(error)');
-      });
   }, []);
 
   useEffect(() => {
@@ -141,6 +112,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <DebugLabel />
       {Platform.OS === 'web' && (
         <style>{`
           button:focus,
@@ -173,8 +145,6 @@ export default function RootLayout() {
               <Stack.Screen name="terms-of-service" />
               <Stack.Screen name="+not-found" />
             </Stack>
-            <DebugHud initialUrl={initialUrl} />
-            <DebugHudOverlay />
             <StatusBar style="auto" />
           </DateProvider>
         </ChildProvider>
@@ -202,20 +172,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#333',
     textAlign: 'center',
-  },
-  debugHud: {
-    position: 'absolute',
-    top: 50,
-    right: 12,
-    zIndex: 9999,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 6,
-  },
-  debugHudText: {
-    color: '#fff',
-    fontSize: 10,
-    lineHeight: 13,
   },
 });

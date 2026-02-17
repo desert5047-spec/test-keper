@@ -22,6 +22,8 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CalendarPicker } from '@/components/CalendarPicker';
 import { CameraScreen } from '@/components/CameraScreen';
+import { ScoreEditorModal } from '@/components/ScoreEditorModal';
+import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
@@ -36,6 +38,23 @@ const PENDING_CAMERA_RESULT_KEY = '@pending_camera_result';
 const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
 const LAST_SUBJECT_KEY = '@last_record_subject';
 const LAST_CHILD_KEY = '@last_record_child_id';
+
+const NETWORK_ERROR_USER_MESSAGE =
+  'インターネットに接続できません。通信環境をご確認のうえ、再度お試しください。';
+
+function isNetworkError(err: unknown): boolean {
+  if (err == null) return false;
+  const msg = typeof (err as { message?: string }).message === 'string' ? (err as { message: string }).message : '';
+  const str = String(err);
+  const name = (err as { name?: string }).name;
+  const status = (err as { status?: number }).status;
+  return (
+    msg.includes('Network request failed') ||
+    str.includes('Network request failed') ||
+    name === 'TypeError' ||
+    status === 0
+  );
+}
 
 interface Child {
   id: string;
@@ -72,6 +91,8 @@ export default function AddScreen() {
   const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
   const [scoreError, setScoreError] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [showFullScoreModal, setShowFullScoreModal] = useState(false);
   const [photoRotation, setPhotoRotation] = useState<number>(0);
   const [photoUploadFailed, setPhotoUploadFailed] = useState(false);
 
@@ -584,7 +605,8 @@ export default function AddScreen() {
   };
 
   const handleSave = async () => {
-    // 全体をtry-catchで囲んで、クラッシュを防ぐ
+    if (isSaving) return;
+
     try {
       if (!selectedSubject) {
         setErrorMessage('教科を選んでください');
@@ -793,20 +815,33 @@ export default function AddScreen() {
         throw dbError;
       }
     } catch (error: any) {
-      logError('[記録保存] 予期しないエラー');
-      
-      const errorMessage = error?.message || error?.toString() || '保存に失敗しました';
-      setErrorMessage(errorMessage);
+      logError('[記録保存] 予期しないエラー', error);
+
+      const isNetwork = isNetworkError(error);
+      const userMessage = isNetwork ? NETWORK_ERROR_USER_MESSAGE : (error?.message || error?.toString() || '保存に失敗しました');
+      setErrorMessage(userMessage);
       setTimeout(() => setErrorMessage(''), 8000);
 
       setTimeout(() => {
         try {
-          Alert.alert(
-            'エラー',
-            errorMessage,
-            [{ text: 'OK', onPress: () => {} }],
-            { cancelable: true }
-          );
+          if (isNetwork) {
+            Alert.alert(
+              '通信エラー',
+              NETWORK_ERROR_USER_MESSAGE,
+              [
+                { text: 'キャンセル', style: 'cancel' as const },
+                { text: '再試行', onPress: () => handleSave() },
+              ],
+              { cancelable: true }
+            );
+          } else {
+            Alert.alert(
+              'エラー',
+              userMessage,
+              [{ text: 'OK', onPress: () => {} }],
+              { cancelable: true }
+            );
+          }
         } catch (alertError: any) {
           logError('[記録保存] Alert表示エラー');
         }
@@ -1039,54 +1074,74 @@ export default function AddScreen() {
           </View>
 
           {evaluationType === 'score' ? (
-            <View style={styles.scoreInputContainer}>
-              <View style={styles.scoreInputRow}>
-                <View style={styles.scoreInputWrapper}>
-                  <TextInput
+            <>
+              <View style={styles.scoreInputContainer}>
+                <View style={styles.scoreInputRow}>
+                  <TouchableOpacity
                     style={[
-                      styles.scoreInput,
+                      styles.scoreInputWrapper,
+                      styles.scoreTapArea,
                       scoreError ? styles.scoreInputError : null,
                       !scoreError && score.trim() !== '' && maxScore.trim() !== '' ? styles.scoreInputValid : null,
                     ]}
-                    value={score}
-                    onChangeText={(value) => {
-                      setScore(value);
-                      validateScore(value, maxScore);
-                    }}
-                    placeholder="点数"
-                    keyboardType="numeric"
-                    placeholderTextColor="#999"
-                  />
-                  {!scoreError && score.trim() !== '' && maxScore.trim() !== '' ? (
-                    <View style={styles.scoreCheckIcon}>
-                      <Check size={16} color="#4CAF50" />
-                    </View>
-                  ) : null}
-                </View>
+                    onPress={() => setShowScoreModal(true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.scoreTapText}>{score || '—'}</Text>
+                    {!scoreError && score.trim() !== '' && maxScore.trim() !== '' ? (
+                      <View style={styles.scoreCheckIcon}>
+                        <Check size={16} color="#4CAF50" />
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
                 <Text style={styles.scoreLabel}>点</Text>
                 <Text style={styles.scoreSeparator}>{'/'}</Text>
-                <TextInput
+                <TouchableOpacity
                   style={[
-                    styles.maxScoreInput,
+                    styles.scoreTapArea,
+                    styles.maxScoreTapArea,
                     scoreError ? styles.scoreInputError : null,
                     !scoreError && score.trim() !== '' && maxScore.trim() !== '' ? styles.scoreInputValid : null,
                   ]}
-                  value={maxScore}
-                  onChangeText={(value) => {
-                    setMaxScore(value);
-                    validateScore(score, value);
+                  onPress={() => {
+                    setMaxScore('');
+                    setShowFullScoreModal(true);
                   }}
-                  keyboardType="numeric"
-                  placeholderTextColor="#999"
-                />
+                  activeOpacity={0.7}>
+                  <Text style={styles.scoreTapText}>{maxScore || '100'}</Text>
+                </TouchableOpacity>
                 <Text style={styles.scoreLabel}>点中</Text>
-              </View>
-              {scoreError ? (
-                <View style={styles.scoreErrorContainer}>
-                  <Text style={styles.scoreErrorText}>{String(scoreError)}</Text>
                 </View>
-              ) : null}
-            </View>
+                {scoreError ? (
+                  <View style={styles.scoreErrorContainer}>
+                    <Text style={styles.scoreErrorText}>{String(scoreError)}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <ScoreEditorModal
+                visible={showScoreModal}
+                initialValue={
+                  score.trim() && Number.isFinite(parseInt(score, 10)) ? parseInt(score, 10) : null
+                }
+                fullScore={parseInt(maxScore, 10) || 100}
+                onClose={() => setShowScoreModal(false)}
+                onConfirm={(value) => {
+                  setScore(value != null ? String(value) : '');
+                  setScoreError('');
+                }}
+              />
+              <FullScoreEditorModal
+                visible={showFullScoreModal}
+                currentScore={
+                  score.trim() && Number.isFinite(parseInt(score, 10)) ? parseInt(score, 10) : null
+                }
+                initialValue={maxScore.trim() ? parseInt(maxScore, 10) || null : null}
+                onClose={() => setShowFullScoreModal(false)}
+                onConfirm={(value) => {
+                  setMaxScore(String(value));
+                  validateScore(score, String(value));
+                }}
+              />
+            </>
           ) : (
             <View style={styles.stampContainer}>
               {(['大変よくできました', 'よくできました', 'がんばりました'] as StampType[]).map((s) => (
@@ -1231,7 +1286,10 @@ export default function AddScreen() {
           disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
           activeOpacity={0.7}>
           {isSaving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={[styles.bottomSaveButtonText, { marginLeft: 8 }]}>保存中...</Text>
+            </View>
           ) : (
             <Text style={styles.bottomSaveButtonText}>保存</Text>
           )}
@@ -1553,6 +1611,24 @@ const styles = StyleSheet.create({
   },
   scoreInputWrapper: {
     position: 'relative',
+  },
+  scoreTapArea: {
+    width: 80,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  scoreTapText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  maxScoreTapArea: {
+    width: 60,
+    alignItems: 'center',
   },
   scoreInput: {
     width: 80,

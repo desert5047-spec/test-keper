@@ -1,6 +1,4 @@
-import { supabase } from '@/lib/supabase';
-
-const BUCKET = 'test-images';
+import { supabase, storageBucket as BUCKET } from '@/lib/supabase';
 const SIGNED_URL_EXPIRES_SEC = 60 * 30; // 30分
 
 /**

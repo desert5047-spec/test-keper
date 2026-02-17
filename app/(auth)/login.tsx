@@ -3,6 +3,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -125,13 +126,22 @@ export default function LoginScreen() {
       setDebugLoginResult(!!data?.session, error?.message);
 
       if (error) {
+        const msg = (error.message ?? '').toLowerCase();
         const isInvalidCredentials =
-          error.message?.includes('Invalid login') ||
-          error.message?.includes('invalid_credentials') ||
-          error.message?.toLowerCase().includes('invalid') && error.message?.toLowerCase().includes('password');
+          msg.includes('invalid login') ||
+          msg.includes('invalid_credentials') ||
+          msg.includes('invalid login credentials') ||
+          (msg.includes('invalid') && (msg.includes('password') || msg.includes('credentials'))) ||
+          (msg.includes('email') && msg.includes('password')) ||
+          msg.includes('incorrect') && (msg.includes('password') || msg.includes('email')) ||
+          (msg.includes('wrong') && msg.includes('password'));
+        const isEmailNotConfirmed =
+          msg.includes('email not confirmed') || msg.includes('email_not_confirmed');
         const message = isInvalidCredentials
           ? 'メールアドレスまたはパスワードが正しくありません。もう一度ご確認ください。'
-          : error.message;
+          : isEmailNotConfirmed
+            ? 'メールアドレスがまだ確認されていません。登録時の確認メールのリンクをご確認ください。'
+            : error.message;
         setError(message);
         Alert.alert('ログインできませんでした', message);
         return;
@@ -154,7 +164,7 @@ export default function LoginScreen() {
           styles.scrollContent,
           { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 },
         ]}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
@@ -226,19 +236,27 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.rememberRow}>
-            <View style={styles.rememberLabelWrap}>
-              <Text style={styles.rememberLabel}>次回のためログイン情報を保存</Text>
-            </View>
-            <View style={styles.rememberSwitchWrap}>
-              <Switch
-                value={rememberMe}
-                onValueChange={handleRememberMeChange}
-                trackColor={{ false: '#e0e0e0', true: '#A5C7F7' }}
-                thumbColor={rememberMe ? '#4A90E2' : '#f4f4f4'}
-              />
-            </View>
-          </View>
+          {__DEV__ && debugLog('[LOGIN]', { rememberMe, loading, initializing })}
+
+          <Pressable
+            style={styles.rememberRow}
+            onPress={() => {
+              const next = !rememberMe;
+              debugLog('[LOGIN] REMEMBER TOGGLE (row):', next);
+              handleRememberMeChange(next);
+            }}>
+            <Text style={styles.rememberText}>ログイン情報を保存</Text>
+            <Switch
+              value={rememberMe}
+              onValueChange={(v) => {
+                debugLog('[LOGIN] REMEMBER TOGGLE (switch):', v);
+                handleRememberMeChange(v);
+              }}
+              trackColor={{ false: '#e0e0e0', true: '#A5C7F7' }}
+              thumbColor={rememberMe ? '#4A90E2' : '#f4f4f4'}
+              style={{ marginLeft: 8 }}
+            />
+          </Pressable>
 
           {error ? (
             <View style={styles.errorContainer}>
@@ -501,21 +519,12 @@ const styles = StyleSheet.create({
   rememberRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 12,
     marginBottom: 16,
   },
-  rememberLabelWrap: {
-    flex: 1,
-    flexShrink: 1,
-    marginRight: 12,
-    justifyContent: 'center',
-  },
-  rememberLabel: {
+  rememberText: {
     fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#333',
-  },
-  rememberSwitchWrap: {
-    flexShrink: 0,
+    flexShrink: 1,
   },
   passwordInputContainer: {
     flexDirection: 'row',

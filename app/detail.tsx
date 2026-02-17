@@ -12,6 +12,8 @@ import {
   Platform,
   ActionSheetIOS,
   Animated,
+  KeyboardAvoidingView,
+  findNodeHandle,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,6 +23,8 @@ import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, C
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { CalendarPicker } from '@/components/CalendarPicker';
+import { ScoreEditorModal } from '@/components/ScoreEditorModal';
+import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
@@ -107,6 +111,10 @@ export default function DetailScreen() {
   const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
   const [score, setScore] = useState<string>('');
   const [maxScore, setMaxScore] = useState<string>('100');
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [showFullScoreModal, setShowFullScoreModal] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const rowRefMap = useRef<Record<string, View | null>>({});
   const [stamp, setStamp] = useState<string | null>(null);
   const [customStamp, setCustomStamp] = useState<string>('');
   const [showCustomStampInput, setShowCustomStampInput] = useState(false);
@@ -179,6 +187,10 @@ export default function DetailScreen() {
       setNewSubject('');
     }
   };
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+  }, []);
 
   const handleOtherSubjectChange = (value: string) => {
     setNewSubject(value);
@@ -452,6 +464,58 @@ export default function DetailScreen() {
     }
   };
 
+  const scrollToRecord = (recordId: string) => {
+    const rowEl = rowRefMap.current[recordId];
+    const scrollEl = scrollViewRef.current;
+    if (!rowEl || !scrollEl) return;
+    const scrollNode = findNodeHandle(scrollEl as any);
+    if (!scrollNode) return;
+    requestAnimationFrame(() => {
+      (rowEl as any).measureLayout(
+        scrollNode,
+        (_x: number, y: number) => {
+          scrollEl.scrollTo({ y: Math.max(0, y - 120), animated: true });
+          setTimeout(() => {
+            scrollEl.scrollTo({ y: Math.max(0, y - 120), animated: true });
+          }, 80);
+        },
+        () => {}
+      );
+    });
+  };
+
+  const openScoreModal = () => {
+    if (record) scrollToRecord(record.id);
+    setShowScoreModal(true);
+  };
+
+  const handleScoreModalConfirm = async (value: number | null) => {
+    if (!record || !familyId) return;
+    const maxScoreNum = parseInt(maxScore, 10) || record.max_score || 100;
+    setScore(value != null ? String(value) : '');
+    setRecord((prev) => (prev ? { ...prev, score: value, max_score: maxScoreNum } : null));
+    setScoreError('');
+    setShowScoreModal(false);
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('records')
+        .update({
+          score: value,
+          max_score: maxScoreNum,
+        })
+        .eq('id', record.id)
+        .eq('family_id', familyId);
+
+      if (error) throw error;
+    } catch (err: any) {
+      logError('[記録更新] 点数更新エラー', err);
+      Alert.alert('エラー', '点数の更新に失敗しました');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const confirmDelete = () => {
     if (Platform.OS === 'web') {
       const ok = window.confirm('この記録を削除しますか？\n\nこの操作は取り消せません。');
@@ -555,21 +619,27 @@ export default function DetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <AppHeader
-        showBack={true}
-        showChildSwitcher={false}
-        showSettings={false}
-        showEdit={!editMode}
-        showDelete={!editMode}
-        onEdit={() => setEditMode(true)}
-        onDelete={confirmDelete}
-      />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? HEADER_HEIGHT : 0}>
+      <View style={styles.container}>
+        <AppHeader
+          showBack={true}
+          showChildSwitcher={false}
+          showSettings={false}
+          showEdit={!editMode}
+          showDelete={!editMode}
+          onEdit={() => setEditMode(true)}
+          onDelete={confirmDelete}
+        />
 
-      {editMode ? (
-        <ScrollView
+        {editMode ? (
+          <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollView}
-          contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
+          contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingBottom: 320 }}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.editSection}>
             <Text style={styles.editSectionTitle}>写真</Text>
@@ -753,46 +823,44 @@ export default function DetailScreen() {
             </View>
 
             {evaluationType === 'score' ? (
-              <View style={styles.scoreInputContainer}>
+              <View
+                ref={(el) => {
+                  if (record) rowRefMap.current[record.id] = el;
+                }}
+                style={styles.scoreInputContainer}>
                 <View style={styles.scoreInputRow}>
-                  <View style={styles.scoreInputWrapper}>
-                    <TextInput
-                      style={[
-                        styles.scoreInput,
-                        scoreError ? styles.scoreInputError : null,
-                        !scoreError && score && maxScore && styles.scoreInputValid,
-                      ]}
-                      value={score}
-                      onChangeText={(value) => {
-                        setScore(value);
-                        validateScore(value, maxScore);
-                      }}
-                      placeholder="点数"
-                      keyboardType="numeric"
-                      placeholderTextColor="#999"
-                    />
+                  <TouchableOpacity
+                    style={[
+                      styles.scoreInputWrapper,
+                      styles.scoreTapArea,
+                      scoreError ? styles.scoreInputError : null,
+                      !scoreError && score && maxScore && styles.scoreInputValid,
+                    ]}
+                    onPress={openScoreModal}
+                    activeOpacity={0.7}>
+                    <Text style={styles.scoreTapText}>{score || '—'}</Text>
                     {!scoreError && score && maxScore && (
                       <View style={styles.scoreCheckIcon}>
                         <Check size={16} color="#4CAF50" />
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                   <Text style={styles.scoreLabel}>点</Text>
                   <Text style={styles.scoreSeparator}>/</Text>
-                  <TextInput
+                  <TouchableOpacity
                     style={[
-                      styles.maxScoreInput,
+                      styles.scoreTapArea,
+                      styles.maxScoreTapArea,
                       scoreError ? styles.scoreInputError : null,
                       !scoreError && score && maxScore && styles.scoreInputValid,
                     ]}
-                    value={maxScore}
-                    onChangeText={(value) => {
-                      setMaxScore(value);
-                      validateScore(score, value);
+                    onPress={() => {
+                      setMaxScore('');
+                      setShowFullScoreModal(true);
                     }}
-                    keyboardType="numeric"
-                    placeholderTextColor="#999"
-                  />
+                    activeOpacity={0.7}>
+                    <Text style={styles.scoreTapText}>{maxScore || '100'}</Text>
+                  </TouchableOpacity>
                   <Text style={styles.scoreLabel}>点中</Text>
                 </View>
                 {scoreError ? (
@@ -939,7 +1007,7 @@ export default function DetailScreen() {
 
           <View style={{ height: 100 }} />
         </ScrollView>
-      ) : (
+        ) : (
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
@@ -1125,7 +1193,37 @@ export default function DetailScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+
+      {record && evaluationType === 'score' && (
+        <>
+          <ScoreEditorModal
+            visible={showScoreModal}
+            initialValue={
+              record.score ??
+              (score.trim() && Number.isFinite(parseInt(score, 10)) ? parseInt(score, 10) : null)
+            }
+            fullScore={parseInt(maxScore, 10) || record.max_score || 100}
+            onClose={() => setShowScoreModal(false)}
+            onConfirm={handleScoreModalConfirm}
+          />
+          <FullScoreEditorModal
+            visible={showFullScoreModal}
+            currentScore={
+              record.score ??
+              (score.trim() && Number.isFinite(parseInt(score, 10)) ? parseInt(score, 10) : null)
+            }
+            initialValue={maxScore.trim() ? parseInt(maxScore, 10) || null : null}
+            onClose={() => setShowFullScoreModal(false)}
+            onConfirm={(value) => {
+              setMaxScore(String(value));
+              validateScore(score, String(value));
+              setShowFullScoreModal(false);
+            }}
+          />
+        </>
+      )}
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1494,6 +1592,24 @@ const styles = StyleSheet.create({
   },
   scoreInputWrapper: {
     position: 'relative',
+  },
+  scoreTapArea: {
+    width: 80,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  scoreTapText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  maxScoreTapArea: {
+    width: 60,
+    alignItems: 'center',
   },
   scoreInput: {
     width: 80,

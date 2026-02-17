@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, storageBucket as STORAGE_BUCKET } from '@/lib/supabase';
 import { Platform, Image as RNImage } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
@@ -15,7 +15,6 @@ const getImageSizeAsync = (uri: string): Promise<{ width: number; height: number
   });
 };
 
-const STORAGE_BUCKET = 'test-images';
 const SIGNED_URL_EXPIRES_IN = 60 * 60;
 
 const isHttpUrl = (value: string) => value.startsWith('http://') || value.startsWith('https://');

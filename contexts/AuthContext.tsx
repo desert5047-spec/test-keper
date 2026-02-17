@@ -21,7 +21,7 @@ const debugLog = log;
 /** 無効なリフレッシュトークンによるエラーかどうかを判定する */
 function isInvalidRefreshTokenError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
-  const msg = (error as { message?: string })?.message ?? '';
+  const msg = String((error as { message?: string })?.message ?? '');
   const name = (error as { name?: string })?.name ?? '';
   return (
     name === 'AuthApiError' ||
@@ -1016,6 +1016,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuthSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      try {
       log('[AuthContext][onAuthStateChange]', event);
       appendLog(`onAuthStateChange ${event}`);
       setDebugAuthEvent(event);
@@ -1123,6 +1124,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           markAuthReady();
         });
+      }
+      } catch (err) {
+        if (isInvalidRefreshTokenError(err)) {
+          warn('[AuthContext] onAuthStateChange でリフレッシュトークンエラー、セッションをクリアします');
+          setSession(null);
+          setUser(null);
+          setFamilyId(null);
+          setIsFamilyReady(false);
+          ensuredUserIdRef.current = null;
+          ensureFamilyInFlightRef.current = false;
+          supabase.auth.signOut().catch(() => {});
+          markAuthReady();
+        } else {
+          logError('[AuthContext] onAuthStateChange エラー', err);
+        }
       }
     });
 

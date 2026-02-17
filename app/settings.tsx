@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { AppHeader } from '@/components/AppHeader';
+import { ResetConfirmModal } from '@/components/ResetConfirmModal';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -39,6 +40,7 @@ export default function SettingsScreen() {
     setActiveFamilyId,
   } = useAuth();
   const [isResetting, setIsResetting] = useState(false);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [familyRole, setFamilyRole] = useState<'owner' | 'member' | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -91,7 +93,7 @@ export default function SettingsScreen() {
     return '招待の受諾に失敗しました';
   };
 
-  const performResetData = async () => {
+  const performResetData = async (opts?: { silent?: boolean }) => {
     setIsResetting(true);
     try {
       if (!user?.id) {
@@ -177,7 +179,7 @@ export default function SettingsScreen() {
         .eq('user_id', user.id);
 
       if (displayNameResetError) {
-        throw new Error('呼称の初期化に失敗しました');
+        throw new Error('ユーザーネームの初期化に失敗しました');
       }
 
       await AsyncStorage.removeItem('hasCompletedOnboarding');
@@ -185,6 +187,9 @@ export default function SettingsScreen() {
       await refreshFamilyDisplayName();
       await refreshSetupStatus();
 
+      if (opts?.silent) {
+        return;
+      }
       if (Platform.OS === 'web') {
         window.alert('すべてのデータを削除しました');
         router.replace('/onboarding');
@@ -419,7 +424,7 @@ export default function SettingsScreen() {
       logError('[Settings] display_name 更新エラー');
       setDisplayNameError('保存に失敗しました');
     } else {
-      setDisplayNameMessage('呼称を保存しました');
+      setDisplayNameMessage('ユーザーネームを保存しました');
       await refreshFamilyDisplayName();
     }
 
@@ -431,18 +436,24 @@ export default function SettingsScreen() {
       const ok = window.confirm(
         '初期化しますか？\n\n子ども・記録・写真の情報がすべて削除され、元に戻せません。'
       );
-      if (ok) performResetData();
+      if (ok) setResetModalVisible(true);
       return;
     }
 
     Alert.alert(
-      '初期化しますか？',
+      '完全リセットしますか？',
       '子ども・記録・写真の情報がすべて削除され、元に戻せません。',
       [
         { text: 'キャンセル', style: 'cancel' },
-        { text: '初期化する', style: 'destructive', onPress: performResetData },
+        { text: '続ける', style: 'destructive', onPress: () => setResetModalVisible(true) },
       ]
     );
+  };
+
+  const runFullReset = async () => {
+    await performResetData({ silent: true });
+    setResetModalVisible(false);
+    router.replace('/onboarding');
   };
 
   const handleLogout = () => {
@@ -555,10 +566,8 @@ export default function SettingsScreen() {
                 <Users size={22} color="#4A90E2" />
               </View>
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>子供設定（子供の追加はこちら）</Text>
-                <Text style={styles.menuItemSubtext} numberOfLines={1}>
-                  {children.length === 0 ? 'まだ登録されていません' : `登録済み：${children.length}人`}
-                </Text>
+                <Text style={styles.menuItemText}>子ども設定</Text>
+                <Text style={styles.menuItemSubtext}>子どもの追加や変更ができます</Text>
               </View>
             </View>
             <ChevronRight size={20} color="#999" style={styles.chevron} />
@@ -719,17 +728,17 @@ export default function SettingsScreen() {
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ユーザーネーム</Text>
+          <Text style={styles.sectionTitle}>親の名前（ユーザーネーム）</Text>
           <Text style={styles.sectionDescription}>
-            家族の中での呼び方を設定できます（最大4文字）
+            親の名前を設定できます（最大4文字）
           </Text>
           <View style={styles.familyCard}>
             <Text style={styles.currentDisplayName}>
-              現在のユーザーネーム: {familyDisplayName ?? '保護者'}
+              現在の親の名前: {familyDisplayName ?? '保護者'}
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="例：父、母、ママ"
+              placeholder="例：ユーザー名"
               placeholderTextColor="#999"
               maxLength={4}
               value={displayNameInput}
@@ -893,6 +902,13 @@ export default function SettingsScreen() {
           <Text style={styles.tabLabel}>記録</Text>
         </TouchableOpacity>
       </View>
+
+      <ResetConfirmModal
+        visible={resetModalVisible}
+        onCancel={() => setResetModalVisible(false)}
+        onConfirm={runFullReset}
+        confirmWord="RESET"
+      />
     </View>
   );
 }

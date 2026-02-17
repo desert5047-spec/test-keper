@@ -97,18 +97,18 @@ export default function OnboardingScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>初期セットアップ</Text>
           <Text style={styles.description}>
-            まずは家族の中での呼び方を設定してください
+            準備完了
           </Text>
 
-          {needsDisplayName && (
+          {(needsDisplayName || needsChildSetup) && (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>あなたの呼称</Text>
+              <Text style={styles.sectionTitle}>親の名前（ユーザーネーム）</Text>
               <Text style={styles.sectionDescription}>
-                家族の中での呼び方を設定できます（最大4文字）
+                親の名前を設定できます（最大4文字）
               </Text>
               <TextInput
                 style={styles.input}
-                placeholder="例：父、母、ママ"
+                placeholder="例：ユーザー名"
                 placeholderTextColor="#999"
                 maxLength={4}
                 value={displayNameInput}

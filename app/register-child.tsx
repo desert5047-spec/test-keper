@@ -230,6 +230,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     borderWidth: 1,
     borderColor: '#E5E5E5',
+    color: '#1A1A1A',
   },
   hint: {
     fontSize: 12,
