@@ -25,6 +25,7 @@ import { Eye, EyeOff } from 'lucide-react-native';
 import { appendLog, setDebugLoginPressed, setDebugLoginResult } from '@/lib/debugLog';
 import { supabase } from '@/lib/supabase';
 import { log } from '@/lib/logger';
+import { webUrls } from '@/lib/urls';
 
 const debugLog = log;
 
@@ -228,7 +229,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
             <TouchableOpacity
-              onPress={() => Linking.openURL('https://www.test-album.jp/reset-password')}
+              onPress={() => Linking.openURL(webUrls.forgotPassword)}
               disabled={loading}
               style={styles.forgotPasswordLink}
               activeOpacity={0.7}>
@@ -282,7 +283,7 @@ export default function LoginScreen() {
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>アカウントをお持ちでないですか？</Text>
             <TouchableOpacity
-              onPress={() => WebBrowser.openBrowserAsync('https://www.test-album.jp/signup')}
+              onPress={() => WebBrowser.openBrowserAsync(webUrls.signup)}
               disabled={loading}
               activeOpacity={0.7}>
               <Text style={styles.signupLink}>Webで新規登録</Text>

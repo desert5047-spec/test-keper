@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookOpen, ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
 import { warn, error as logError } from '@/lib/logger';
+import { webUrls } from '@/lib/urls';
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');
@@ -34,9 +35,8 @@ export default function SignupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { signUp } = useAuth();
-  const lpBaseUrl = process.env.EXPO_PUBLIC_LP_URL ?? 'https://example.com';
-  const privacyPolicyUrl = 'https://www.test-album.jp/privacy';
-  const termsUrl = 'https://www.test-album.jp/terms';
+  const privacyPolicyUrl = webUrls.privacy;
+  const termsUrl = webUrls.terms;
   const pendingConsentKey = 'pendingConsent';
 
   const openExternalLink = (path: '/terms' | '/privacy') => {

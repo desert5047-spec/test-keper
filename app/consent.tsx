@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { webUrls } from '@/lib/urls';
 
 export default function ConsentScreen() {
   const router = useRouter();
@@ -19,9 +20,8 @@ export default function ConsentScreen() {
   const { saveConsent } = useAuth();
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const lpBaseUrl = process.env.EXPO_PUBLIC_LP_URL ?? 'https://example.com';
-  const privacyPolicyUrl = 'https://www.test-album.jp/privacy';
-  const termsUrl = 'https://www.test-album.jp/terms';
+  const privacyPolicyUrl = webUrls.privacy;
+  const termsUrl = webUrls.terms;
 
   const openExternalLink = (path: '/terms' | '/privacy') => {
     const url = path === '/privacy' ? privacyPolicyUrl : termsUrl;

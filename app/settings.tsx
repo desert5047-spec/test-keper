@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { deleteImage } from '@/utils/imageUpload';
 import { warn, error as logError } from '@/lib/logger';
+import { webUrls } from '@/lib/urls';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -493,7 +494,7 @@ export default function SettingsScreen() {
   };
 
   const openPrivacyPolicy = () => {
-    const url = 'https://www.test-album.jp/privacy';
+    const url = webUrls.privacy;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
@@ -504,7 +505,7 @@ export default function SettingsScreen() {
   };
 
   const openTerms = () => {
-    const url = 'https://www.test-album.jp/terms';
+    const url = webUrls.terms;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
@@ -526,7 +527,7 @@ export default function SettingsScreen() {
   };
 
   const openDeleteAccount = async () => {
-    const url = 'https://www.test-album.jp/delete-account';
+    const url = webUrls.deleteAccount;
     try {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.open(url, '_blank', 'noopener,noreferrer');

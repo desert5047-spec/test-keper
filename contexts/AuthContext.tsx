@@ -15,6 +15,7 @@ import {
   setDebugWatchdogFired,
 } from '@/lib/debugLog';
 import { log, warn, error as logError } from '@/lib/logger';
+import { webUrls } from '@/lib/urls';
 
 const debugLog = log;
 
@@ -1467,13 +1468,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     consent?: { agreedTerms: boolean; agreedPrivacy: boolean }
   ) => {
     const agreedAt = consent ? new Date().toISOString() : undefined;
-    log('[AuthContext] emailRedirectTo:', 'https://www.test-album.jp/auth/callback');
+    const authCallbackUrl = webUrls.authCallback;
+    log('[AuthContext] emailRedirectTo:', authCallbackUrl);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        // メール確認のリダイレクトURLを固定
-        emailRedirectTo: 'https://www.test-album.jp/auth/callback',
+        // メール確認のリダイレクトURL（環境に応じて stg/prod の LP に揃える）
+        emailRedirectTo: authCallbackUrl,
         data: consent
           ? {
               agreed_terms: consent.agreedTerms,
@@ -1649,7 +1651,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string) => {
     try {
-      const redirectUrl = 'https://www.test-album.jp/auth/callback';
+      const redirectUrl = webUrls.authCallback;
       log('[AuthContext] resetPassword redirectTo:', redirectUrl);
       debugLog('[パスワードリセット] リクエスト開始', { platform: Platform.OS });
 

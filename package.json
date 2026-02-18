@@ -4,9 +4,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "start": "expo start",
+    "start:stg": "cross-env EXPO_PUBLIC_ENV=stg EXPO_PUBLIC_SUPABASE_URL=https://dzqzkwoxfciuhikvnlmg.supabase.co EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_rbyn5OYRcxTARliQAn8B7g_y5pkgOby EXPO_PUBLIC_LP_URL=https://stg.test-album.jp expo start --clear",
+    "start:prod": "cross-env EXPO_PUBLIC_ENV=prod EXPO_PUBLIC_SUPABASE_URL=https://cwwzaknsitnaqqafbrsc.supabase.co EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_8fR6T36b95UOuwSU84O-qw_DTkupAEC EXPO_PUBLIC_LP_URL=https://www.test-album.jp expo start --clear",
     "dev": "cross-env EXPO_NO_TELEMETRY=1 expo start",
     "dev:tunnel": "cross-env EXPO_NO_TELEMETRY=1 expo start --tunnel",
     "build:web": "expo export --platform web",
+    "config:prod": "cross-env NODE_ENV=production EXPO_PUBLIC_ENV=prod npx expo config --json",
+    "config:stg": "cross-env EXPO_PUBLIC_ENV=stg npx expo config --json",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "android": "expo run:android",
@@ -59,6 +64,7 @@
     "@babel/core": "^7.25.2",
     "@types/react": "~19.1.10",
     "cross-env": "^10.1.0",
+    "dotenv": "^16.4.5",
     "typescript": "~5.9.2"
   }
 }
