@@ -22,6 +22,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CalendarPicker } from '@/components/CalendarPicker';
 import { CameraScreen } from '@/components/CameraScreen';
+import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -84,6 +85,8 @@ export default function AddScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -427,88 +430,16 @@ export default function AddScreen() {
       logError('[写真撮影] setStateエラー');
     }
 
-    // Androidではexpo-cameraを使用（Expo Goで再起動する問題を回避）
-    if (Platform.OS === 'android') {
-      debugLog('[写真撮影] Android: expo-cameraを使用', { platform: Platform.OS });
-      setShowCamera(true);
-      return;
-    }
-
-    // iOSでは従来のImagePickerを使用
-    try {
-      debugLog('[写真撮影] iOS: ImagePickerを使用', { platform: Platform.OS });
-      
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 1.0,
-        allowsMultipleSelection: false,
-      });
-
-      debugLog('[写真撮影] カメラ結果:', { 
-        canceled: result.canceled,
-        assetsCount: result.assets?.length || 0,
-        platform: Platform.OS 
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        
-        if (!uri || typeof uri !== 'string') {
-          logError('[写真撮影] URIが無効');
-          throw new Error('画像のURIが取得できませんでした');
-        }
-
-        debugLog('[写真撮影] URI取得', { platform: Platform.OS });
-
-        try {
-          validateImageUri(uri);
-        } catch (validateError: any) {
-          logError('[写真撮影] URI検証エラー');
-          throw new Error(`画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
-        }
-
-        if (!isValidImageUri(uri)) {
-          logError('[写真撮影] 無効なURI');
-          throw new Error('画像の形式が正しくありません');
-        }
-
-        debugLog('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
-        
-        try {
-          setPhotoUri(uri);
-          setPhotoRotation(0);
-          debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
-        } catch (setUriError: any) {
-          logError('[写真撮影] URI設定エラー');
-          throw new Error(`画像の設定に失敗しました: ${setUriError.message || '不明なエラー'}`);
-        }
-      } else {
-        debugLog('[写真撮影] キャンセルされました', { platform: Platform.OS });
-      }
-    } catch (error: any) {
-      logError('[写真撮影] エラー');
-      
-      // エラーメッセージを表示（アプリをクラッシュさせない）
-      setTimeout(() => {
-        try {
-          Alert.alert(
-            'エラー',
-            error?.message || '画像の撮影に失敗しました。もう一度お試しください。',
-            [{ text: 'OK', onPress: () => {} }],
-            { cancelable: true }
-          );
-        } catch (alertError: any) {
-          logError('[写真撮影] Alert表示エラー');
-        }
-      }, 100);
-    }
+    // iOS/Android とも expo-camera + アプリ内プレビュー（再撮影/保存）に統一
+    debugLog('[写真撮影] カメラ起動', { platform: Platform.OS });
+    setCameraPhase('camera');
+    setPreviewUri(null);
+    setShowCamera(true);
   };
 
   const handleCameraCapture = async (uri: string) => {
     try {
-      debugLog('[写真撮影] カメラからURIを取得', { platform: Platform.OS });
-      setShowCamera(false);
-
+      debugLog('[写真撮影] カメラからURIを取得 → プレビューへ', { platform: Platform.OS });
       try {
         validateImageUri(uri);
       } catch (validateError: any) {
@@ -516,27 +447,42 @@ export default function AddScreen() {
         Alert.alert('エラー', `画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         return;
       }
-
       if (!isValidImageUri(uri)) {
         logError('[写真撮影] 無効なURI');
         Alert.alert('エラー', '画像の形式が正しくありません');
         return;
       }
-
-      debugLog('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
-      setPhotoUri(uri);
-      setPhotoRotation(0);
-      debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
+      setPreviewUri(uri);
+      setCameraPhase('preview');
     } catch (error: any) {
       logError('[写真撮影] カメラキャプチャ処理エラー');
       setShowCamera(false);
+      setCameraPhase('camera');
+      setPreviewUri(null);
       Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
     }
+  };
+
+  const handlePreviewSave = () => {
+    if (previewUri) {
+      setPhotoUri(previewUri);
+      setPhotoRotation(0);
+    }
+    setShowCamera(false);
+    setCameraPhase('camera');
+    setPreviewUri(null);
+  };
+
+  const handlePreviewRetake = () => {
+    setCameraPhase('camera');
+    setPreviewUri(null);
   };
 
   const handleCameraCancel = () => {
     debugLog('[写真撮影] カメラをキャンセル', { platform: Platform.OS });
     setShowCamera(false);
+    setCameraPhase('camera');
+    setPreviewUri(null);
   };
 
   const rotatePhoto = async (direction: 'right' | 'left') => {
@@ -1332,10 +1278,18 @@ export default function AddScreen() {
         visible={showCamera}
         animationType="slide"
         onRequestClose={handleCameraCancel}>
-        <CameraScreen
-          onCapture={handleCameraCapture}
-          onCancel={handleCameraCancel}
-        />
+        {cameraPhase === 'preview' && previewUri ? (
+          <CameraPreviewScreen
+            imageUri={previewUri}
+            onRetake={handlePreviewRetake}
+            onSave={handlePreviewSave}
+          />
+        ) : (
+          <CameraScreen
+            onCapture={handleCameraCapture}
+            onCancel={handleCameraCancel}
+          />
+        )}
       </Modal>
 
       {showToast && (

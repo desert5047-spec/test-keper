@@ -55,6 +55,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       buildNumber: '5',
       infoPlist: {
         ...(config.ios?.infoPlist ?? {}),
+        CFBundleDevelopmentRegion: 'ja',
+        CFBundleLocalizations: ['ja'],
         NSCameraUsageDescription: 'テストの写真を撮影するためにカメラを使用します。',
         NSPhotoLibraryUsageDescription:
           'テストの写真を選択するために写真ライブラリへアクセスします。',

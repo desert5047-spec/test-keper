@@ -17,12 +17,15 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Calendar as CalendarIcon, Check } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { CalendarPicker } from '@/components/CalendarPicker';
+import { CameraScreen } from '@/components/CameraScreen';
+import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { supabase } from '@/lib/supabase';
@@ -45,6 +48,9 @@ export default function DetailScreen() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [scoreError, setScoreError] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -61,9 +67,10 @@ export default function DetailScreen() {
   const lastTranslateRef = useRef({ x: 0, y: 0 });
   const pinchRef = useRef<PinchGestureHandler>(null);
   const panRef = useRef<PanGestureHandler>(null);
+  const useNativeDriver = Platform.OS !== 'web';
   const onPinchEvent = Animated.event(
     [{ nativeEvent: { scale: pinchScale } }],
-    { useNativeDriver: true }
+    { useNativeDriver }
   );
 
   const onPinchStateChange = (event: { nativeEvent: { oldState: number; scale: number } }) => {
@@ -78,7 +85,7 @@ export default function DetailScreen() {
 
   const onPanEvent = Animated.event(
     [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
-    { useNativeDriver: true }
+    { useNativeDriver }
   );
 
   const onPanStateChange = (event: { nativeEvent: { oldState: number; translationX: number; translationY: number } }) => {
@@ -283,26 +290,140 @@ export default function DetailScreen() {
     }
   };
 
-  const takePhoto = async () => {
+  const takePhoto = () => {
     setShowPhotoOptions(false);
-    try {
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 1.0,
-      });
+    setCameraPhase('camera');
+    setPreviewUri(null);
+    setShowCamera(true);
+  };
 
-      if (!result.canceled) {
-        const uri = result.assets[0].uri;
-        validateImageUri(uri);
-        if (!isValidImageUri(uri)) {
-          Alert.alert('エラー', '画像の読み込みに失敗しました。もう一度選択してください。');
-          return;
-        }
-        setPhotoUri(uri);
+  const handleCameraCapture = (uri: string) => {
+    try {
+      validateImageUri(uri);
+      if (!isValidImageUri(uri)) {
+        Alert.alert('エラー', '画像の形式が正しくありません');
+        return;
       }
+      setPreviewUri(uri);
+      setCameraPhase('preview');
     } catch (error: any) {
-      Alert.alert('エラー', error.message || '画像の撮影に失敗しました');
+      Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
     }
+  };
+
+  const handlePreviewSave = () => {
+    if (previewUri) setPhotoUri(previewUri);
+    setShowCamera(false);
+    setCameraPhase('camera');
+    setPreviewUri(null);
+  };
+
+  const handlePreviewRetake = () => {
+    setCameraPhase('camera');
+    setPreviewUri(null);
+  };
+
+  const handleCameraCancel = () => {
+    setShowCamera(false);
+    setCameraPhase('camera');
+    setPreviewUri(null);
+  };
+
+  // Web: fetch → blob URL → Canvas で回転（blob: の場合は fetch 不要）
+  const rotateImageWithCanvas = (imageUrl: string, degrees: number): Promise<string> => {
+    const FETCH_TIMEOUT_MS = 10000;
+    const TOTAL_TIMEOUT_MS = 20000;
+    return new Promise((resolve, reject) => {
+      if (typeof document === 'undefined') {
+        reject(new Error('Web 環境で回転を実行できません'));
+        return;
+      }
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+      const totalTimeoutId = setTimeout(() => {
+        settle(() => reject(new Error('画像の処理がタイムアウトしました')));
+      }, TOTAL_TIMEOUT_MS);
+
+      const runWithImage = (srcUrl: string, revokeBlobUrl?: string) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            if (revokeBlobUrl) URL.revokeObjectURL(revokeBlobUrl);
+            const canvas = document.createElement('canvas');
+            const rad = (degrees * Math.PI) / 180;
+            const cos = Math.abs(Math.cos(rad));
+            const sin = Math.abs(Math.sin(rad));
+            canvas.width = Math.floor(img.width * cos + img.height * sin);
+            canvas.height = Math.floor(img.width * sin + img.height * cos);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              clearTimeout(totalTimeoutId);
+              settle(() => reject(new Error('Canvas 2d が利用できません')));
+              return;
+            }
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(rad);
+            ctx.drawImage(img, -img.width / 2, -img.height / 2);
+            canvas.toBlob(
+              (resultBlob) => {
+                clearTimeout(totalTimeoutId);
+                if (settled) return;
+                settled = true;
+                if (!resultBlob) {
+                  reject(new Error('回転後の画像の生成に失敗しました'));
+                  return;
+                }
+                resolve(URL.createObjectURL(resultBlob));
+              },
+              'image/jpeg',
+              0.5
+            );
+          } catch (e) {
+            clearTimeout(totalTimeoutId);
+            settle(() => reject(e instanceof Error ? e : new Error('回転処理でエラーが発生しました')));
+          }
+        };
+        img.onerror = () => {
+          clearTimeout(totalTimeoutId);
+          if (revokeBlobUrl) URL.revokeObjectURL(revokeBlobUrl);
+          settle(() => reject(new Error('画像の読み込みに失敗しました')));
+        };
+        img.src = srcUrl;
+      };
+
+      if (imageUrl.startsWith('blob:')) {
+        runWithImage(imageUrl);
+        return;
+      }
+
+      const controller = new AbortController();
+      const fetchTimeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      fetch(imageUrl, { mode: 'cors', signal: controller.signal })
+        .then((res) => {
+          clearTimeout(fetchTimeoutId);
+          if (!res.ok) throw new Error('画像の取得に失敗しました');
+          return res.blob();
+        })
+        .then((blob) => {
+          const blobUrl = URL.createObjectURL(blob);
+          runWithImage(blobUrl, blobUrl);
+        })
+        .catch((err) => {
+          clearTimeout(fetchTimeoutId);
+          clearTimeout(totalTimeoutId);
+          const msg =
+            err?.name === 'AbortError'
+              ? '画像の取得がタイムアウトしました。ネットワークまたは Supabase Storage の CORS 設定をご確認ください。'
+              : err instanceof Error
+                ? err.message
+                : '画像の取得に失敗しました。CORS設定をご確認ください。';
+          settle(() => reject(new Error(msg)));
+        });
+    });
   };
 
   const rotatePhoto = async (direction: 'right' | 'left') => {
@@ -310,11 +431,42 @@ export default function DetailScreen() {
 
     setIsProcessingImage(true);
     try {
-      validateImageUri(photoUri);
+      // 編集時は photoUri が DB のパス（recordId/xxx.jpg）のことがある → 回転には読み込み可能な URL が必要
+      let uriToRotate = photoUri;
+      if (!isValidImageUri(photoUri)) {
+        const signed = await getSignedImageUrl(photoUri);
+        if (!signed) {
+          Alert.alert('エラー', '画像の読み込みに失敗しました');
+          return;
+        }
+        uriToRotate = signed;
+      } else {
+        validateImageUri(photoUri);
+      }
 
       const rotation = direction === 'right' ? 90 : -90;
+
+      if (Platform.OS === 'web' && (uriToRotate.startsWith('http://') || uriToRotate.startsWith('https://'))) {
+        const blobUrl = await rotateImageWithCanvas(uriToRotate, rotation);
+        validateImageUri(blobUrl);
+        if (!isValidImageUri(blobUrl)) {
+          throw new Error('回転後の画像が無効です');
+        }
+        setPhotoUri(blobUrl);
+        return;
+      }
+
+      // ネイティブ: ImageManipulator は file:// を要求するため、https の場合は一旦ローカルに保存してから回転
+      let localUri = uriToRotate;
+      if (uriToRotate.startsWith('http://') || uriToRotate.startsWith('https://')) {
+        const cachePath = `${FileSystem.cacheDirectory}temp-rotate-${Date.now()}.jpg`;
+        const downloadResult = await FileSystem.downloadAsync(uriToRotate, cachePath);
+        if (!downloadResult?.uri) throw new Error('画像のダウンロードに失敗しました');
+        localUri = downloadResult.uri;
+      }
+
       const result = await ImageManipulator.manipulateAsync(
-        photoUri,
+        localUri,
         [{ rotate: rotation }],
         { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
       );
@@ -326,6 +478,7 @@ export default function DetailScreen() {
 
       setPhotoUri(result.uri);
     } catch (error: any) {
+      logError('[回転]', error);
       Alert.alert('エラー', error.message || '画像の回転に失敗しました');
     } finally {
       setIsProcessingImage(false);
@@ -354,11 +507,27 @@ export default function DetailScreen() {
       return;
     }
 
-    if (evaluationType === 'score') {
-      if (!score.trim()) {
-        Alert.alert('エラー', '点数を入れてください');
-        return;
-      }
+    // 写真・点数・スタンプのいずれかがあれば保存可能（既存の record.photo_uri も写真ありとみなす）
+    const hasPhoto = !!(photoUri && (isValidImageUri(photoUri) || record?.photo_uri));
+    const hasValidScore =
+      evaluationType === 'score' &&
+      score.trim() !== '' &&
+      !scoreError &&
+      !isNaN(parseInt(score)) &&
+      parseInt(score) >= 0 &&
+      parseInt(maxScore) > 0 &&
+      parseInt(score) <= parseInt(maxScore);
+    const hasStamp = evaluationType === 'stamp' && !!stamp;
+
+    if (!hasPhoto && !hasValidScore && !hasStamp) {
+      Alert.alert(
+        'エラー',
+        '写真、点数、スタンプのいずれかを入力してください'
+      );
+      return;
+    }
+
+    if (evaluationType === 'score' && score.trim() !== '') {
       const scoreNum = parseInt(score);
       const maxScoreNum = parseInt(maxScore);
       if (isNaN(scoreNum) || isNaN(maxScoreNum) || scoreNum < 0 || maxScoreNum <= 0) {
@@ -367,11 +536,6 @@ export default function DetailScreen() {
       }
       if (scoreNum > maxScoreNum) {
         Alert.alert('エラー', `点数は${maxScoreNum}点以下で入力してください`);
-        return;
-      }
-    } else {
-      if (!stamp) {
-        Alert.alert('エラー', 'スタンプを選んでください');
         return;
       }
     }
@@ -441,9 +605,9 @@ export default function DetailScreen() {
           child_id: selectedChildId ?? null,
           subject: selectedSubject,
           date: record.date,
-          score: evaluationType === 'score' ? parseInt(score) : null,
-          max_score: evaluationType === 'score' ? parseInt(maxScore) : 100,
-          stamp: evaluationType === 'stamp' ? stamp : null,
+          score: evaluationType === 'score' && score.trim() ? parseInt(score, 10) : null,
+          max_score: evaluationType === 'score' && score.trim() ? parseInt(maxScore, 10) : 100,
+          stamp: evaluationType === 'stamp' && stamp ? stamp : null,
           memo: memo.trim() || null,
           photo_uri: photoUriToDb,
           photo_rotation: 0,
@@ -598,6 +762,23 @@ export default function DetailScreen() {
     resolvedRecordPhotoUrl || (record?.photo_uri && isValidImageUri(record.photo_uri) ? record.photo_uri : null);
   const editPhotoDisplayUri =
     photoUri && isValidImageUri(photoUri) ? photoUri : resolvedEditPhotoUrl;
+
+  // 編集時：写真・点数・スタンプのいずれかがあれば保存ボタン有効
+  // 写真あり = 新規選択のURI(file/https) または 既存の record.photo_uri（DBのパスは isValidImageUri で false になるため別判定）
+  const hasPhotoInEdit = !!(
+    photoUri &&
+    (isValidImageUri(photoUri) || record?.photo_uri)
+  );
+  const canSaveInEdit =
+    hasPhotoInEdit ||
+    (evaluationType === 'score' &&
+      score.trim() !== '' &&
+      !scoreError &&
+      !isNaN(parseInt(score, 10)) &&
+      parseInt(score, 10) >= 0 &&
+      parseInt(maxScore, 10) > 0 &&
+      parseInt(score, 10) <= parseInt(maxScore, 10)) ||
+    (evaluationType === 'stamp' && !!stamp);
 
   if (loading) {
     return (
@@ -1074,10 +1255,10 @@ export default function DetailScreen() {
             <TouchableOpacity
               style={[
                 styles.saveButton,
-                (isSaving || scoreError) && styles.saveButtonDisabled,
+                (isSaving || !canSaveInEdit) && styles.saveButtonDisabled,
               ]}
               onPress={handleSave}
-              disabled={isSaving || !!scoreError}
+              disabled={isSaving || !canSaveInEdit}
               activeOpacity={0.7}>
               {isSaving ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -1192,6 +1373,24 @@ export default function DetailScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={showCamera}
+        animationType="slide"
+        onRequestClose={handleCameraCancel}>
+        {cameraPhase === 'preview' && previewUri ? (
+          <CameraPreviewScreen
+            imageUri={previewUri}
+            onRetake={handlePreviewRetake}
+            onSave={handlePreviewSave}
+          />
+        ) : (
+          <CameraScreen
+            onCapture={handleCameraCapture}
+            onCancel={handleCameraCancel}
+          />
+        )}
       </Modal>
 
       {record && evaluationType === 'score' && (
