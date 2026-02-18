@@ -13,6 +13,8 @@ import {
   ActionSheetIOS,
   Animated,
   KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
   findNodeHandle,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -816,12 +818,16 @@ export default function DetailScreen() {
         />
 
         {editMode ? (
-          <ScrollView
-          ref={scrollViewRef}
-          style={styles.scrollView}
-          contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingBottom: 320 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.scrollView}
+                contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingBottom: 320 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}>
           <View style={styles.editSection}>
             <Text style={styles.editSectionTitle}>写真</Text>
             {photoUri ? (
@@ -1137,17 +1143,23 @@ export default function DetailScreen() {
           </View>
 
           <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>メモ</Text>
+            <Text style={[styles.editSectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
             <TextInput
               style={styles.memoInput}
               value={memo}
               onChangeText={setMemo}
-              placeholder="メモを入力"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
+              placeholder="メモを入力（例：計算がんばった！）"
               placeholderTextColor="#999"
+              multiline
+              textAlignVertical="top"
+              maxLength={200}
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+              }}
             />
+            <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
           </View>
 
           <View style={styles.editSection}>
@@ -1187,7 +1199,9 @@ export default function DetailScreen() {
           )}
 
           <View style={{ height: 100 }} />
-        </ScrollView>
+              </ScrollView>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
         ) : (
         <ScrollView
           style={styles.scrollView}
@@ -1943,15 +1957,21 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   memoInput: {
+    minHeight: 100,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    backgroundColor: '#fff',
+    fontSize: 16,
     fontFamily: 'Nunito-Regular',
-    color: '#333',
-    minHeight: 100,
+    color: '#222',
+  },
+  memoCharCount: {
+    textAlign: 'right',
+    color: '#888',
+    marginTop: 4,
+    fontSize: 12,
   },
   dateInputContainer: {
     flexDirection: 'row',
@@ -2087,7 +2107,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   cancelButtonText: {
-    color: '#666',
+    color: '#333',
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
   },
@@ -2137,6 +2157,6 @@ const styles = StyleSheet.create({
   actionSheetCancelText: {
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
-    color: '#666',
+    color: '#333',
   },
 });

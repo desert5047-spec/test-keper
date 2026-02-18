@@ -25,7 +25,7 @@ export default function WebAuthCallback() {
 
     const url = window.location.href;
     setDebugUrl(url);
-    log('[AuthCallbackWeb] opened:', url);
+    log('[AuthCallbackWeb] opened:', window.location.origin + window.location.pathname);
 
     const searchParams = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));

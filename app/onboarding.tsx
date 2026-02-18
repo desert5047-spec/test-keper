@@ -97,7 +97,7 @@ export default function OnboardingScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>初期セットアップ</Text>
           <Text style={styles.description}>
-            準備完了
+            {needsDisplayName || needsChildSetup ? '名前設定' : 'はじめましょう'}
           </Text>
 
           {(needsDisplayName || needsChildSetup) && (

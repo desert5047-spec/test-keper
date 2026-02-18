@@ -13,6 +13,9 @@ import {
   ActionSheetIOS,
   AppState,
   InteractionManager,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -835,10 +838,16 @@ export default function AddScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.scrollView}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>写真</Text>
           {photoUri ? (
@@ -1201,21 +1210,29 @@ export default function AddScreen() {
         />
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>メモ</Text>
+          <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
           <TextInput
             style={styles.memoInput}
             value={memo}
             onChangeText={setMemo}
-            placeholder="メモを入力"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
+            placeholder="メモを入力（例：計算がんばった！）"
             placeholderTextColor="#999"
+            multiline
+            textAlignVertical="top"
+            maxLength={200}
+            onFocus={() => {
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+            }}
           />
+          <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
         <View style={{ height: 100 }} />
-      </ScrollView>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
 
       <View style={styles.bottomButtonContainer}>
         {errorMessage ? (
@@ -1738,15 +1755,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   memoInput: {
+    minHeight: 100,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    backgroundColor: '#fff',
+    fontSize: 16,
     fontFamily: 'Nunito-Regular',
-    color: '#333',
-    minHeight: 100,
+    color: '#222',
+  },
+  memoCharCount: {
+    textAlign: 'right',
+    color: '#888',
+    marginTop: 4,
+    fontSize: 12,
   },
   bottomButtonContainer: {
     position: 'absolute',
@@ -1839,7 +1862,7 @@ const styles = StyleSheet.create({
   actionSheetCancelText: {
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
-    color: '#666',
+    color: '#333',
   },
   toastContainer: {
     position: 'absolute',

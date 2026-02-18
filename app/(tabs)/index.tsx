@@ -88,13 +88,15 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
                 recyclingKey={item.id}
                 onLoad={() => onImageError(item.id, false)}
                 onError={(e) => {
-                  log('[THUMB][ImageError]', { id: item.id, url: item.imageUrl, error: e?.error });
+                  log('[THUMB][ImageError]', { id: item.id, hasUrl: !!item.imageUrl, errorMsg: e?.error?.message ?? null });
                   onImageError(item.id, true);
                 }}
               />
-              <Text numberOfLines={1} style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
-                {item.imageUrl ? item.imageUrl.slice(0, 80) : 'imageUrl:null'}
-              </Text>
+              {__DEV__ && (
+                <Text numberOfLines={1} style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
+                  {item.imageUrl ? 'signed' : 'imageUrl:null'}
+                </Text>
+              )}
             </View>
             <View style={styles.dateOverlay}>
               <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>

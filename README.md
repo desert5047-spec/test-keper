@@ -30,7 +30,7 @@
 | **EAS ビルド（PROD）** | `eas build -p ios --profile production` | EAS environment **production** → PROD |
 
 **確認項目（表示と実接続の一致）**
-- 右上の **DebugLabel**（環境 / Supabase ref / LP host。例: `prod / cwwzaknsitnaqqafbrsc` と `www.test-album.jp`）
+- **DebugLabel**: production build は必ず非表示。Expo Go/開発起動でも `EXPO_PUBLIC_ENV=prod` の場合は非表示。stg/dev で envLabel を見るには `EXPO_PUBLIC_ENV=stg` 等で起動する
 - 起動時ログ **`[Supabase] 接続先 host:`** が意図した host であること
 - データが意図した Supabase（STG または PROD）に入ること
 - アプリから開く Web リンク（新規登録・パスワードリセットなど）が意図した環境の LP（stg なら stg Web、prod なら www）に飛ぶこと
@@ -67,7 +67,7 @@ Expo Go で STG / PROD をコマンド一発で切り替えて起動する場合
 
 **確認項目**
 
-- 右上の **DebugLabel**（環境 / Supabase ref / LP host）
+- 右上の **DebugLabel**（環境 / Supabase ref / LP host。表示条件は [release-checklist](docs/release-checklist.md) 参照）
 - 起動時のコンソールログ **`[Supabase] 接続先 host:`** が、選択した環境の host になっていること
 - データが意図した環境（STG または PROD）に入ること
 - **Web リンク（動作確認）**
@@ -96,16 +96,17 @@ eas submit -p android --profile production
 
 | ビルド | 確認項目 |
 |--------|----------|
-| **STG** `eas build -p ios --profile preview` | DebugLabel が **stg**。起動時ログで接続先 host が **dzqzkwoxfciuhikvnlmg** であること。 |
-| **PROD** `eas build -p ios --profile production` | DebugLabel が **prod**（極薄）。接続先 host が **cwwzaknsitnaqqafbrsc** であること。 |
+| **STG** `eas build -p ios --profile preview` | DebugLabel は **非表示**（release ビルドのため）。起動時ログで接続先 host が **dzqzkwoxfciuhikvnlmg** であること。 |
+| **PROD** `eas build -p ios --profile production` | DebugLabel は**非表示**。接続先 host が **cwwzaknsitnaqqafbrsc** であること。 |
 
 - ログには接続先の **host だけ**を出し、キー全文は出さない（`lib/supabase.ts` で起動時に host のみ `[Supabase] 接続先 host:` で出力済み）。
 - **テスト項目**: 新規登録・ログイン・写真アップロード（bucket=test-images）が、STG/PROD それぞれで期待どおり動作することを確認する。
-- 画面上部の **DebugLabel** は「環境 / Supabase project ref」を表示する（例: `prod / cwwzak…`）。**表示と実接続が一致しているか**を必ず確認する。
+- **DebugLabel**: production build（release）は必ず非表示。Expo Go/開発起動でも `EXPO_PUBLIC_ENV=prod` の場合は非表示。stg/dev で envLabel を確認したい場合は `npm run start:stg` 等で `EXPO_PUBLIC_ENV=stg` を指定して起動する。
 
 ### prod ビルドなのに stg に繋がる場合のチェック項目
 
-DebugLabel が **prod** なのに実際の Supabase 接続が **stg**（host が dzqzkwoxfciuhikvnlmg）になっている場合は、次を確認する。
+（prod ビルドでは DebugLabel は非表示。起動時ログ `[Supabase] 接続先 host:` で接続先を確認する）  
+接続先 host が **stg**（dzqzkwoxfciuhikvnlmg）になっている場合は、次を確認する。
 
 1. **expo.dev の Environment variables（production）**
    - [Expo Dashboard](https://expo.dev) → プロジェクト → **Project settings** → **Environment variables**
@@ -118,7 +119,7 @@ DebugLabel が **prod** なのに実際の Supabase 接続が **stg**（host が
 
 3. **アプリの再インストール**
    - 古いビルド（stg 用の環境変数でビルドされたもの）が端末に残っている可能性がある
-   - TestFlight から **最新の production ビルドを再インストール**し、起動後の DebugLabel が `prod / cwwzak…` になっているか確認する
+   - TestFlight から **最新の production ビルドを再インストール**し、起動時ログで接続先 host が `cwwzaknsitnaqqafbrsc` であることを確認する
 
 4. **app.config.ts の挙動**
    - `EXPO_PUBLIC_ENV=prod` のときは、Supabase URL/KEY が未設定だと **ビルド時に throw する**ため、production プロファイルで EAS 環境変数が渡っていないとビルドが失敗する。ビルドが通っているのに stg に繋がる場合は、端末上のアプリが古いビルドである可能性が高い。
@@ -162,7 +163,7 @@ DebugLabel が **prod** なのに実際の Supabase 接続が **stg**（host が
   または EAS Dashboard で該当ビルドの build number を確認する。
 - すでに submit 済みの build number と同じ番号のビルドは選ばず、**新しいビルドを作成してから submit** する。
 
-詳細は [docs/branch-and-environment.md](docs/branch-and-environment.md) も参照。
+詳細は [docs/branch-and-environment.md](docs/branch-and-environment.md) を参照。**本番リリース前の最終チェック**は [docs/release-checklist.md](docs/release-checklist.md) を参照。
 
 ## 追加された iOS 権限文言
 `app.json` の `expo.ios.infoPlist` に追加済みです。

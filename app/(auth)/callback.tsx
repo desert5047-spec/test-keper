@@ -144,8 +144,8 @@ export default function AuthCallbackScreen() {
           }
           
           // Linking.parseも試す（フォールバック）
-          const parsedUrl = Linking.parse(url);
-          debugLog('[コールバック] パースされたURL:', parsedUrl);
+          Linking.parse(url);
+          debugLog('[コールバック] パースされたURL取得済み');
           
           // クエリパラメータからトークンを取得（まだ取得できていない場合）
           if (parsedUrl.queryParams && (!accessToken || !authCode)) {

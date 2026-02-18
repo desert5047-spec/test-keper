@@ -509,7 +509,7 @@ export const uploadImage = async (
       log('[UPLOAD][session]', {
         hasSession: !!data?.session,
         userId: data?.session?.user?.id ?? null,
-        sessErr,
+        sessErrMsg: sessErr?.message ?? null,
       });
     });
 

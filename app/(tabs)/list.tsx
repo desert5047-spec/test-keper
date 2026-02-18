@@ -71,7 +71,7 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
               transition={0}
               recyclingKey={item.id}
               onError={(e) => {
-                log('[THUMB][ImageError]', { id: item.id, url: item.imageUrl, error: e?.error });
+                log('[THUMB][ImageError]', { id: item.id, hasUrl: !!item.imageUrl, errorMsg: e?.error?.message ?? null });
               }}
             />
           </View>

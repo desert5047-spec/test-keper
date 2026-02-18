@@ -1486,7 +1486,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    log('[AuthContext][signUp] error:', error);
+    log('[AuthContext][signUp] error:', error?.message ?? null);
     log('[AuthContext][signUp] sessionExists:', !!data?.session);
 
     if (error) {

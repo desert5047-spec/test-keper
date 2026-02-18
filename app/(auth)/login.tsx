@@ -115,11 +115,11 @@ export default function LoginScreen() {
         password: p,
       });
 
-      log('[LOGIN:4] error:', error);
+      log('[LOGIN:4] error:', error?.message ?? null);
       log('[LOGIN:5] data.session exists:', !!data?.session);
 
       const s = await supabase.auth.getSession();
-      log('[LOGIN:6] getSession:', { hasSession: !!s.data.session, error: s.error });
+      log('[LOGIN:6] getSession:', { hasSession: !!s.data.session, errorMsg: s.error?.message ?? null });
 
       appendLog(
         `LOGIN RESULT hasSession=${!!data?.session} error=${error?.message || 'none'}`
@@ -526,6 +526,7 @@ const styles = StyleSheet.create({
   rememberText: {
     fontSize: 14,
     flexShrink: 1,
+    color: '#333',
   },
   passwordInputContainer: {
     flexDirection: 'row',

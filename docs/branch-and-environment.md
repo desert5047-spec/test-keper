@@ -80,7 +80,7 @@ eas env:create --environment production --name EXPO_PUBLIC_SUPABASE_ANON_KEY --v
 
 | 確認項目 | STG（preview ビルド） | PROD（production ビルド） |
 |----------|------------------------|----------------------------|
-| DebugLabel | 画面上部に **stg** と表示される | **prod** と極薄で表示される |
+| DebugLabel | `EXPO_PUBLIC_ENV=stg` かつ開発起動時に **stg** 表示。release ビルドでは非表示 | **非表示**。prod 環境では開発起動でも表示しない（意図した仕様） |
 | Supabase 接続先 | URL のホストが **dzqzkwoxfciuhikvnlmg** であること | URL のホストが **cwwzaknsitnaqqafbrsc** であること |
 
 - ログで確認する場合は **URL のホストだけ** を出し、キー全文は絶対にログに出さないこと。

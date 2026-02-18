@@ -15,18 +15,18 @@ function getSupabaseRef(url: string | undefined): string {
 
 /**
  * 環境ラベル（stg / prod / dev）、Supabase project ref、LP host を表示する。
- * 表示と実接続の不一致を防ぐ（例: prod / cwwzaknsitnaqqafbrsc / www.test-album.jp）。
- * 本番（prod）では極薄にして目立たないようにする。
+ * prod もしくは release（!__DEV__）では絶対に表示しない。stg/dev かつ __DEV__ のときのみ表示。
  */
 export function DebugLabel() {
-  const isProd = envLabel === 'prod';
+  const isProdEnv = process.env.EXPO_PUBLIC_ENV === 'prod' || envLabel === 'prod';
+  if (isProdEnv || !__DEV__) return null;
   const ref = getSupabaseRef(supabaseUrl);
   const lpHost = getLpHost();
   const mainText = `${envLabel} / ${ref}`;
   return (
     <View style={styles.wrapper} pointerEvents="none">
-      <Text style={[styles.label, isProd && styles.labelProd]}>{mainText}</Text>
-      <Text style={[styles.lpHost, isProd && styles.labelProd]}>{lpHost}</Text>
+      <Text style={styles.label}>{mainText}</Text>
+      <Text style={styles.lpHost}>{lpHost}</Text>
     </View>
   );
 }
@@ -47,9 +47,5 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: '#999',
     marginTop: 2,
-  },
-  labelProd: {
-    opacity: 0.25,
-    color: '#999',
   },
 });
