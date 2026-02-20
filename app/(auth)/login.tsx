@@ -11,12 +11,11 @@ import {
   ActivityIndicator,
   Switch,
   Alert,
-  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
+import { openExternal } from '@/lib/openExternal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLastAuthProvider } from '@/lib/auth/lastProvider';
@@ -26,6 +25,7 @@ import { appendLog, setDebugLoginPressed, setDebugLoginResult } from '@/lib/debu
 import { supabase } from '@/lib/supabase';
 import { log } from '@/lib/logger';
 import { webUrls } from '@/lib/urls';
+import AppBrand from '@/components/AppBrand';
 
 const debugLog = log;
 
@@ -168,16 +168,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View style={styles.iconContainer}>
-            <Image
-              source={require('@/assets/images/app-icon.png')}
-              style={styles.appIcon}
-              contentFit="contain"
-              cachePolicy="memory-disk"
-            />
-          </View>
-          <Text style={styles.title}>テストアルバム</Text>
-          <Text style={styles.subtitle}>写真でかんたん、テスト記録アプリ</Text>
+          <AppBrand title="テストアルバム" subtitle="写真でかんたん、テスト記録アプリ" />
         </View>
 
         <View style={styles.form}>
@@ -229,7 +220,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
             <TouchableOpacity
-              onPress={() => Linking.openURL(webUrls.forgotPassword)}
+              onPress={() => openExternal(webUrls.forgotPassword)}
               disabled={loading}
               style={styles.forgotPasswordLink}
               activeOpacity={0.7}>
@@ -283,7 +274,7 @@ export default function LoginScreen() {
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>アカウントをお持ちでないですか？</Text>
             <TouchableOpacity
-              onPress={() => WebBrowser.openBrowserAsync(webUrls.signup)}
+              onPress={() => openExternal(webUrls.signup)}
               disabled={loading}
               activeOpacity={0.7}>
               <Text style={styles.signupLink}>Webで新規登録</Text>
@@ -292,7 +283,7 @@ export default function LoginScreen() {
           <Text style={styles.signupNote}>新規登録はWebで行います</Text>
 
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://docs.google.com/forms/d/e/1FAIpQLSeNQjw8CRwEPbCD9JfvAY3dbWTdDNlyXBV8UOk4zdtGQLTOTg/viewform')}
+            onPress={() => openExternal('https://docs.google.com/forms/d/e/1FAIpQLSeNQjw8CRwEPbCD9JfvAY3dbWTdDNlyXBV8UOk4zdtGQLTOTg/viewform')}
             disabled={loading}
             style={styles.contactLink}
             activeOpacity={0.7}>
@@ -316,41 +307,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 15,
-  },
-  iconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-      },
-    }),
-  },
-  appIcon: {
-    width: 96,
-    height: 96,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    fontFamily: 'Nunito-Regular',
-    color: '#666',
   },
   lastLoginText: {
     marginTop: 30,

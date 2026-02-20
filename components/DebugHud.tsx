@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getDebugLogs, getDebugStatus, subscribeDebugLogs } from '@/lib/debugLog';
 

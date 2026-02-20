@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,9 @@ import { isValidImageUri } from '@/utils/imageGuard';
 import { getSignedImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
-import { log, error as logError } from '@/lib/logger';
+import { log, logLoadError } from '@/lib/logger';
+
+const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
 
 type RecordWithImageUrl = TestRecord & { imageUrl: string | null };
 
@@ -108,6 +110,14 @@ export default function ListScreen() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<'offline' | 'unknown' | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+
+  const formatLastUpdated = (d: Date) => {
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
 
   useEffect(() => {
     if (params.year && params.month) {
@@ -124,6 +134,7 @@ export default function ListScreen() {
       return;
     }
 
+    setLoadError(null);
     if (!isRefresh) setIsInitialLoading(true);
     else setRefreshing(true);
 
@@ -144,11 +155,14 @@ export default function ListScreen() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        logError('[記録読み込みエラー]', error.message);
+        const isNetwork = String(error?.message ?? '').includes('Network request failed');
+        logLoadError('記録読み込み');
+        setLoadError(isNetwork ? 'offline' : 'unknown');
         if (isRefresh) {
-          Alert.alert('エラー', '一覧の取得に失敗しました。しばらくしてからお試しください。');
+          Alert.alert('エラー', LOAD_ERROR_MESSAGE);
         }
         return;
+        // sections / stableSections は上書きしない（前回成功分を維持）
       }
 
       if (data) {
@@ -181,12 +195,17 @@ export default function ListScreen() {
           .map((date) => ({ title: date, data: grouped[date] }));
         setSections(sectionsData);
         setStableSections(sectionsData);
+        setLoadError(null);
+        setLastUpdatedAt(new Date());
       }
     } catch (e) {
-      logError('[記録読み込みエラー]', e);
+      const isNetwork = String(e).includes('Network request failed');
+      logLoadError('記録読み込み');
+      setLoadError(isNetwork ? 'offline' : 'unknown');
       if (isRefresh) {
-        Alert.alert('エラー', '一覧の取得に失敗しました。しばらくしてからお試しください。');
+        Alert.alert('エラー', LOAD_ERROR_MESSAGE);
       }
+      // sections / stableSections は上書きしない（前回成功分を維持）
     } finally {
       setHasLoadedOnce(true);
       if (isRefresh) setRefreshing(false);
@@ -212,15 +231,73 @@ export default function ListScreen() {
 
   const showSpinner =
     !isFamilyReady || (stableSections.length === 0 && (!hasLoadedOnce || isInitialLoading));
-  const showEmptyState = isFamilyReady && hasLoadedOnce && !refreshing && stableSections.length === 0;
+  const showEmptyState = isFamilyReady && hasLoadedOnce && !refreshing && stableSections.length === 0 && !loadError;
+  const showLoadErrorFullScreen = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length === 0;
+  const showBannerAndList = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length > 0;
 
   return (
     <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
+      {showBannerAndList ? (
+        <View style={styles.mainWithBanner}>
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText} numberOfLines={2}>
+              通信できません{lastUpdatedAt ? `（最終更新: ${formatLastUpdated(lastUpdatedAt)}）` : ''}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButtonSmall}
+              onPress={() => loadRecords()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>再試行</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={[styles.listContent, { paddingTop: 12, paddingBottom: 20 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadRecords({ isRefresh: true })}
+              />
+            }>
+            {stableSections.map((section) => (
+              <View key={section.title} style={styles.daySection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>
+                </View>
+                <View style={styles.dayRecords}>
+                  {section.data.map((item) => (
+                    <View key={item.id} style={styles.dayRecordWrapper}>
+                      <ListRecordCard item={item} onPress={handlePress} />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+            <View style={{ height: 20 }} />
+          </ScrollView>
+        </View>
+      ) : null}
+
       {showSpinner ? (
         <View style={[styles.loadingContainer, { paddingTop: isFamilyReady ? HEADER_HEIGHT : 0 }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      ) : showLoadErrorFullScreen ? (
+        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+          <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
+          {lastUpdatedAt ? (
+            <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
+          ) : null}
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => loadRecords()}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.retryButtonText}>再試行</Text>
+          </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
         <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
@@ -228,7 +305,7 @@ export default function ListScreen() {
             {year}年{month}月の記録はありません
           </Text>
         </View>
-      ) : (
+      ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
         <ScrollView
           contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 12 }]}
           showsVerticalScrollIndicator={false}
@@ -254,7 +331,7 @@ export default function ListScreen() {
           ))}
           <View style={{ height: 20 }} />
         </ScrollView>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -384,5 +461,50 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     color: '#666',
+    textAlign: 'center',
+  },
+  lastUpdatedText: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 4,
+    fontFamily: 'Nunito-Regular',
+  },
+  mainWithBanner: {
+    flex: 1,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF3E0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0B2',
+  },
+  offlineBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#E65100',
+    fontFamily: 'Nunito-SemiBold',
+  },
+  retryButtonSmall: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
   },
 });

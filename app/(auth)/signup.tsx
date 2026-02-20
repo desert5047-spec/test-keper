@@ -12,7 +12,7 @@ import {
   Alert,
   Linking,
 } from 'react-native';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';

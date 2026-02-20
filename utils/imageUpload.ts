@@ -504,14 +504,12 @@ export const uploadImage = async (
     const bodySize = uploadBody instanceof Blob ? uploadBody.size : uploadBody.length;
     debugLog('[Supabase] ストレージへアップロード中...', { bodySize, platform: Platform.OS });
 
-    // セッションログは非同期で取得（アップロード待ちにしない）
-    supabase.auth.getSession().then(({ data, error: sessErr }) => {
-      log('[UPLOAD][session]', {
-        hasSession: !!data?.session,
-        userId: data?.session?.user?.id ?? null,
-        sessErrMsg: sessErr?.message ?? null,
+    // セッション確認ログ（__DEV__ 時のみ、トークン等は一切出さない）
+    if (__DEV__) {
+      supabase.auth.getSession().then(({ data }) => {
+        log('[UPLOAD][session] hasSession:', !!data?.session);
       });
-    });
+    }
 
     try {
       // アップロード処理にタイムアウトを設定（120秒）
@@ -529,7 +527,7 @@ export const uploadImage = async (
       const { data, error } = await Promise.race([uploadPromise, uploadTimeoutPromise]);
 
       if (error) {
-        logError('[Supabase] アップロードエラー', error?.message, (error as { error?: string })?.error);
+        logError('[Supabase] アップロードエラー', error?.message ?? '不明');
         const detail = (error as { message?: string; error?: string })?.message || (error as { error?: string })?.error || '不明なエラー';
         throw new Error(`アップロードエラー: ${detail}`);
       }
@@ -601,9 +599,9 @@ export const deleteImage = async (imageUrl: string): Promise<void> => {
       .remove([filePath]);
 
     if (error) {
-      logError('Image deletion error');
+      logError('[削除] 画像の削除に失敗しました');
     }
-  } catch (error) {
-    logError('Image deletion error');
+  } catch {
+    logError('[削除] 画像の削除に失敗しました');
   }
 };

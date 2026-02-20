@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,13 @@ import {
   Platform,
   ActionSheetIOS,
   Animated,
+  findNodeHandle,
+  UIManager,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
-  findNodeHandle,
 } from 'react-native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -42,11 +44,13 @@ import { useChild } from '@/contexts/ChildContext';
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const headerHeight = useHeaderHeight();
   const { user, familyId, isFamilyReady } = useAuth();
   const { children: contextChildren } = useChild();
   const insets = useSafeAreaInsets();
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSwitchingChild, setIsSwitchingChild] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
@@ -123,10 +127,10 @@ export default function DetailScreen() {
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showFullScoreModal, setShowFullScoreModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const scrollContentAnchorRef = useRef<View>(null);
   const rowRefMap = useRef<Record<string, View | null>>({});
+  const memoYRef = useRef(0);
   const [stamp, setStamp] = useState<string | null>(null);
-  const [customStamp, setCustomStamp] = useState<string>('');
-  const [showCustomStampInput, setShowCustomStampInput] = useState(false);
   const [memo, setMemo] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
@@ -153,9 +157,12 @@ export default function DetailScreen() {
   }, [photoUri]);
 
   useEffect(() => {
-    if (params.id && isFamilyReady && familyId) {
-      loadRecord(params.id as string);
-    }
+    if (!params.id || !isFamilyReady || !familyId) return;
+    setIsSwitchingChild(true);
+    setRecord(null);
+    loadRecord(params.id as string).finally(() => {
+      setIsSwitchingChild(false);
+    });
   }, [params.id, isFamilyReady, familyId]);
 
   const loadRecord = async (id: string) => {
@@ -177,13 +184,11 @@ export default function DetailScreen() {
   };
 
   const initializeEditForm = (data: TestRecord) => {
-    setPhotoUri(data.photo_uri);
+    setPhotoUri(data.photo_uri ?? null);
     setEvaluationType(data.score !== null ? 'score' : 'stamp');
     setScore(data.score?.toString() || '');
     setMaxScore(data.max_score?.toString() || '100');
     setStamp(data.stamp);
-    setCustomStamp('');
-    setShowCustomStampInput(false);
     setMemo(data.memo || '');
     setScoreError('');
     setSelectedSubject(data.subject || '');
@@ -487,13 +492,26 @@ export default function DetailScreen() {
     }
   };
 
+  const handleDeletePhoto = async () => {
+    try {
+      if (record?.photo_uri) {
+        const pathToDelete = normalizePhotoUriForDb(record.photo_uri) ?? record.photo_uri;
+        await deleteImage(pathToDelete);
+      }
+      setPhotoUri(null);
+    } catch (e) {
+      logError('[写真削除エラー]', e);
+      Alert.alert('エラー', '写真の削除に失敗しました');
+    }
+  };
+
   const confirmRemovePhoto = () => {
     Alert.alert(
       '写真を削除',
       '写真を削除しますか？',
       [
         { text: 'キャンセル', style: 'cancel' },
-        { text: '削除', style: 'destructive', onPress: () => setPhotoUri(null) },
+        { text: '削除', style: 'destructive', onPress: handleDeletePhoto },
       ]
     );
   };
@@ -565,7 +583,9 @@ export default function DetailScreen() {
     try {
       let uploadedImagePath: string | null = null;
 
-      if (photoUri && photoUri !== record.photo_uri) {
+      if (photoUri === null) {
+        uploadedImagePath = null;
+      } else if (photoUri && photoUri !== record.photo_uri) {
         if (photoUri.startsWith('file://') || photoUri.startsWith('content://') || (photoUri.startsWith('http') && photoUri.includes('blob:'))) {
           try {
             if (!user) {
@@ -599,6 +619,7 @@ export default function DetailScreen() {
           ? getStoragePathFromUrl(uploadedImagePath)
           : (normalizePhotoUriForDb(uploadedImagePath) ?? uploadedImagePath)
         : null;
+      log('[保存時 photoUri]', photoUri);
       log('[SAVE][detail] photo_uri to DB (path only):', photoUriToDb);
 
       const { error } = await supabase
@@ -633,19 +654,23 @@ export default function DetailScreen() {
   const scrollToRecord = (recordId: string) => {
     const rowEl = rowRefMap.current[recordId];
     const scrollEl = scrollViewRef.current;
-    if (!rowEl || !scrollEl) return;
-    const scrollNode = findNodeHandle(scrollEl as any);
-    if (!scrollNode) return;
+    const anchorEl = scrollContentAnchorRef.current;
+    if (!rowEl || !scrollEl || !anchorEl) return;
+    const rowNode = findNodeHandle(rowEl);
+    const anchorNode = findNodeHandle(anchorEl);
+    if (!rowNode || !anchorNode) return;
     requestAnimationFrame(() => {
-      (rowEl as any).measureLayout(
-        scrollNode,
+      UIManager.measureLayout(
+        rowNode,
+        anchorNode,
+        () => {},
         (_x: number, y: number) => {
-          scrollEl.scrollTo({ y: Math.max(0, y - 120), animated: true });
+          const targetY = Math.max(0, HEADER_HEIGHT + y - 120);
+          scrollEl.scrollTo({ y: targetY, animated: true });
           setTimeout(() => {
-            scrollEl.scrollTo({ y: Math.max(0, y - 120), animated: true });
+            scrollEl.scrollTo({ y: targetY, animated: true });
           }, 80);
-        },
-        () => {}
+        }
       );
     });
   };
@@ -782,6 +807,15 @@ export default function DetailScreen() {
       parseInt(score, 10) <= parseInt(maxScore, 10)) ||
     (evaluationType === 'stamp' && !!stamp);
 
+  if (isSwitchingChild) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4A90E2" />
+        <Text style={styles.loadingText}>読み込み中…</Text>
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -828,7 +862,7 @@ export default function DetailScreen() {
                 contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingBottom: 320 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}>
-          <View style={styles.editSection}>
+          <View ref={scrollContentAnchorRef} collapsable={false} style={styles.editSection}>
             <Text style={styles.editSectionTitle}>写真</Text>
             {photoUri ? (
               <View style={styles.photoContainer}>
@@ -1065,11 +1099,7 @@ export default function DetailScreen() {
                       styles.stampButton,
                       stamp === s && styles.stampButtonSelected,
                     ]}
-                    onPress={() => {
-                      setStamp(s);
-                      setShowCustomStampInput(false);
-                      setCustomStamp('');
-                    }}
+                    onPress={() => setStamp(s)}
                     activeOpacity={0.7}>
                     <Text
                       style={[
@@ -1080,69 +1110,13 @@ export default function DetailScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
-
-                {!showCustomStampInput ? (
-                  <TouchableOpacity
-                    style={[
-                      styles.stampButton,
-                      styles.stampButtonOther,
-                      stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampButtonSelected,
-                    ]}
-                    onPress={() => {
-                      setShowCustomStampInput(true);
-                      if (stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp)) {
-                        setCustomStamp(stamp);
-                      } else {
-                        setStamp(null);
-                      }
-                    }}
-                    activeOpacity={0.7}>
-                    <Text
-                      style={[
-                        styles.stampText,
-                        stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampTextSelected,
-                      ]}>
-                      {stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) ? stamp : 'その他'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.customStampInputRow}>
-                    <TextInput
-                      style={[
-                        styles.customStampInput,
-                        customStamp.trim().length >= 2 && styles.textInputValid,
-                      ]}
-                      value={customStamp}
-                      onChangeText={(value) => {
-                        setCustomStamp(value);
-                        if (value.trim().length >= 2) {
-                          setStamp(value.trim());
-                        }
-                      }}
-                      placeholder="評価を入力（例：よくがんばった、もう少し）"
-                      placeholderTextColor="#999"
-                      autoFocus
-                    />
-                    {customStamp.trim().length >= 2 && (
-                      <View style={styles.checkIconContainer}>
-                        <Check size={20} color="#4CAF50" />
-                      </View>
-                    )}
-                    <TouchableOpacity
-                      onPress={() => {
-                        setShowCustomStampInput(false);
-                        setCustomStamp('');
-                      }}
-                      activeOpacity={0.7}>
-                      <X size={24} color="#999" />
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
             )}
           </View>
 
-          <View style={styles.editSection}>
+          <View
+            style={styles.editSection}
+            onLayout={(e) => { memoYRef.current = e.nativeEvent.layout.y; }}>
             <Text style={[styles.editSectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
             <TextInput
               style={styles.memoInput}
@@ -1151,12 +1125,19 @@ export default function DetailScreen() {
               placeholder="メモを入力（例：計算がんばった！）"
               placeholderTextColor="#999"
               multiline
+              blurOnSubmit={false}
+              scrollEnabled={false}
               textAlignVertical="top"
               maxLength={200}
               onFocus={() => {
-                setTimeout(() => {
-                  scrollViewRef.current?.scrollToEnd({ animated: true });
-                }, 100);
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    scrollViewRef.current?.scrollTo({
+                      y: Math.max(0, memoYRef.current - 80),
+                      animated: true,
+                    });
+                  });
+                });
               }}
             />
             <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
@@ -1199,10 +1180,10 @@ export default function DetailScreen() {
           )}
 
           <View style={{ height: 100 }} />
-              </ScrollView>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
-        ) : (
+            </ScrollView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      ) : (
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
@@ -1435,7 +1416,7 @@ export default function DetailScreen() {
           />
         </>
       )}
-      </View>
+    </View>
     </KeyboardAvoidingView>
   );
 }
@@ -1919,9 +1900,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4A90E2',
     borderColor: '#4A90E2',
   },
-  stampButtonOther: {
-    borderStyle: 'dashed',
-  },
   stampText: {
     fontSize: 15,
     fontFamily: 'Nunito-SemiBold',
@@ -1929,23 +1907,6 @@ const styles = StyleSheet.create({
   },
   stampTextSelected: {
     color: '#fff',
-  },
-  customStampInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  customStampInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#333',
-    backgroundColor: '#fff',
   },
   textInputValid: {
     borderColor: '#4CAF50',
@@ -2008,6 +1969,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8f8f8',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
   errorContainer: {
     flex: 1,

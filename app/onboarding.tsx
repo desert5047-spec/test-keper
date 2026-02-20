@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,14 @@ import {
   TextInput,
   ActivityIndicator,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { Image } from 'expo-image';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+
+const { height: screenHeight } = Dimensions.get('window');
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -108,7 +112,7 @@ export default function OnboardingScreen() {
               </Text>
               <TextInput
                 style={styles.input}
-                placeholder="例：ユーザー名"
+                placeholder="例：ママ、パパ"
                 placeholderTextColor="#999"
                 maxLength={4}
                 value={displayNameInput}
@@ -170,6 +174,17 @@ export default function OnboardingScreen() {
                     activeOpacity={0.7}>
                     <Text style={styles.secondaryButtonText}>あとで登録する</Text>
                   </TouchableOpacity>
+                  <Image
+                    source={require('@/assets/images/onboarding-camera-promo.png')}
+                    style={{
+                      width: '100%',
+                      height: screenHeight * 0.32,
+                      maxHeight: screenHeight * 0.4,
+                      marginTop: 24,
+                      alignSelf: 'center',
+                    }}
+                    contentFit="contain"
+                  />
                 </>
               )}
             </View>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -14,6 +15,9 @@ import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { logLoadError } from '@/lib/logger';
+
+const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
 
 interface MonthSummary {
   year: number;
@@ -32,24 +36,38 @@ export default function MonthlyScreen() {
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
   const [monthlySummaries, setMonthlySummaries] = useState<MonthSummary[]>([]);
+  const [stableSummaries, setStableSummaries] = useState<MonthSummary[]>([]);
   const [displayCount, setDisplayCount] = useState(3);
+  const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [loadError, setLoadError] = useState<'offline' | 'unknown' | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-  useEffect(() => {
-    if (selectedChildId && isFamilyReady && familyId) {
-      loadMonthlySummaries();
+  const loadMonthlySummaries = useCallback(async () => {
+    if (!selectedChildId || !isFamilyReady || !familyId) {
+      setLoading(false);
+      return;
     }
-  }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
-  const loadMonthlySummaries = async () => {
-    if (!selectedChildId || !isFamilyReady || !familyId) return;
+    setLoadError(null);
+    setLoading(true);
 
-    const { data: allRecords } = await supabase
-      .from('records')
-      .select('*')
-      .eq('child_id', selectedChildId)
-      .eq('family_id', familyId)
-      .or('score.not.is.null,stamp.not.is.null,photo_uri.not.is.null')
-      .order('date', { ascending: false });
+    try {
+      const { data: allRecords, error } = await supabase
+        .from('records')
+        .select('*')
+        .eq('child_id', selectedChildId)
+        .eq('family_id', familyId)
+        .or('score.not.is.null,stamp.not.is.null,photo_uri.not.is.null')
+        .order('date', { ascending: false });
+
+      if (error) {
+        const isNetwork = String(error?.message ?? '').includes('Network request failed');
+        logLoadError('記録読み込み');
+        setLoadError(isNetwork ? 'offline' : 'unknown');
+        return;
+        // monthlySummaries / stableSummaries は上書きしない
+      }
 
     const monthlyData: Record<string, TestRecord[]> = {};
 
@@ -117,8 +135,24 @@ export default function MonthlyScreen() {
       });
     }
 
-    setMonthlySummaries(summaries);
-  };
+      setMonthlySummaries(summaries);
+      setStableSummaries(summaries);
+      setLoadError(null);
+      setLastUpdatedAt(new Date());
+    } catch (e) {
+      const isNetwork = String(e).includes('Network request failed');
+      logLoadError('記録読み込み');
+      setLoadError(isNetwork ? 'offline' : 'unknown');
+      // monthlySummaries / stableSummaries は上書きしない
+    } finally {
+      setHasLoadedOnce(true);
+      setLoading(false);
+    }
+  }, [year, month, selectedChildId, isFamilyReady, familyId]);
+
+  useEffect(() => {
+    loadMonthlySummaries();
+  }, [loadMonthlySummaries]);
 
   const handleMonthCardPress = (year: number, month: number) => {
     router.push(`/(tabs)/list?year=${year}&month=${month}`);
@@ -186,37 +220,103 @@ export default function MonthlyScreen() {
     );
   };
 
-  const visibleSummaries = monthlySummaries.slice(0, displayCount);
-  const hasMore = monthlySummaries.length > displayCount;
+  const formatLastUpdated = (d: Date) => {
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  const showSpinner = !isFamilyReady || (stableSummaries.length === 0 && (!hasLoadedOnce || loading));
+  const showEmptyState = isFamilyReady && hasLoadedOnce && !loading && stableSummaries.length === 0 && !loadError;
+  const showLoadErrorFullScreen = hasLoadedOnce && loadError && !loading && stableSummaries.length === 0;
+  const showBannerAndList = hasLoadedOnce && loadError && !loading && stableSummaries.length > 0;
+
+  const displaySummaries = showBannerAndList ? stableSummaries : monthlySummaries;
+  const visibleSummaries = displaySummaries.slice(0, displayCount);
+  const hasMore = displaySummaries.length > displayCount;
 
   return (
     <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
-      {monthlySummaries.length === 0 ? (
+      {showBannerAndList ? (
+        <View style={styles.mainWithBanner}>
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText} numberOfLines={2}>
+              通信できません{lastUpdatedAt ? `（最終更新: ${formatLastUpdated(lastUpdatedAt)}）` : ''}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButtonSmall}
+              onPress={() => loadMonthlySummaries()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>再試行</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[styles.scrollContent, { paddingTop: 12, paddingBottom: 20 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {visibleSummaries.map((summary, index) => renderMonthCard(summary, index))}
+            {hasMore && (
+              <TouchableOpacity
+                style={styles.showMoreButton}
+                onPress={() => setDisplayCount(displayCount + 3)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.showMoreText}>さらに表示</Text>
+              </TouchableOpacity>
+            )}
+            <View style={{ height: 20 }} />
+          </ScrollView>
+        </View>
+      ) : null}
+
+      {showSpinner ? (
+        <View style={[styles.loadingContainer, { paddingTop: HEADER_HEIGHT }]}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+        </View>
+      ) : showLoadErrorFullScreen ? (
         <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
-          <Text style={styles.emptyText}>まだ記録がありません</Text>
+          <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
+          {lastUpdatedAt ? (
+            <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
+          ) : null}
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => loadMonthlySummaries()}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.retryButtonText}>再試行</Text>
+          </TouchableOpacity>
+        </View>
+      ) : showEmptyState ? (
+        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+          <Text style={styles.emptyText}>記録がありません</Text>
           <Text style={styles.emptySubText}>
             ＋ボタンから記録を残しましょう
           </Text>
         </View>
-      ) : (
+      ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingTop: HEADER_HEIGHT + 16 }]}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           {visibleSummaries.map((summary, index) => renderMonthCard(summary, index))}
           {hasMore && (
             <TouchableOpacity
               style={styles.showMoreButton}
               onPress={() => setDisplayCount(displayCount + 3)}
-              activeOpacity={0.7}>
+              activeOpacity={0.7}
+            >
               <Text style={styles.showMoreText}>さらに表示</Text>
             </TouchableOpacity>
           )}
           <View style={{ height: 20 }} />
         </ScrollView>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -311,6 +411,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     color: '#2563eb',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -321,6 +426,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginBottom: 8,
+    textAlign: 'center',
+  },
+  lastUpdatedText: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 4,
+    fontFamily: 'Nunito-Regular',
+  },
+  mainWithBanner: {
+    flex: 1,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF3E0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0B2',
+  },
+  offlineBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#E65100',
+    fontFamily: 'Nunito-SemiBold',
+  },
+  retryButtonSmall: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
   },
   emptySubText: {
     fontSize: 14,

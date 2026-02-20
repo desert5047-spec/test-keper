@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -442,6 +442,7 @@ export default function AuthCallbackDeepLink() {
         ) : null}
         {!!message && <Text style={styles.message}>{message}</Text>}
 
+        {__DEV__ && (
         <View style={styles.debugBox}>
           <Text style={styles.debugTitle}>デバッグ</Text>
           <Text style={styles.debugLabel}>source</Text>
@@ -463,6 +464,7 @@ export default function AuthCallbackDeepLink() {
           <Text style={styles.debugLabel}>error</Text>
           <Text style={styles.debugValue}>{errorDetail || '(none)'}</Text>
         </View>
+        )}
 
         <View style={{ marginTop: 16 }}>
           <Text

@@ -1,10 +1,11 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppHeader } from '@/components/AppHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { error as logError } from '@/lib/logger';
 
 const PENDING_INVITE_KEY = 'pendingInviteToken';
 
@@ -186,7 +187,7 @@ export default function InviteScreen() {
     });
 
     if (acceptError) {
-      console.error('[Invite] 招待受諾エラー');
+      logError('[Invite] 招待受諾エラー');
       if ((acceptError as any)?.code === '23505') {
         const recovered = await tryRecoverFromInviteError();
         if (recovered) {

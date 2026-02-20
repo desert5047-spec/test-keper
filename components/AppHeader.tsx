@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,9 @@ import { isValidImageUri } from '@/utils/imageGuard';
 import { getSignedImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
-import { log, error as logError } from '@/lib/logger';
+import { log, logLoadError } from '@/lib/logger';
+
+const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
 
 type RecordWithImageUrl = TestRecord & { imageUrl: string | null };
 
@@ -142,8 +144,16 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<'offline' | 'unknown' | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
   const canceledRef = useRef(false);
+
+  const formatLastUpdated = (d: Date) => {
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
 
   useEffect(() => {
     stableRef.current = stableRecords;
@@ -163,6 +173,7 @@ export default function HomeScreen() {
     }
 
     if (!canceledRef.current) {
+      setLoadError(null);
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
     }
@@ -184,7 +195,9 @@ export default function HomeScreen() {
 
       if (canceledRef.current) return;
       if (error) {
-        logError('[記録読み込みエラー]');
+        const isNetwork = String(error?.message ?? '').includes('Network request failed');
+        logLoadError('記録読み込み');
+        if (!canceledRef.current) setLoadError(isNetwork ? 'offline' : 'unknown');
         return;
       }
 
@@ -212,9 +225,18 @@ export default function HomeScreen() {
         setRecords(newRows);
         setStableRecords(newRows);
         setImageErrors({});
+        if (!canceledRef.current) {
+          setLoadError(null);
+          setLastUpdatedAt(new Date());
+        }
       }
     } catch (e) {
-      if (!canceledRef.current) logError('[記録読み込みエラー]', e);
+      if (!canceledRef.current) {
+        const isNetwork = String(e).includes('Network request failed');
+        logLoadError('記録読み込み');
+        setLoadError(isNetwork ? 'offline' : 'unknown');
+        // records / stableRecords は上書きしない（前回成功分を維持）
+      }
     } finally {
       if (!canceledRef.current) {
         setHasLoadedOnce(true);
@@ -277,22 +299,71 @@ export default function HomeScreen() {
   }
 
   const showSpinner = !hasLoadedOnce && loading && stableRecords.length === 0;
-  const showEmptyState = hasLoadedOnce && !loading && !refreshing && stableRecords.length === 0;
+  const showEmptyState = hasLoadedOnce && !loading && !refreshing && stableRecords.length === 0 && !loadError;
+  const showLoadErrorFullScreen = hasLoadedOnce && loadError && !loading && stableRecords.length === 0;
+  const showBannerAndList = hasLoadedOnce && loadError && !loading && stableRecords.length > 0;
 
   return (
     <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
+      {showBannerAndList ? (
+        <View style={styles.mainWithBanner}>
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText} numberOfLines={2}>
+              通信できません{lastUpdatedAt ? `（最終更新: ${formatLastUpdated(lastUpdatedAt)}）` : ''}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButtonSmall}
+              onPress={() => loadRecords()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>再試行</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={stableRecords}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            removeClippedSubviews={false}
+            windowSize={5}
+            initialNumToRender={10}
+            contentContainerStyle={[styles.listContent, { paddingTop: 16, paddingBottom: 24 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadRecords({ isRefresh: true })}
+              />
+            }
+          />
+        </View>
+      ) : null}
+
       {showSpinner ? (
         <View style={[styles.loadingContainer, { paddingTop: HEADER_HEIGHT }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      ) : showLoadErrorFullScreen ? (
+        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+          <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
+          {lastUpdatedAt ? (
+            <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
+          ) : null}
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => loadRecords()}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.retryButtonText}>再試行</Text>
+          </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
         <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
           <Text style={styles.emptyText}>まだ記録がありません</Text>
           <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
-      ) : (
+      ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
         <FlatList
           data={stableRecords}
           renderItem={renderItem}
@@ -317,7 +388,7 @@ export default function HomeScreen() {
             />
           }
         />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -430,11 +501,56 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
     fontFamily: 'Nunito-SemiBold',
+    textAlign: 'center',
+  },
+  lastUpdatedText: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 4,
+    fontFamily: 'Nunito-Regular',
   },
   emptySubText: {
     fontSize: 14,
     color: '#999',
     fontFamily: 'Nunito-Regular',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+  },
+  mainWithBanner: {
+    flex: 1,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF3E0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0B2',
+  },
+  offlineBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#E65100',
+    fontFamily: 'Nunito-SemiBold',
+  },
+  retryButtonSmall: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    marginLeft: 12,
   },
   loadingContainer: {
     flex: 1,

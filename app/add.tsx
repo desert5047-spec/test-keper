@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,6 @@ import {
   ActionSheetIOS,
   AppState,
   InteractionManager,
-  KeyboardAvoidingView,
-  TouchableWithoutFeedback,
-  Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CalendarPicker } from '@/components/CalendarPicker';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
+import KeyboardAwareScroll from '@/components/KeyboardAwareScroll';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -66,6 +64,8 @@ interface Child {
   color: string;
 }
 
+const ADD_HEADER_HEIGHT = 102;
+
 export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
@@ -81,9 +81,8 @@ export default function AddScreen() {
   const [score, setScore] = useState<string>('');
   const [maxScore, setMaxScore] = useState<string>('100');
   const [stamp, setStamp] = useState<string | null>(null);
-  const [customStamp, setCustomStamp] = useState<string>('');
-  const [showCustomStampInput, setShowCustomStampInput] = useState(false);
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const getTodayLocal = () => new Date().toLocaleDateString('sv-SE');
+  const [date, setDate] = useState<string>(getTodayLocal());
   const [memo, setMemo] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
@@ -814,10 +813,8 @@ export default function AddScreen() {
     setScore('');
     setMaxScore('100');
     setStamp(null);
-    setCustomStamp('');
-    setShowCustomStampInput(false);
     setMemo('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(getTodayLocal());
   };
 
   const saveConfirmMessage =
@@ -838,16 +835,12 @@ export default function AddScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.scrollView}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScroll
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentPaddingBottom={120}
+        keyboardVerticalOffsetOverride={ADD_HEADER_HEIGHT}
+        showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>写真</Text>
           {photoUri ? (
@@ -1106,11 +1099,7 @@ export default function AddScreen() {
                     styles.stampButton,
                     stamp === s && styles.stampButtonSelected,
                   ]}
-                  onPress={() => {
-                    setStamp(s);
-                    setShowCustomStampInput(false);
-                    setCustomStamp('');
-                  }}
+                  onPress={() => setStamp(s)}
                   activeOpacity={0.7}>
                   <Text
                     style={[
@@ -1121,60 +1110,6 @@ export default function AddScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-
-              {!showCustomStampInput ? (
-                <TouchableOpacity
-                  style={[
-                    styles.stampButton,
-                    styles.stampButtonOther,
-                    stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampButtonSelected,
-                  ]}
-                  onPress={() => {
-                    setShowCustomStampInput(true);
-                    setStamp(null);
-                  }}
-                  activeOpacity={0.7}>
-                  <Text
-                    style={[
-                      styles.stampText,
-                      stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampTextSelected,
-                    ]}>
-                    {stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) ? stamp : 'その他'}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.customStampInputRow}>
-                  <TextInput
-                    style={[
-                      styles.customStampInput,
-                      customStamp.trim().length >= 2 && styles.textInputValid,
-                    ]}
-                    value={customStamp}
-                    onChangeText={(value) => {
-                      setCustomStamp(value);
-                      if (value.trim().length >= 2) {
-                        setStamp(value.trim());
-                      }
-                    }}
-                    placeholder="評価を入力（例：よくがんばった、もう少し）"
-                    placeholderTextColor="#999"
-                    autoFocus
-                  />
-                  {customStamp.trim().length >= 2 && (
-                    <View style={styles.checkIconContainer}>
-                      <Check size={20} color="#4CAF50" />
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowCustomStampInput(false);
-                      setCustomStamp('');
-                    }}
-                    activeOpacity={0.7}>
-                    <X size={24} color="#999" />
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
           )}
         </View>
@@ -1218,21 +1153,16 @@ export default function AddScreen() {
             placeholder="メモを入力（例：計算がんばった！）"
             placeholderTextColor="#999"
             multiline
+            blurOnSubmit={false}
+            scrollEnabled={false}
             textAlignVertical="top"
             maxLength={200}
-            onFocus={() => {
-              setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-              }, 100);
-            }}
           />
           <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
         <View style={{ height: 100 }} />
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScroll>
 
       <View style={styles.bottomButtonContainer}>
         {errorMessage ? (
@@ -1696,9 +1626,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4A90E2',
     borderColor: '#4A90E2',
   },
-  stampButtonOther: {
-    borderStyle: 'dashed',
-  },
   stampText: {
     fontSize: 15,
     fontFamily: 'Nunito-SemiBold',
@@ -1706,23 +1633,6 @@ const styles = StyleSheet.create({
   },
   stampTextSelected: {
     color: '#fff',
-  },
-  customStampInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  customStampInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#333',
-    backgroundColor: '#fff',
   },
   dateInputContainer: {
     flexDirection: 'row',
