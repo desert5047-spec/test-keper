@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import AppLoading from '@/components/AppLoading';
 
 export default function Index() {
   const router = useRouter();
@@ -45,9 +46,5 @@ export default function Index() {
     router,
   ]);
 
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <ActivityIndicator />
-    </View>
-  );
+  return <AppLoading message="アルバムを読み込んでいます…" />;
 }

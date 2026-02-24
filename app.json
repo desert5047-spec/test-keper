@@ -10,11 +10,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "jp.testalbum.app",
-      "buildNumber": "3",
+      "buildNumber": "5",
       "infoPlist": {
-        "NSCameraUsageDescription": "写真を撮影して記録に追加するためにカメラを使用します。",
-        "NSPhotoLibraryUsageDescription": "記録に写真を追加するためにフォトライブラリにアクセスします。",
-        "NSPhotoLibraryAddUsageDescription": "撮影した写真をフォトライブラリに保存するために使用します。",
+        "NSCameraUsageDescription": "テストの写真を撮影するためにカメラを使用します。",
+        "NSPhotoLibraryUsageDescription": "テストの写真を選択するために写真ライブラリへアクセスします。",
+        "NSPhotoLibraryAddUsageDescription": "撮影した写真を写真ライブラリに保存するために使用します。",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "jp.testalbum.app",
-      "versionCode": 3,
+      "versionCode": 5,
       "intentFilters": [
         {
           "action": "VIEW",

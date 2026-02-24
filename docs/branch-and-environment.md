@@ -12,6 +12,7 @@
 | ブランチ       | `develop`         | `main`            |
 | EAS ビルドプロファイル | `preview`    | `production`      |
 | EAS 環境変数   | **preview**       | **production**    |
+| distribution   | **store**（TestFlight 向け・端末登録不要） | **store**         |
 | Supabase       | STG プロジェクト  | PROD プロジェクト |
 | 環境表示       | アプリ内に "stg"  | 本番は極薄表示    |
 
@@ -79,7 +80,7 @@ eas env:create --environment production --name EXPO_PUBLIC_SUPABASE_ANON_KEY --v
 
 | 確認項目 | STG（preview ビルド） | PROD（production ビルド） |
 |----------|------------------------|----------------------------|
-| DebugLabel | 画面上部に **stg** と表示される | **prod** と極薄で表示される |
+| DebugLabel | `EXPO_PUBLIC_ENV=stg` かつ開発起動時に **stg** 表示。release ビルドでは非表示 | **非表示**。prod 環境では開発起動でも表示しない（意図した仕様） |
 | Supabase 接続先 | URL のホストが **dzqzkwoxfciuhikvnlmg** であること | URL のホストが **cwwzaknsitnaqqafbrsc** であること |
 
 - ログで確認する場合は **URL のホストだけ** を出し、キー全文は絶対にログに出さないこと。
@@ -93,6 +94,45 @@ eas build -p ios --profile preview
 # prod 用ビルド（EAS environment: production が使われる）
 eas build -p ios --profile production
 ```
+
+---
+
+## ビルド番号が重複した時の対処（"You've already submitted this build"）
+
+このプロジェクトでは **EAS の remote versioning**（`cli.appVersionSource: "remote"`）を使っています。  
+そのため **app.config.ts の `ios.buildNumber` を変更しても、EAS 側の値が優先され、重複エラーが解消しない場合があります。**
+
+### 再発防止の流れ
+
+1. **EAS 側の iOS バージョン情報を同期・初期化**
+   ```bash
+   eas build:version:set
+   ```
+   - platform で **iOS** を選択
+   - version source は **remote** のまま
+   - 初期値に、App Store Connect で最後に提出した **build number（CFBundleVersion）** を入力して EAS と揃える
+
+2. **新しいビルドを作成**（preview / production ともに `ios.autoIncrement: "buildNumber"` で毎回 build number が増える）
+   ```bash
+   eas build -p ios --profile preview
+   # または
+   eas build -p ios --profile production
+   ```
+
+3. **提出時は「最新のビルド」を選ぶ**
+   ```bash
+   eas submit -p ios --profile production
+   ```
+   - 「Select a build from EAS」で **日時が一番新しいビルド** を選ぶ（同じ build number のビルドを二重で submit しない）
+
+### 事故防止（提出前の確認）
+
+- 提出前に最新ビルドの build number を確認する:
+  ```bash
+  eas build:list -p ios --limit 5
+  ```
+  または EAS Dashboard で該当ビルドの build number を確認する。
+- **同じ build number のビルドがすでに submit 済みの場合は、submit せずに新しいビルドを作り直してから提出する。**
 
 ---
 

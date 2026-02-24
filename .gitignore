@@ -32,6 +32,7 @@ yarn-error.*
 .env
 .env.stg
 .env.prod
+.env.production
 
 # typescript
 *.tsbuildinfo

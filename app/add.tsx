@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CalendarPicker } from '@/components/CalendarPicker';
 import { CameraScreen } from '@/components/CameraScreen';
+import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
+import KeyboardAwareScroll from '@/components/KeyboardAwareScroll';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,6 +64,8 @@ interface Child {
   color: string;
 }
 
+const ADD_HEADER_HEIGHT = 102;
+
 export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
@@ -77,13 +81,14 @@ export default function AddScreen() {
   const [score, setScore] = useState<string>('');
   const [maxScore, setMaxScore] = useState<string>('100');
   const [stamp, setStamp] = useState<string | null>(null);
-  const [customStamp, setCustomStamp] = useState<string>('');
-  const [showCustomStampInput, setShowCustomStampInput] = useState(false);
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const getTodayLocal = () => new Date().toLocaleDateString('sv-SE');
+  const [date, setDate] = useState<string>(getTodayLocal());
   const [memo, setMemo] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -427,88 +432,16 @@ export default function AddScreen() {
       logError('[写真撮影] setStateエラー');
     }
 
-    // Androidではexpo-cameraを使用（Expo Goで再起動する問題を回避）
-    if (Platform.OS === 'android') {
-      debugLog('[写真撮影] Android: expo-cameraを使用', { platform: Platform.OS });
-      setShowCamera(true);
-      return;
-    }
-
-    // iOSでは従来のImagePickerを使用
-    try {
-      debugLog('[写真撮影] iOS: ImagePickerを使用', { platform: Platform.OS });
-      
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 1.0,
-        allowsMultipleSelection: false,
-      });
-
-      debugLog('[写真撮影] カメラ結果:', { 
-        canceled: result.canceled,
-        assetsCount: result.assets?.length || 0,
-        platform: Platform.OS 
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        
-        if (!uri || typeof uri !== 'string') {
-          logError('[写真撮影] URIが無効');
-          throw new Error('画像のURIが取得できませんでした');
-        }
-
-        debugLog('[写真撮影] URI取得', { platform: Platform.OS });
-
-        try {
-          validateImageUri(uri);
-        } catch (validateError: any) {
-          logError('[写真撮影] URI検証エラー');
-          throw new Error(`画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
-        }
-
-        if (!isValidImageUri(uri)) {
-          logError('[写真撮影] 無効なURI');
-          throw new Error('画像の形式が正しくありません');
-        }
-
-        debugLog('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
-        
-        try {
-          setPhotoUri(uri);
-          setPhotoRotation(0);
-          debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
-        } catch (setUriError: any) {
-          logError('[写真撮影] URI設定エラー');
-          throw new Error(`画像の設定に失敗しました: ${setUriError.message || '不明なエラー'}`);
-        }
-      } else {
-        debugLog('[写真撮影] キャンセルされました', { platform: Platform.OS });
-      }
-    } catch (error: any) {
-      logError('[写真撮影] エラー');
-      
-      // エラーメッセージを表示（アプリをクラッシュさせない）
-      setTimeout(() => {
-        try {
-          Alert.alert(
-            'エラー',
-            error?.message || '画像の撮影に失敗しました。もう一度お試しください。',
-            [{ text: 'OK', onPress: () => {} }],
-            { cancelable: true }
-          );
-        } catch (alertError: any) {
-          logError('[写真撮影] Alert表示エラー');
-        }
-      }, 100);
-    }
+    // iOS/Android とも expo-camera + アプリ内プレビュー（再撮影/保存）に統一
+    debugLog('[写真撮影] カメラ起動', { platform: Platform.OS });
+    setCameraPhase('camera');
+    setPreviewUri(null);
+    setShowCamera(true);
   };
 
   const handleCameraCapture = async (uri: string) => {
     try {
-      debugLog('[写真撮影] カメラからURIを取得', { platform: Platform.OS });
-      setShowCamera(false);
-
+      debugLog('[写真撮影] カメラからURIを取得 → プレビューへ', { platform: Platform.OS });
       try {
         validateImageUri(uri);
       } catch (validateError: any) {
@@ -516,27 +449,42 @@ export default function AddScreen() {
         Alert.alert('エラー', `画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         return;
       }
-
       if (!isValidImageUri(uri)) {
         logError('[写真撮影] 無効なURI');
         Alert.alert('エラー', '画像の形式が正しくありません');
         return;
       }
-
-      debugLog('[写真撮影] 画像URIを設定中...', { platform: Platform.OS });
-      setPhotoUri(uri);
-      setPhotoRotation(0);
-      debugLog('[写真撮影] 画像URI設定完了', { platform: Platform.OS });
+      setPreviewUri(uri);
+      setCameraPhase('preview');
     } catch (error: any) {
       logError('[写真撮影] カメラキャプチャ処理エラー');
       setShowCamera(false);
+      setCameraPhase('camera');
+      setPreviewUri(null);
       Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
     }
+  };
+
+  const handlePreviewSave = () => {
+    if (previewUri) {
+      setPhotoUri(previewUri);
+      setPhotoRotation(0);
+    }
+    setShowCamera(false);
+    setCameraPhase('camera');
+    setPreviewUri(null);
+  };
+
+  const handlePreviewRetake = () => {
+    setCameraPhase('camera');
+    setPreviewUri(null);
   };
 
   const handleCameraCancel = () => {
     debugLog('[写真撮影] カメラをキャンセル', { platform: Platform.OS });
     setShowCamera(false);
+    setCameraPhase('camera');
+    setPreviewUri(null);
   };
 
   const rotatePhoto = async (direction: 'right' | 'left') => {
@@ -865,10 +813,8 @@ export default function AddScreen() {
     setScore('');
     setMaxScore('100');
     setStamp(null);
-    setCustomStamp('');
-    setShowCustomStampInput(false);
     setMemo('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(getTodayLocal());
   };
 
   const saveConfirmMessage =
@@ -889,9 +835,11 @@ export default function AddScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScroll
         ref={scrollViewRef}
         style={styles.scrollView}
+        contentPaddingBottom={120}
+        keyboardVerticalOffsetOverride={ADD_HEADER_HEIGHT}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>写真</Text>
@@ -1151,11 +1099,7 @@ export default function AddScreen() {
                     styles.stampButton,
                     stamp === s && styles.stampButtonSelected,
                   ]}
-                  onPress={() => {
-                    setStamp(s);
-                    setShowCustomStampInput(false);
-                    setCustomStamp('');
-                  }}
+                  onPress={() => setStamp(s)}
                   activeOpacity={0.7}>
                   <Text
                     style={[
@@ -1166,60 +1110,6 @@ export default function AddScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-
-              {!showCustomStampInput ? (
-                <TouchableOpacity
-                  style={[
-                    styles.stampButton,
-                    styles.stampButtonOther,
-                    stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampButtonSelected,
-                  ]}
-                  onPress={() => {
-                    setShowCustomStampInput(true);
-                    setStamp(null);
-                  }}
-                  activeOpacity={0.7}>
-                  <Text
-                    style={[
-                      styles.stampText,
-                      stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) && styles.stampTextSelected,
-                    ]}>
-                    {stamp && !['大変よくできました', 'よくできました', 'がんばりました'].includes(stamp) ? stamp : 'その他'}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.customStampInputRow}>
-                  <TextInput
-                    style={[
-                      styles.customStampInput,
-                      customStamp.trim().length >= 2 && styles.textInputValid,
-                    ]}
-                    value={customStamp}
-                    onChangeText={(value) => {
-                      setCustomStamp(value);
-                      if (value.trim().length >= 2) {
-                        setStamp(value.trim());
-                      }
-                    }}
-                    placeholder="評価を入力（例：よくがんばった、もう少し）"
-                    placeholderTextColor="#999"
-                    autoFocus
-                  />
-                  {customStamp.trim().length >= 2 && (
-                    <View style={styles.checkIconContainer}>
-                      <Check size={20} color="#4CAF50" />
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowCustomStampInput(false);
-                      setCustomStamp('');
-                    }}
-                    activeOpacity={0.7}>
-                    <X size={24} color="#999" />
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
           )}
         </View>
@@ -1255,21 +1145,24 @@ export default function AddScreen() {
         />
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>メモ</Text>
+          <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
           <TextInput
             style={styles.memoInput}
             value={memo}
             onChangeText={setMemo}
-            placeholder="メモを入力"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
+            placeholder="メモを入力（例：計算がんばった！）"
             placeholderTextColor="#999"
+            multiline
+            blurOnSubmit={false}
+            scrollEnabled={false}
+            textAlignVertical="top"
+            maxLength={200}
           />
+          <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
         <View style={{ height: 100 }} />
-      </ScrollView>
+      </KeyboardAwareScroll>
 
       <View style={styles.bottomButtonContainer}>
         {errorMessage ? (
@@ -1332,10 +1225,18 @@ export default function AddScreen() {
         visible={showCamera}
         animationType="slide"
         onRequestClose={handleCameraCancel}>
-        <CameraScreen
-          onCapture={handleCameraCapture}
-          onCancel={handleCameraCancel}
-        />
+        {cameraPhase === 'preview' && previewUri ? (
+          <CameraPreviewScreen
+            imageUri={previewUri}
+            onRetake={handlePreviewRetake}
+            onSave={handlePreviewSave}
+          />
+        ) : (
+          <CameraScreen
+            onCapture={handleCameraCapture}
+            onCancel={handleCameraCancel}
+          />
+        )}
       </Modal>
 
       {showToast && (
@@ -1725,9 +1626,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4A90E2',
     borderColor: '#4A90E2',
   },
-  stampButtonOther: {
-    borderStyle: 'dashed',
-  },
   stampText: {
     fontSize: 15,
     fontFamily: 'Nunito-SemiBold',
@@ -1735,23 +1633,6 @@ const styles = StyleSheet.create({
   },
   stampTextSelected: {
     color: '#fff',
-  },
-  customStampInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  customStampInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#333',
-    backgroundColor: '#fff',
   },
   dateInputContainer: {
     flexDirection: 'row',
@@ -1784,15 +1665,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   memoInput: {
+    minHeight: 100,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    backgroundColor: '#fff',
+    fontSize: 16,
     fontFamily: 'Nunito-Regular',
-    color: '#333',
-    minHeight: 100,
+    color: '#222',
+  },
+  memoCharCount: {
+    textAlign: 'right',
+    color: '#888',
+    marginTop: 4,
+    fontSize: 12,
   },
   bottomButtonContainer: {
     position: 'absolute',
@@ -1885,7 +1772,7 @@ const styles = StyleSheet.create({
   actionSheetCancelText: {
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
-    color: '#666',
+    color: '#333',
   },
   toastContainer: {
     position: 'absolute',

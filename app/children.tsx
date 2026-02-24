@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
   modalCancelText: {
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
-    color: '#666',
+    color: '#333',
   },
   modalSaveButton: {
     flex: 1,

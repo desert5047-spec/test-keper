@@ -38,6 +38,13 @@ const isPlaceholder = (v: string) =>
 
 export const isSupabaseConfigured = !isPlaceholder(supabaseUrl) && !isPlaceholder(supabaseAnonKey);
 
+// prod ではフォールバック禁止: URL/KEY 未設定なら起動失敗（stg/dev のみフォールバック許容）
+if (envLabel === 'prod' && !isSupabaseConfigured) {
+  throw new Error(
+    '[Supabase] EXPO_PUBLIC_ENV=prod のため、EXPO_PUBLIC_SUPABASE_URL と EXPO_PUBLIC_SUPABASE_ANON_KEY が必須です。EAS の production 環境変数を設定してください。'
+  );
+}
+
 // 事故防止: 起動時に接続先の host だけをログ（キーは出さない）
 if (isSupabaseConfigured && supabaseUrl) {
   try {

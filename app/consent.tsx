@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { webUrls } from '@/lib/urls';
+import { warn } from '@/lib/logger';
 
 export default function ConsentScreen() {
   const router = useRouter();
@@ -19,9 +21,8 @@ export default function ConsentScreen() {
   const { saveConsent } = useAuth();
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const lpBaseUrl = process.env.EXPO_PUBLIC_LP_URL ?? 'https://example.com';
-  const privacyPolicyUrl = 'https://www.test-album.jp/privacy';
-  const termsUrl = 'https://www.test-album.jp/terms';
+  const privacyPolicyUrl = webUrls.privacy;
+  const termsUrl = webUrls.terms;
 
   const openExternalLink = (path: '/terms' | '/privacy') => {
     const url = path === '/privacy' ? privacyPolicyUrl : termsUrl;
@@ -29,8 +30,8 @@ export default function ConsentScreen() {
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
-    Linking.openURL(url).catch((error) => {
-      console.warn('[Consent] 外部リンクを開けませんでした');
+    Linking.openURL(url).catch(() => {
+      warn('[Consent] 外部リンクを開けませんでした');
     });
   };
 
