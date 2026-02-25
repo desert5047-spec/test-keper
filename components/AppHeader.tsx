@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react-native';
+import { Settings, ArrowLeft, ChevronLeft, ChevronRight, Edit3, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
 // ステータスバー(=insets.top)を除いた「中身だけ」の高さ
-export const HEADER_HEIGHT = 58;
+export const HEADER_HEIGHT = 52;
 
 interface AppHeaderProps {
   showBack?: boolean;
@@ -38,7 +38,7 @@ export function AppHeader({
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(year);
 
-  const headerPaddingTop = Platform.OS === 'web' ? 20 : insets.top;
+  const headerInsetTop = Platform.OS === 'web' ? 12 : insets.top;
 
   useEffect(() => {
     if (showMonthPicker) setPickerYear(year);
@@ -75,94 +75,103 @@ export function AppHeader({
         style={[
           styles.container,
           {
-            paddingTop: headerPaddingTop,
-            minHeight: HEADER_HEIGHT + headerPaddingTop,
+            height: HEADER_HEIGHT + headerInsetTop,
+            paddingTop: headerInsetTop,
           },
         ]}>
-        <View style={styles.left}>
-          {showBack ? (
-            <TouchableOpacity
-              onPress={() => {
-                const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
-                if (canGoBack) {
-                  router.back();
-                  return;
-                }
-                if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                  if (window.history.length > 1) {
+        <View
+          style={[
+            styles.bar,
+            { height: HEADER_HEIGHT },
+            showYearMonthNav && styles.barWithYearMonthNav,
+          ]}>
+          <View style={styles.left}>
+            {showBack ? (
+              <TouchableOpacity
+                onPress={() => {
+                  const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
+                  if (canGoBack) {
                     router.back();
                     return;
                   }
-                }
-                router.replace('/(tabs)');
-              }}
-              style={styles.backButton}
-              activeOpacity={0.7}>
-              <ArrowLeft size={20} color="#333" />
-            </TouchableOpacity>
-          ) : showChildSwitcher ? (
-            <ChildSwitcher />
-          ) : (
-            <View style={styles.placeholder} />
-          )}
-        </View>
-
-        {showYearMonthNav && (
-          <View style={styles.center}>
-            <TouchableOpacity
-              style={styles.yearArrow}
-              onPress={() => handleMonthChange('prev')}
-              activeOpacity={0.7}>
-              <ChevronLeft size={18} color="#666" />
-            </TouchableOpacity>
-            <Text style={styles.yearText}>{year}年</Text>
-            <TouchableOpacity
-              style={styles.yearArrow}
-              onPress={() => handleMonthChange('next')}
-              activeOpacity={0.7}>
-              <ChevronRight size={18} color="#666" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.monthButton}
-              onPress={() => setShowMonthPicker(true)}
-              activeOpacity={0.7}>
-              <Text style={styles.monthText}>{month}月</Text>
-              <ChevronDown size={14} color="#666" strokeWidth={2.5} />
-            </TouchableOpacity>
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    if (window.history.length > 1) {
+                      router.back();
+                      return;
+                    }
+                  }
+                  router.replace('/(tabs)');
+                }}
+                style={styles.backButton}
+                activeOpacity={0.7}>
+                <ArrowLeft size={20} color="#333" />
+              </TouchableOpacity>
+            ) : showChildSwitcher ? (
+              <ChildSwitcher />
+            ) : (
+              <View style={styles.placeholder} />
+            )}
           </View>
-        )}
 
-        {title && (
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>{title}</Text>
+          {showYearMonthNav && (
+            <View style={styles.center}>
+              <View style={styles.yearRow}>
+                <TouchableOpacity
+                  style={styles.arrowButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => handleMonthChange('prev')}
+                  activeOpacity={0.7}>
+                  <ChevronLeft size={20} color="#666" strokeWidth={2.2} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.yearMonthButton}
+                  onPress={() => setShowMonthPicker(true)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.yearText}>{`${year}年${month}月`}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.arrowButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => handleMonthChange('next')}
+                  activeOpacity={0.7}>
+                  <ChevronRight size={20} color="#666" strokeWidth={2.2} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {title && (
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>{title}</Text>
+            </View>
+          )}
+
+          <View style={styles.right}>
+            {showEdit && onEdit && (
+              <TouchableOpacity
+                onPress={onEdit}
+                style={styles.iconButton}
+                activeOpacity={0.7}>
+                <Edit3 size={20} color="#666" />
+              </TouchableOpacity>
+            )}
+            {showDelete && onDelete && (
+              <TouchableOpacity
+                onPress={onDelete}
+                style={styles.iconButton}
+                activeOpacity={0.7}>
+                <Trash2 size={20} color="#666" />
+              </TouchableOpacity>
+            )}
+            {showSettings && (
+              <TouchableOpacity
+                onPress={() => router.push('/settings')}
+                style={styles.iconButton}
+                activeOpacity={0.7}>
+                <Settings size={24} color="#666" />
+              </TouchableOpacity>
+            )}
           </View>
-        )}
-
-        <View style={styles.right}>
-          {showEdit && onEdit && (
-            <TouchableOpacity
-              onPress={onEdit}
-              style={styles.iconButton}
-              activeOpacity={0.7}>
-              <Edit3 size={20} color="#666" />
-            </TouchableOpacity>
-          )}
-          {showDelete && onDelete && (
-            <TouchableOpacity
-              onPress={onDelete}
-              style={styles.iconButton}
-              activeOpacity={0.7}>
-              <Trash2 size={20} color="#666" />
-            </TouchableOpacity>
-          )}
-          {showSettings && (
-            <TouchableOpacity
-              onPress={() => router.push('/settings')}
-              style={styles.iconButton}
-              activeOpacity={0.7}>
-              <Settings size={24} color="#666" />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 
@@ -231,22 +240,39 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#FFF',
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    justifyContent: 'flex-end',
+    borderBottomWidth: 0,
+    zIndex: 10,
+  },
+  bar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 2,
+  },
+  barWithYearMonthNav: {
+    alignItems: 'center',
+    paddingBottom: 2,
   },
   left: {
     alignItems: 'flex-start',
   },
   center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 0,
+  },
+  yearRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 2,
+  },
+  yearMonthButton: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   titleContainer: {
     position: 'absolute',
@@ -284,24 +310,15 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 36,
   },
-  yearArrow: {
-    padding: 2,
+  arrowButton: {
+    height: 44,
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   yearText: {
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-    color: '#333',
-  },
-  monthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    gap: 4,
-    marginLeft: 4,
-  },
-  monthText: {
-    fontSize: 14,
+    fontSize: 17,
+    fontWeight: '600',
     fontFamily: 'Nunito-Bold',
     color: '#333',
   },

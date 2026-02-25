@@ -822,8 +822,8 @@ export default function AddScreen() {
 
   const saveConfirmMessage =
     photoUploadFailed
-      ? '記録は保存されましたが、写真のアップロードに失敗しました。続けて入力しますか？'
-      : '記録は保存されました。続けて入力しますか？';
+      ? '記録は保存されましたが、写真のアップロードに失敗しました。\n続けて入力しますか？'
+      : '記録は保存されました。\n続けて入力しますか？';
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -1282,8 +1282,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',

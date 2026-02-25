@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   name: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Nunito-SemiBold',
     color: '#FFF',
     maxWidth: 80,

@@ -545,7 +545,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
       <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
 
