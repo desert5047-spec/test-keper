@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
@@ -28,7 +28,6 @@ const GRADES = [
 
 export default function RegisterChildScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user, familyId, isFamilyReady, refreshSetupStatus } = useAuth();
   const { loadChildren } = useChild();
   const [name, setName] = useState('');
@@ -112,7 +111,8 @@ export default function RegisterChildScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>お子さまを登録</Text>
@@ -176,7 +176,8 @@ export default function RegisterChildScreen() {
           <Text style={styles.saveButtonText}>{saving ? '登録中...' : 'はじめる'}</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

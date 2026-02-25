@@ -14,6 +14,7 @@ import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 import { logLoadError } from '@/lib/logger';
 
@@ -32,6 +33,8 @@ interface MonthSummary {
 
 export default function MonthlyScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
@@ -236,7 +239,8 @@ export default function MonthlyScreen() {
   const hasMore = displaySummaries.length > displayCount;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
       {showBannerAndList ? (
@@ -274,11 +278,11 @@ export default function MonthlyScreen() {
       ) : null}
 
       {showSpinner ? (
-        <View style={[styles.loadingContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.loadingContainer, { paddingTop: headerTop + 8 }]}>
           <ActivityIndicator size="large" color="#4CAF50" />
         </View>
       ) : showLoadErrorFullScreen ? (
-        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
           {lastUpdatedAt ? (
             <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
@@ -292,7 +296,7 @@ export default function MonthlyScreen() {
           </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
-        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>記録がありません</Text>
           <Text style={styles.emptySubText}>
             ＋ボタンから記録を残しましょう
@@ -301,7 +305,7 @@ export default function MonthlyScreen() {
       ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingTop: HEADER_HEIGHT + 16 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: headerTop + 8 }]}
           showsVerticalScrollIndicator={false}
         >
           {visibleSummaries.map((summary, index) => renderMonthCard(summary, index))}
@@ -317,7 +321,8 @@ export default function MonthlyScreen() {
           <View style={{ height: 20 }} />
         </ScrollView>
       ) : null}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Modal,
+  Animated,
+  Dimensions,
+  Pressable,
 } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
 import { useChild } from '@/contexts/ChildContext';
 import { useRouter, usePathname } from 'expo-router';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const ANIM_DURATION = 250;
+const ANIM_DURATION_OUT = 200;
 
 export function ChildSwitcher() {
   const { selectedChild, children, setSelectedChildId } = useChild();
@@ -16,13 +23,53 @@ export function ChildSwitcher() {
   const router = useRouter();
   const pathname = usePathname();
 
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  useEffect(() => {
+    if (showModal) {
+      backdropOpacity.setValue(0);
+      sheetTranslateY.setValue(SCREEN_HEIGHT);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: ANIM_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslateY, {
+          toValue: 0,
+          duration: ANIM_DURATION,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showModal]);
+
+  const closeModal = (onDone?: () => void) => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: ANIM_DURATION_OUT,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: SCREEN_HEIGHT,
+        duration: ANIM_DURATION_OUT,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowModal(false);
+      onDone?.();
+    });
+  };
+
   const handleSelectChild = (childId: string) => {
     setSelectedChildId(childId);
-    setShowModal(false);
-
-    if (pathname.includes('/detail')) {
-      router.replace('/(tabs)/list');
-    }
+    closeModal(() => {
+      if (pathname.includes('/detail')) {
+        router.replace('/(tabs)/list');
+      }
+    });
   };
 
   if (!selectedChild) return null;
@@ -45,47 +92,63 @@ export function ChildSwitcher() {
       <Modal
         visible={showModal}
         transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowModal(false)}>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowModal(false)}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>子供を選択</Text>
+        animationType="none"
+        onRequestClose={() => closeModal()}>
+        <View style={styles.modalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => closeModal()}>
+            <Animated.View
+              style={[
+                styles.backdrop,
+                {
+                  opacity: backdropOpacity,
+                },
+              ]}
+            />
+          </Pressable>
+          <Animated.View
+            style={[
+              styles.sheetWrap,
+              {
+                transform: [{ translateY: sheetTranslateY }],
+              },
+            ]}
+            pointerEvents="auto">
+            <View style={styles.modalContent}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>子供を選択</Text>
 
-            {children.map((child) => (
-              <TouchableOpacity
-                key={child.id}
-                style={[
-                  styles.childOption,
-                  selectedChild?.id === child.id && styles.childOptionSelected
-                ]}
-                onPress={() => handleSelectChild(child.id)}
-                activeOpacity={0.7}>
-                <View style={styles.childOptionLeft}>
-                  <View style={[styles.childBadge, { backgroundColor: child.color }]}>
-                    <Text style={styles.childBadgeText}>
-                      {child.name?.charAt(0) || '?'}
-                    </Text>
+              {children.map((child) => (
+                <TouchableOpacity
+                  key={child.id}
+                  style={[
+                    styles.childOption,
+                    selectedChild?.id === child.id && styles.childOptionSelected,
+                  ]}
+                  onPress={() => handleSelectChild(child.id)}
+                  activeOpacity={0.7}>
+                  <View style={styles.childOptionLeft}>
+                    <View style={[styles.childBadge, { backgroundColor: child.color }]}>
+                      <Text style={styles.childBadgeText}>
+                        {child.name?.charAt(0) || '?'}
+                      </Text>
+                    </View>
+                    <View style={styles.childInfo}>
+                      <Text style={styles.childName}>{child.name || '未設定'}</Text>
+                      {child.grade && (
+                        <Text style={styles.childGrade}>小学{child.grade}年</Text>
+                      )}
+                    </View>
                   </View>
-                  <View style={styles.childInfo}>
-                    <Text style={styles.childName}>{child.name || '未設定'}</Text>
-                    {child.grade && (
-                      <Text style={styles.childGrade}>小学{child.grade}年</Text>
-                    )}
-                  </View>
-                </View>
-                {selectedChild?.id === child.id && (
-                  <View style={styles.checkmark}>
-                    <Text style={styles.checkmarkText}>✓</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
+                  {selectedChild?.id === child.id && (
+                    <View style={styles.checkmark}>
+                      <Text style={styles.checkmarkText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+        </View>
       </Modal>
     </>
   );
@@ -107,10 +170,18 @@ const styles = StyleSheet.create({
     color: '#FFF',
     maxWidth: 80,
   },
-  modalOverlay: {
+  modalRoot: {
     flex: 1,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+  },
+  sheetWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modalContent: {
     backgroundColor: '#FFF',

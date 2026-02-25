@@ -24,10 +24,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Calendar as CalendarIcon, Check } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Check } from 'lucide-react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
-import { CalendarPicker } from '@/components/CalendarPicker';
+import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
@@ -45,9 +45,10 @@ export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
+  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
   const { user, familyId, isFamilyReady } = useAuth();
   const { children: contextChildren } = useChild();
-  const insets = useSafeAreaInsets();
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSwitchingChild, setIsSwitchingChild] = useState(false);
@@ -59,7 +60,6 @@ export default function DetailScreen() {
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [scoreError, setScoreError] = useState<string>('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [resolvedRecordPhotoUrl, setResolvedRecordPhotoUrl] = useState<string | null>(null);
   const [resolvedEditPhotoUrl, setResolvedEditPhotoUrl] = useState<string | null>(null);
 
@@ -622,19 +622,22 @@ export default function DetailScreen() {
       log('[保存時 photoUri]', photoUri);
       log('[SAVE][detail] photo_uri to DB (path only):', photoUriToDb);
 
-      const { error } = await supabase
-        .from('records')
-        .update({
+      const updatePayload: Record<string, unknown> = {
           child_id: selectedChildId ?? null,
           subject: selectedSubject,
-          date: record.date,
           score: evaluationType === 'score' && score.trim() ? parseInt(score, 10) : null,
           max_score: evaluationType === 'score' && score.trim() ? parseInt(maxScore, 10) : 100,
           stamp: evaluationType === 'stamp' && stamp ? stamp : null,
           memo: memo.trim() || null,
           photo_uri: photoUriToDb,
           photo_rotation: 0,
-        })
+        };
+      if (record.date && isValidYmd(record.date)) {
+        updatePayload.date = record.date;
+      }
+      const { error } = await supabase
+        .from('records')
+        .update(updatePayload)
         .eq('id', record.id)
         .eq('family_id', familyId ?? '');
 
@@ -665,7 +668,7 @@ export default function DetailScreen() {
         anchorNode,
         () => {},
         (_x: number, y: number) => {
-          const targetY = Math.max(0, HEADER_HEIGHT + y - 120);
+          const targetY = Math.max(0, headerTop + y - 120);
           scrollEl.scrollTo({ y: targetY, animated: true });
           setTimeout(() => {
             scrollEl.scrollTo({ y: targetY, animated: true });
@@ -809,37 +812,44 @@ export default function DetailScreen() {
 
   if (isSwitchingChild) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>読み込み中…</Text>
-      </View>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+          <Text style={styles.loadingText}>読み込み中…</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-      </View>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!record) {
     return (
-      <View style={styles.container}>
-        <AppHeader showBack={true} showChildSwitcher={false} />
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>記録が見つかりません</Text>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.container}>
+          <AppHeader showBack={true} showChildSwitcher={false} />
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>記録が見つかりません</Text>
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? HEADER_HEIGHT : 0}>
+      keyboardVerticalOffset={Platform.OS === 'ios' ? headerTop : 0}>
       <View style={styles.container}>
         <AppHeader
           showBack={true}
@@ -859,7 +869,7 @@ export default function DetailScreen() {
               <ScrollView
                 ref={scrollViewRef}
                 style={styles.scrollView}
-                contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingBottom: 320 }}
+                contentContainerStyle={{ paddingTop: headerTop, paddingBottom: 320 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}>
           <View ref={scrollContentAnchorRef} collapsable={false} style={styles.editSection}>
@@ -1114,6 +1124,21 @@ export default function DetailScreen() {
             )}
           </View>
 
+          <View style={styles.editSection}>
+            <Text style={styles.editSectionTitle}>日付</Text>
+            <DateField
+              value={record?.date ?? ''}
+              onChange={(d) => {
+                if (record && isValidYmd(d)) setRecord({ ...record, date: d });
+              }}
+              maxDate={new Date()}
+              placeholder="タップして選択"
+            />
+            {record?.date && isValidYmd(record.date) && (
+              <Text style={styles.dateDisplayText}>{formatDisplayDate(record.date)}</Text>
+            )}
+          </View>
+
           <View
             style={styles.editSection}
             onLayout={(e) => { memoYRef.current = e.nativeEvent.layout.y; }}>
@@ -1143,42 +1168,6 @@ export default function DetailScreen() {
             <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
           </View>
 
-          <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>日付</Text>
-            <View style={styles.dateInputContainer}>
-              <TextInput
-                style={styles.dateInput}
-                value={record?.date || ''}
-                onChangeText={(value) => {
-                  if (record) {
-                    setRecord({ ...record, date: value });
-                  }
-                }}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#999"
-              />
-              <TouchableOpacity
-                style={styles.calendarButton}
-                onPress={() => setShowDatePicker(true)}
-                activeOpacity={0.7}>
-                <CalendarIcon size={20} color="#4A90E2" />
-              </TouchableOpacity>
-            </View>
-            {record?.date && (
-              <Text style={styles.dateDisplayText}>{formatDisplayDate(record.date)}</Text>
-            )}
-          </View>
-
-          {record && (
-            <CalendarPicker
-              visible={showDatePicker}
-              selectedDate={record.date}
-              onDateSelect={(date) => setRecord({ ...record, date })}
-              onClose={() => setShowDatePicker(false)}
-              maxDate={new Date()}
-            />
-          )}
-
           <View style={{ height: 100 }} />
             </ScrollView>
           </TouchableWithoutFeedback>
@@ -1186,7 +1175,7 @@ export default function DetailScreen() {
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={{ paddingTop: HEADER_HEIGHT }}
+          contentContainerStyle={{ paddingTop: headerTop }}
           showsVerticalScrollIndicator={false}>
           {recordPhotoDisplayUri && (
             <TouchableOpacity
@@ -1418,6 +1407,7 @@ export default function DetailScreen() {
       )}
     </View>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -1933,29 +1923,6 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 4,
     fontSize: 12,
-  },
-  dateInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dateInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#333',
-  },
-  calendarButton: {
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    backgroundColor: '#F0F8FF',
   },
   dateDisplayText: {
     marginTop: 8,

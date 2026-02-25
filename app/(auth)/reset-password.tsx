@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-react-native';
 import { error as logError } from '@/lib/logger';
@@ -172,22 +172,25 @@ export default function ResetPasswordScreen() {
 
   if (checkingToken) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>リンクを確認中...</Text>
-      </View>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={[styles.container, styles.centerContent]}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+          <Text style={styles.loadingText}>リンクを確認中...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!isValidToken && !isDebug) {
     return (
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}>
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+            { paddingTop: 20, paddingBottom: insets.bottom + 20 },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
@@ -213,29 +216,33 @@ export default function ResetPasswordScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      </SafeAreaView>
     );
   }
 
   if (success) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <View style={styles.successIcon}>
-          <Check size={48} color="#4CAF50" strokeWidth={3} />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={[styles.container, styles.centerContent]}>
+          <View style={styles.successIcon}>
+            <Check size={48} color="#4CAF50" strokeWidth={3} />
+          </View>
+          <Text style={styles.successTitle}>パスワードを更新しました</Text>
+          <Text style={styles.successText}>ログイン画面に戻ります...</Text>
         </View>
-        <Text style={styles.successTitle}>パスワードを更新しました</Text>
-        <Text style={styles.successText}>ログイン画面に戻ります...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+          { paddingTop: 20, paddingBottom: insets.bottom + 20 },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
@@ -326,6 +333,7 @@ export default function ResetPasswordScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

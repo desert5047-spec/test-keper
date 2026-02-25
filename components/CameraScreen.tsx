@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { X, RotateCw } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { log, error as logError } from '@/lib/logger';
 
 const debugLog = log;
@@ -24,7 +24,6 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!permission) {
@@ -98,7 +97,8 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         facing={facing}
         mode="picture"
       >
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+        <SafeAreaView edges={['top']}>
+        <View style={styles.header}>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={onCancel}
@@ -106,6 +106,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
             <X size={28} color="#fff" />
           </TouchableOpacity>
         </View>
+        </SafeAreaView>
 
         <View style={styles.controls}>
           <TouchableOpacity

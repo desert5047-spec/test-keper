@@ -1,9 +1,11 @@
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/AppHeader';
 
 export default function PrivacyPolicyScreen() {
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="プライバシーポリシー" />
 
       <ScrollView
@@ -69,7 +71,8 @@ export default function PrivacyPolicyScreen() {
           </Text>
         </View>
       </ScrollView>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

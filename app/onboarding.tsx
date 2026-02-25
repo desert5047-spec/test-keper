@@ -9,6 +9,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useAuth } from '@/contexts/AuthContext';
@@ -92,7 +93,8 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       {!isFamilyReady || !isSetupReady ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
@@ -191,7 +193,8 @@ export default function OnboardingScreen() {
           )}
         </ScrollView>
       )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

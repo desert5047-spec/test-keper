@@ -16,7 +16,7 @@ import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { openExternal } from '@/lib/openExternal';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLastAuthProvider } from '@/lib/auth/lastProvider';
 import { getRememberMe, setRememberMe } from '@/lib/authStorage';
@@ -157,13 +157,14 @@ export default function LoginScreen() {
   };
 
   return (
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 },
+          { paddingTop: 40, paddingBottom: insets.bottom + 20 },
         ]}
         keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}>
@@ -292,6 +293,7 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

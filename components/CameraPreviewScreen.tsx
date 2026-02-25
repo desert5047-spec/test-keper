@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { RotateCcw, Check } from 'lucide-react-native';
 
 interface CameraPreviewScreenProps {
@@ -13,10 +13,8 @@ interface CameraPreviewScreenProps {
  * 撮影後のプレビュー画面。「再撮影」「保存」をアプリ側で表示（OS標準の Retake/Use Photo を使わない）
  */
 export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPreviewScreenProps) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <SafeAreaView style={[styles.container, { flex: 1 }]} edges={['top', 'bottom']}>
       <View style={styles.imageContainer}>
         <Image source={{ uri: imageUri }} style={styles.image} contentFit="contain" />
       </View>
@@ -36,7 +34,7 @@ export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPrevie
           <Text style={styles.saveText}>保存</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

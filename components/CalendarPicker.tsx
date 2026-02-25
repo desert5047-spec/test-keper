@@ -6,8 +6,30 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  Dimensions,
+  ScrollView,
 } from 'react-native';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+
+const WINDOW_MAX_HEIGHT = Dimensions.get('window').height * 0.85;
+
+const CONTAINER_PADDING = 20;
+const HEADER_ROW_HEIGHT = 44;
+const HEADER_MARGIN_BOTTOM = 12;
+const WEEKDAYS_ROW_HEIGHT = 32;
+const WEEKDAYS_MARGIN_BOTTOM = 8;
+const DAY_ROW_HEIGHT = 44;
+const WEEK_ROW_GAP = 4;
+const FOOTER_MARGIN_TOP = 16;
+const FOOTER_HEIGHT = 48;
+
+function getWeekCount(year: number, monthIndex: number): number {
+  const firstDay = new Date(year, monthIndex, 1);
+  const lastDay = new Date(year, monthIndex + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startDayOfWeek = firstDay.getDay(); // 0=Sun..6=Sat
+  return Math.ceil((startDayOfWeek + daysInMonth) / 7);
+}
 
 interface CalendarPickerProps {
   visible: boolean;
@@ -53,6 +75,20 @@ export function CalendarPicker({
   };
 
   const monthData = getMonthData(currentMonth);
+  const weekCount = getWeekCount(monthData.year, monthData.month);
+  const calendarHeight =
+    CONTAINER_PADDING * 2 +
+    HEADER_ROW_HEIGHT +
+    HEADER_MARGIN_BOTTOM +
+    WEEKDAYS_ROW_HEIGHT +
+    WEEKDAYS_MARGIN_BOTTOM +
+    weekCount * DAY_ROW_HEIGHT +
+    Math.max(0, weekCount - 1) * WEEK_ROW_GAP +
+    FOOTER_MARGIN_TOP +
+    FOOTER_HEIGHT;
+  const containerHeight = Math.min(calendarHeight, WINDOW_MAX_HEIGHT);
+  const weeksAreaHeight =
+    weekCount * DAY_ROW_HEIGHT + Math.max(0, weekCount - 1) * WEEK_ROW_GAP;
   const weeks: (number | null)[][] = [];
   let currentWeek: (number | null)[] = [];
 
@@ -130,14 +166,7 @@ export function CalendarPicker({
         style={styles.overlay}
         activeOpacity={1}
         onPress={onClose}>
-        <View style={styles.calendarContainer}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={onClose}
-            activeOpacity={0.7}>
-            <X size={24} color="#666" />
-          </TouchableOpacity>
-
+        <View style={[styles.calendarContainer, { height: containerHeight }]}>
           <View style={styles.header}>
             <TouchableOpacity
               onPress={handlePreviousMonth}
@@ -145,7 +174,7 @@ export function CalendarPicker({
               activeOpacity={0.7}>
               <ChevronLeft size={24} color="#4A90E2" />
             </TouchableOpacity>
-            <Text style={styles.monthYear}>
+            <Text style={styles.monthYear} numberOfLines={1}>
               {monthData.year}年 {monthData.month + 1}月
             </Text>
             <TouchableOpacity
@@ -160,6 +189,12 @@ export function CalendarPicker({
                 size={24}
                 color={isNextMonthDisabled() ? '#CCC' : '#4A90E2'}
               />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.closeButtonInHeader}
+              onPress={onClose}
+              activeOpacity={0.7}>
+              <X size={24} color="#666" />
             </TouchableOpacity>
           </View>
 
@@ -178,9 +213,15 @@ export function CalendarPicker({
             ))}
           </View>
 
-          {weeks.map((week, weekIndex) => (
-            <View key={weekIndex} style={styles.weekRow}>
-              {week.map((day, dayIndex) => {
+          <ScrollView
+            style={styles.weeksScroll}
+            contentContainerStyle={{ minHeight: weeksAreaHeight }}
+            showsVerticalScrollIndicator={false}>
+            {weeks.map((week, weekIndex) => (
+              <View
+                key={weekIndex}
+                style={[styles.weekRow, weekIndex < weeks.length - 1 && styles.weekRowGap]}>
+                {week.map((day, dayIndex) => {
                 const selected = day !== null && isSelectedDay(day);
                 const disabled = day !== null && isDisabledDay(day);
                 const isSunday = dayIndex === 0;
@@ -217,6 +258,7 @@ export function CalendarPicker({
               })}
             </View>
           ))}
+          </ScrollView>
 
           <TouchableOpacity
             style={styles.closeButtonBottom}
@@ -241,7 +283,7 @@ const styles = StyleSheet.create({
   calendarContainer: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    padding: CONTAINER_PADDING,
     width: '100%',
     maxWidth: 400,
     ...Platform.select({
@@ -257,19 +299,14 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  closeButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 10,
-    padding: 8,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    height: HEADER_ROW_HEIGHT,
+    marginBottom: HEADER_MARGIN_BOTTOM,
     paddingTop: 8,
+    gap: 4,
   },
   navButton: {
     padding: 8,
@@ -278,18 +315,27 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   monthYear: {
+    flex: 1,
     fontSize: 18,
     fontFamily: 'Nunito-Bold',
     color: '#333',
+    textAlign: 'center',
+  },
+  closeButtonInHeader: {
+    padding: 8,
   },
   weekDaysRow: {
     flexDirection: 'row',
-    marginBottom: 8,
+    height: WEEKDAYS_ROW_HEIGHT,
+    marginBottom: WEEKDAYS_MARGIN_BOTTOM,
+  },
+  weeksScroll: {
+    flex: 1,
   },
   weekDayCell: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
+    justifyContent: 'center',
   },
   weekDayText: {
     fontSize: 12,
@@ -304,11 +350,13 @@ const styles = StyleSheet.create({
   },
   weekRow: {
     flexDirection: 'row',
-    marginBottom: 4,
+    height: DAY_ROW_HEIGHT,
+  },
+  weekRowGap: {
+    marginBottom: WEEK_ROW_GAP,
   },
   dayCell: {
     flex: 1,
-    aspectRatio: 1,
     padding: 2,
   },
   dayButton: {
@@ -336,11 +384,13 @@ const styles = StyleSheet.create({
     color: '#CCC',
   },
   closeButtonBottom: {
-    marginTop: 20,
+    height: FOOTER_HEIGHT,
+    marginTop: FOOTER_MARGIN_TOP,
     paddingVertical: 14,
     backgroundColor: '#4A90E2',
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   closeButtonText: {
     color: '#fff',

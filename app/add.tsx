@@ -17,10 +17,10 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Camera, RotateCw, RotateCcw, X, Calendar as CalendarIcon, Check } from 'lucide-react-native';
+import { Camera, RotateCw, RotateCcw, X, Check } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CalendarPicker } from '@/components/CalendarPicker';
+import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
 import KeyboardAwareScroll from '@/components/KeyboardAwareScroll';
@@ -32,6 +32,7 @@ import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { log, warn, error as logError } from '@/lib/logger';
 
 // Androidでexpo-cameraを使用するため、このキーは使用されませんが、エラー回避のため定義
@@ -95,7 +96,6 @@ export default function AddScreen() {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
   const [scoreError, setScoreError] = useState<string>('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showFullScoreModal, setShowFullScoreModal] = useState(false);
   const [photoRotation, setPhotoRotation] = useState<number>(0);
@@ -670,12 +670,9 @@ export default function AddScreen() {
       debugLog('[記録保存] データベースに保存開始');
 
       try {
-        const { data: insertData, error } = await supabase
-          .from('records')
-          .insert({
+        const insertPayload: Record<string, unknown> = {
             child_id: selectedChildId || null,
             family_id: familyId,
-            date,
             subject: selectedSubject,
             type,
             score: scoreValue,
@@ -685,7 +682,13 @@ export default function AddScreen() {
             photo_uri: null,
             photo_rotation: photoRotation,
             user_id: user.id,
-          })
+          };
+        if (date && isValidYmd(date)) {
+          insertPayload.date = date;
+        }
+        const { data: insertData, error } = await supabase
+          .from('records')
+          .insert(insertPayload)
           .select('id')
           .single();
 
@@ -823,7 +826,8 @@ export default function AddScreen() {
       : '記録は保存されました。続けて入力しますか？';
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -1116,33 +1120,16 @@ export default function AddScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>日付</Text>
-          <View style={styles.dateInputContainer}>
-            <TextInput
-              style={styles.dateInput}
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#999"
-            />
-            <TouchableOpacity
-              style={styles.calendarButton}
-              onPress={() => setShowDatePicker(true)}
-              activeOpacity={0.7}>
-              <CalendarIcon size={20} color="#4A90E2" />
-            </TouchableOpacity>
-          </View>
-          {date && date.trim() !== '' ? (
+          <DateField
+            value={date}
+            onChange={setDate}
+            maxDate={new Date()}
+            placeholder="タップして選択"
+          />
+          {date && isValidYmd(date) ? (
             <Text style={styles.dateDisplayText}>{formatDisplayDate(date)}</Text>
           ) : null}
         </View>
-
-        <CalendarPicker
-          visible={showDatePicker}
-          selectedDate={date}
-          onDateSelect={setDate}
-          onClose={() => setShowDatePicker(false)}
-          maxDate={new Date()}
-        />
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
@@ -1283,7 +1270,8 @@ export default function AddScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -1294,7 +1282,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
@@ -1633,29 +1621,6 @@ const styles = StyleSheet.create({
   },
   stampTextSelected: {
     color: '#fff',
-  },
-  dateInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dateInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#333',
-  },
-  calendarButton: {
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    backgroundColor: '#F0F8FF',
   },
   dateDisplayText: {
     marginTop: 8,

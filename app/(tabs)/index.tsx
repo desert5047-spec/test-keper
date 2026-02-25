@@ -8,7 +8,6 @@ import {
   RefreshControl,
   Dimensions,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -20,7 +19,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
 import { getSignedImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { Platform } from 'react-native';
 import { log, logLoadError } from '@/lib/logger';
 
 const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
@@ -138,6 +139,8 @@ export default function HomeScreen() {
     }
   };
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
   const [records, setRecords] = useState<RecordWithImageUrl[]>([]);
   const [stableRecords, setStableRecords] = useState<RecordWithImageUrl[]>([]);
   const stableRef = useRef<RecordWithImageUrl[]>([]);
@@ -304,7 +307,8 @@ export default function HomeScreen() {
   const showBannerAndList = hasLoadedOnce && loadError && !loading && stableRecords.length > 0;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
       {showBannerAndList ? (
@@ -328,7 +332,7 @@ export default function HomeScreen() {
             removeClippedSubviews={false}
             windowSize={5}
             initialNumToRender={10}
-            contentContainerStyle={[styles.listContent, { paddingTop: 16, paddingBottom: 24 }]}
+            contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8, paddingBottom: 24 }]}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -341,11 +345,11 @@ export default function HomeScreen() {
       ) : null}
 
       {showSpinner ? (
-        <View style={[styles.loadingContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.loadingContainer, { paddingTop: headerTop + 8 }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
       ) : showLoadErrorFullScreen ? (
-        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
           {lastUpdatedAt ? (
             <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
@@ -359,7 +363,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
-        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>まだ記録がありません</Text>
           <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
@@ -371,11 +375,11 @@ export default function HomeScreen() {
           removeClippedSubviews={false}
           windowSize={5}
           initialNumToRender={10}
-          contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 16 }]}
+          contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8 }]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             refreshing ? null : (
-              <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+              <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
                 <Text style={styles.emptyText}>まだ記録がありません</Text>
                 <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
               </View>
@@ -389,7 +393,8 @@ export default function HomeScreen() {
           }
         />
       ) : null}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

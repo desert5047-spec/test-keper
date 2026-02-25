@@ -10,14 +10,13 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { webUrls } from '@/lib/urls';
 import { warn } from '@/lib/logger';
 
 export default function ConsentScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { saveConsent } = useAuth();
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -44,7 +43,8 @@ export default function ConsentScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 24 }]}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={[styles.container, { paddingTop: 24 }]}>
       <Text style={styles.title}>利用規約への同意</Text>
       <Text style={styles.description}>
         アプリのご利用にあたり、利用規約とプライバシーポリシーへの同意をお願いします。
@@ -85,7 +85,8 @@ export default function ConsentScreen() {
           <Text style={styles.primaryButtonText}>同意して続ける</Text>
         )}
       </TouchableOpacity>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

@@ -2,13 +2,12 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform }
 import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
-export const HEADER_HEIGHT = Platform.select({
-  web: 78,
-  default: 102,
-});
+// ステータスバー(=insets.top)を除いた「中身だけ」の高さ
+export const HEADER_HEIGHT = 58;
 
 interface AppHeaderProps {
   showBack?: boolean;
@@ -34,9 +33,12 @@ export function AppHeader({
   onDelete
 }: AppHeaderProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { year, month, setYearMonth } = useDateContext();
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(year);
+
+  const headerPaddingTop = Platform.OS === 'web' ? 20 : insets.top;
 
   useEffect(() => {
     if (showMonthPicker) setPickerYear(year);
@@ -69,7 +71,14 @@ export function AppHeader({
 
   return (
     <>
-      <View style={styles.container}>
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: headerPaddingTop,
+            minHeight: HEADER_HEIGHT + headerPaddingTop,
+          },
+        ]}>
         <View style={styles.left}>
           {showBack ? (
             <TouchableOpacity
@@ -218,14 +227,10 @@ export function AppHeader({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: -1,
-    left: 1,
+    top: 0,
+    left: 0,
     right: 0,
     backgroundColor: '#FFF',
-    paddingTop: Platform.select({
-      web: 20,
-      default: 44,
-    }),
     paddingBottom: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
@@ -233,7 +238,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: HEADER_HEIGHT,
     zIndex: 10,
   },
   left: {

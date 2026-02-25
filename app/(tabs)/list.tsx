@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
 import { getSignedImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 import { log, logLoadError } from '@/lib/logger';
 
@@ -101,6 +102,8 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
 
 export default function ListScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
   const params = useLocalSearchParams();
   const { year, month, setYearMonth } = useDateContext();
   const { selectedChildId } = useChild();
@@ -236,7 +239,8 @@ export default function ListScreen() {
   const showBannerAndList = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length > 0;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
       {showBannerAndList ? (
@@ -282,11 +286,11 @@ export default function ListScreen() {
       ) : null}
 
       {showSpinner ? (
-        <View style={[styles.loadingContainer, { paddingTop: isFamilyReady ? HEADER_HEIGHT : 0 }]}>
+        <View style={[styles.loadingContainer, { paddingTop: isFamilyReady ? headerTop + 8 : 0 }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
       ) : showLoadErrorFullScreen ? (
-        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
           {lastUpdatedAt ? (
             <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
@@ -300,14 +304,14 @@ export default function ListScreen() {
           </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
-        <View style={[styles.emptyContainer, { paddingTop: HEADER_HEIGHT }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>
             {year}年{month}月の記録はありません
           </Text>
         </View>
       ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
         <ScrollView
-          contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT + 12 }]}
+          contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -332,7 +336,8 @@ export default function ListScreen() {
           <View style={{ height: 20 }} />
         </ScrollView>
       ) : null}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

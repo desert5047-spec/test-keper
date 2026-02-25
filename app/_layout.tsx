@@ -5,6 +5,8 @@ import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LogBox, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -76,6 +78,15 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    // Android 3ボタン: ナビゲーションバーがコンテンツに被らないようにする
+    NavigationBar.setPositionAsync('relative').catch(() => {});
+    NavigationBar.setBackgroundColorAsync('#FFFFFF').catch(() => {});
+    NavigationBar.setButtonStyleAsync('dark').catch(() => {});
+  }, []);
+
+  useEffect(() => {
     try {
       if (fontsLoaded || fontError) {
         debugLog('[RootLayout] フォント読み込み完了、スプラッシュ画面を非表示', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
@@ -114,8 +125,9 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <DebugLabel />
-      {Platform.OS === 'web' && (
+      <SafeAreaProvider>
+        <DebugLabel />
+        {Platform.OS === 'web' && (
         <style>{`
           button:focus,
           button:focus-visible,
@@ -147,10 +159,11 @@ export default function RootLayout() {
               <Stack.Screen name="terms-of-service" />
               <Stack.Screen name="+not-found" />
             </Stack>
-            <StatusBar style="auto" />
+            <StatusBar style="dark" backgroundColor="#ffffff" />
           </DateProvider>
         </ChildProvider>
       </AuthProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

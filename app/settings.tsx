@@ -14,7 +14,7 @@ import {
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield, MessageCircle } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { AppHeader } from '@/components/AppHeader';
@@ -193,10 +193,10 @@ export default function SettingsScreen() {
       }
       if (Platform.OS === 'web') {
         window.alert('すべてのデータを削除しました');
-        router.replace('/onboarding');
+        await signOut();
       } else {
         Alert.alert('初期化完了', 'すべてのデータを削除しました', [
-          { text: 'OK', onPress: () => router.replace('/onboarding') },
+          { text: 'OK', onPress: () => void signOut() },
         ]);
       }
     } catch (err: any) {
@@ -454,7 +454,7 @@ export default function SettingsScreen() {
   const runFullReset = async () => {
     await performResetData({ silent: true });
     setResetModalVisible(false);
-    router.replace('/onboarding');
+    await signOut();
   };
 
   const handleLogout = () => {
@@ -545,7 +545,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
 
       <ScrollView
@@ -910,7 +911,8 @@ export default function SettingsScreen() {
         onConfirm={runFullReset}
         confirmWord="RESET"
       />
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
