@@ -5,7 +5,7 @@ import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LogBox, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
@@ -13,7 +13,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
 import { isSupabaseConfigured, supabaseConfigError, supabase } from '@/lib/supabase';
-import { DebugLabel } from '@/components/DebugLabel';
+import DebugLabel from '@/components/DebugLabel';
 import { log, warn, error as logError } from '@/lib/logger';
 
 // 本番（!__DEV__）では log/info/debug/warn を無効化。error はクラッシュ情報のため残す
@@ -44,6 +44,24 @@ function isInvalidRefreshTokenError(reason: unknown): boolean {
     msg.includes('refresh_token') ||
     msg.includes('Refresh Token Not Found') ||
     msg.includes('Invalid Refresh Token')
+  );
+}
+
+function TopSafeAreaBg() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: insets.top,
+        backgroundColor: '#fff',
+        zIndex: 9998,
+      }}
+    />
   );
 }
 
@@ -126,7 +144,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <DebugLabel />
+        <TopSafeAreaBg />
+        <StatusBar style="dark" />
         {Platform.OS === 'web' && (
         <style>{`
           button:focus,
@@ -144,7 +163,25 @@ export default function RootLayout() {
       <AuthProvider>
         <ChildProvider>
           <DateProvider>
-            <Stack screenOptions={{ headerShown: false }}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                headerStyle: {
+                  backgroundColor: '#ffffff',
+                  height: 56,
+                  borderBottomWidth: 0,
+                  shadowColor: 'transparent',
+                  elevation: 0,
+                },
+                headerShadowVisible: false,
+                headerTitleStyle: {
+                  fontSize: 18,
+                  fontWeight: '600',
+                },
+                contentStyle: {
+                  backgroundColor: '#ffffff',
+                },
+              }}>
             <Stack.Screen name="auth-callback" />
             <Stack.Screen name="(auth)" />
               <Stack.Screen name="onboarding" />
@@ -159,7 +196,7 @@ export default function RootLayout() {
               <Stack.Screen name="terms-of-service" />
               <Stack.Screen name="+not-found" />
             </Stack>
-            <StatusBar style="dark" backgroundColor="#ffffff" />
+            <DebugLabel />
           </DateProvider>
         </ChildProvider>
       </AuthProvider>

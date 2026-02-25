@@ -1,51 +1,53 @@
-import { Text, StyleSheet, View } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { envLabel, supabaseUrl } from '@/lib/supabase';
 import { getLpHost } from '@/lib/lpUrl';
 
-/** Supabase URL の hostname から project ref を取得（例: cwwzaknsitnaqqafbrsc） */
 function getSupabaseRef(url: string | undefined): string {
-  if (!url) return '—';
+  if (!url) return '...';
   try {
     const host = new URL(url).hostname;
     return host.replace(/\.supabase\.co$/, '') || host;
   } catch {
-    return '—';
+    return '...';
   }
 }
 
-/**
- * 環境ラベル（stg / prod / dev）、Supabase project ref、LP host を表示する。
- * prod もしくは release（!__DEV__）では絶対に表示しない。stg/dev かつ __DEV__ のときのみ表示。
- */
-export function DebugLabel() {
-  const isProdEnv = process.env.EXPO_PUBLIC_ENV === 'prod' || envLabel === 'prod';
-  if (isProdEnv || !__DEV__) return null;
+export default function DebugLabel() {
+  const insets = useSafeAreaInsets();
+
+  if (!__DEV__) return null;
+
   const ref = getSupabaseRef(supabaseUrl);
-  const lpHost = getLpHost();
-  const mainText = `${envLabel} / ${ref}`;
+  const host = getLpHost();
+
   return (
-    <View style={styles.wrapper} pointerEvents="none">
-      <Text style={styles.label}>{mainText}</Text>
-      <Text style={styles.lpHost}>{lpHost}</Text>
+    <View pointerEvents="none" style={[styles.wrap, { top: insets.top + 44 }]}>
+      <Text style={styles.line1}>{`${envLabel} / ${ref}`}</Text>
+      <Text style={styles.line2}>{host}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  wrap: {
     position: 'absolute',
-    top: 8,
     right: 8,
     zIndex: 9999,
+    alignSelf: 'flex-end',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.7)',
   },
-  label: {
+  line1: {
     fontSize: 10,
     color: '#666',
-    fontWeight: '600',
   },
-  lpHost: {
-    fontSize: 8,
+  line2: {
+    fontSize: 9,
     color: '#999',
-    marginTop: 2,
+    marginTop: 0,
   },
 });

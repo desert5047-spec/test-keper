@@ -21,7 +21,15 @@ export default function TabLayout() {
         const { state, descriptors, navigation } = props;
 
         return (
-          <View style={[styles.tabBarContainer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View
+            style={[
+              styles.tabBarContainer,
+              {
+                height: 56 + insets.bottom,
+                paddingTop: 8,
+                paddingBottom: Math.max(insets.bottom, 8),
+              },
+            ]}>
             {/* ホーム */}
             {state.routes.slice(0, 1).map((route, idx) => {
               const { options } = descriptors[route.key];
@@ -191,7 +199,6 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     flexDirection: 'row',
-    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#eee',
     backgroundColor: '#fff',

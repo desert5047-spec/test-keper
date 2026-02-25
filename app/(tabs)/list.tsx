@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -115,6 +115,23 @@ export default function ListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<'offline' | 'unknown' | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [switchingChild, setSwitchingChild] = useState(false);
+
+  // 子ども切替時は一度表示をリセットしてローディングに固定（空状態の一瞬表示を防ぐ）
+  useEffect(() => {
+    setLoadError(null);
+    setHasLoadedOnce(false);
+    setIsInitialLoading(true);
+    setSections([]);
+    setStableSections([]);
+  }, [selectedChildId]);
+
+  // 切替直後の短いブリッジ時間は空状態を出さずスピナーを維持
+  useEffect(() => {
+    setSwitchingChild(true);
+    const t = setTimeout(() => setSwitchingChild(false), 200);
+    return () => clearTimeout(t);
+  }, [selectedChildId]);
 
   const formatLastUpdated = (d: Date) => {
     const h = d.getHours().toString().padStart(2, '0');
@@ -232,14 +249,15 @@ export default function ListScreen() {
     return `${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
-  const showSpinner =
-    !isFamilyReady || (stableSections.length === 0 && (!hasLoadedOnce || isInitialLoading));
-  const showEmptyState = isFamilyReady && hasLoadedOnce && !refreshing && stableSections.length === 0 && !loadError;
+  const listData = useMemo(() => stableSections, [stableSections]);
+  const hasData = listData.length > 0;
+  const showSpinner = !isFamilyReady || ((isInitialLoading || switchingChild) && !hasData);
+  const showEmptyState = isFamilyReady && !switchingChild && hasLoadedOnce && !isInitialLoading && !hasData && !loadError;
   const showLoadErrorFullScreen = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length === 0;
-  const showBannerAndList = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length > 0;
+  const showBannerAndList = hasLoadedOnce && loadError && !isInitialLoading && hasData;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
       <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
@@ -266,7 +284,7 @@ export default function ListScreen() {
                 onRefresh={() => loadRecords({ isRefresh: true })}
               />
             }>
-            {stableSections.map((section) => (
+            {listData.map((section) => (
               <View key={section.title} style={styles.daySection}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>
@@ -286,11 +304,11 @@ export default function ListScreen() {
       ) : null}
 
       {showSpinner ? (
-        <View style={[styles.loadingContainer, { paddingTop: isFamilyReady ? headerTop + 8 : 0 }]}>
+        <View style={[styles.loadingContainer, { paddingTop: isFamilyReady ? headerTop + 2 : 0 }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
       ) : showLoadErrorFullScreen ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 2 }]}>
           <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
           {lastUpdatedAt ? (
             <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
@@ -304,14 +322,14 @@ export default function ListScreen() {
           </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 2 }]}>
           <Text style={styles.emptyText}>
             {year}年{month}月の記録はありません
           </Text>
         </View>
-      ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
+      ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && hasData ? (
         <ScrollView
-          contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8 }]}
+          contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 2 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -319,7 +337,7 @@ export default function ListScreen() {
               onRefresh={() => loadRecords({ isRefresh: true })}
             />
           }>
-          {stableSections.map((section) => (
+          {listData.map((section) => (
             <View key={section.title} style={styles.daySection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionHeaderText}>{formatDate(section.title)}</Text>

@@ -10,8 +10,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, usePathname } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
@@ -28,7 +27,12 @@ const GRADES = [
 
 export default function RegisterChildScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, familyId, isFamilyReady, refreshSetupStatus } = useAuth();
+
+  useEffect(() => {
+    if (__DEV__) console.log('[route]', pathname);
+  }, [pathname]);
   const { loadChildren } = useChild();
   const [name, setName] = useState('');
   const [grade, setGrade] = useState<number | null>(null);
@@ -107,11 +111,11 @@ export default function RegisterChildScreen() {
     await loadChildren();
     await refreshSetupStatus();
 
-    router.replace('/onboarding');
+    router.replace('/(tabs)');
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <View style={{ flex: 1 }}>
       <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.header}>
@@ -177,7 +181,7 @@ export default function RegisterChildScreen() {
         </TouchableOpacity>
       </ScrollView>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
