@@ -17,6 +17,7 @@ import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileTe
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
+import Constants from 'expo-constants';
 import { AppHeader } from '@/components/AppHeader';
 import { ResetConfirmModal } from '@/components/ResetConfirmModal';
 import { useChild } from '@/contexts/ChildContext';
@@ -29,6 +30,7 @@ import { webUrls } from '@/lib/urls';
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const { children, loadChildren } = useChild();
   const {
     signOut,
@@ -863,7 +865,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>アプリについて</Text>
           <View style={styles.infoCard}>
             <Text style={styles.appName}>テストアルバム</Text>
-            <Text style={styles.appVersion}>Version 1.0.0</Text>
+            <Text style={styles.appVersion}>v{appVersion}</Text>
             <Text style={styles.appDescription}>
               子供のテストや成績を記録して、{'\n'}
               頑張りを見える化するアプリです。
