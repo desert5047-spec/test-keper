@@ -32,8 +32,9 @@ import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSafeBottom } from '@/lib/useSafeBottom';
+import { HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
 import { log, warn, error as logError } from '@/lib/logger';
 
 // Androidでexpo-cameraを使用するため、このキーは使用されませんが、エラー回避のため定義
@@ -66,11 +67,11 @@ interface Child {
   color: string;
 }
 
-const ADD_HEADER_HEIGHT = 102;
-
 export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const headerTop = useHeaderTop();
   const { safeBottom } = useSafeBottom(16);
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
@@ -106,6 +107,12 @@ export default function AddScreen() {
   useEffect(() => {
     requestPermissions();
   }, []);
+
+  useEffect(() => {
+    if (__DEV__ && showPhotoOptions) {
+      debugLog('[ActionSheet] insets.bottom=', insets.bottom);
+    }
+  }, [showPhotoOptions, insets.bottom]);
 
   useEffect(() => {
     const loadLastSelections = async () => {
@@ -319,16 +326,6 @@ export default function AddScreen() {
 
     setScoreError('');
   };
-
-  const formatDisplayDate = (dateString: string) => {
-    try {
-      const [year, month, day] = dateString.split('-');
-      return `${year}年${parseInt(month)}月${parseInt(day)}日`;
-    } catch {
-      return dateString;
-    }
-  };
-
 
   const showPhotoActionSheet = () => {
     if (Platform.OS === 'ios') {
@@ -830,11 +827,12 @@ export default function AddScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerTop - HEADER_HEIGHT }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>記録を残す</Text>
@@ -845,10 +843,9 @@ export default function AddScreen() {
         ref={scrollViewRef}
         style={styles.scrollView}
         contentPaddingBottom={140 + safeBottom}
-        keyboardVerticalOffsetOverride={ADD_HEADER_HEIGHT}
+        keyboardVerticalOffsetOverride={headerTop}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>写真</Text>
+        <View style={[styles.section, styles.photoSection]}>
           {photoUri ? (
             <View style={styles.photoContainer}>
               <TouchableOpacity
@@ -1128,13 +1125,10 @@ export default function AddScreen() {
             maxDate={new Date()}
             placeholder="タップして選択"
           />
-          {date && isValidYmd(date) ? (
-            <Text style={styles.dateDisplayText}>{formatDisplayDate(date)}</Text>
-          ) : null}
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
+          <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>メモ</Text>
           <TextInput
             style={styles.memoInput}
             value={memo}
@@ -1157,8 +1151,9 @@ export default function AddScreen() {
         style={[
           styles.bottomButtonContainer,
           {
-            bottom: safeBottom,
-            paddingBottom: 12 + safeBottom,
+            minHeight: 72 + insets.bottom,
+            paddingBottom: 10 + insets.bottom,
+            paddingTop: 10,
           },
         ]}>
         {errorMessage ? (
@@ -1166,14 +1161,15 @@ export default function AddScreen() {
             <Text style={styles.errorMessageText}>{errorMessage}</Text>
           </View>
         ) : null}
-        <TouchableOpacity
-          style={[
-            styles.bottomSaveButton,
-            (isSaving || (evaluationType === 'score' && scoreError)) && styles.bottomSaveButtonDisabled,
-          ]}
-          onPress={handleSave}
-          disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
-          activeOpacity={0.7}>
+        <View style={styles.footerButtonRow}>
+          <TouchableOpacity
+            style={[
+              styles.bottomSaveButton,
+              (isSaving || (evaluationType === 'score' && scoreError)) && styles.bottomSaveButtonDisabled,
+            ]}
+            onPress={handleSave}
+            disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
+            activeOpacity={0.8}>
           {isSaving ? (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <ActivityIndicator size="small" color="#fff" />
@@ -1182,7 +1178,8 @@ export default function AddScreen() {
           ) : (
             <Text style={styles.bottomSaveButtonText}>保存</Text>
           )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal
@@ -1194,7 +1191,16 @@ export default function AddScreen() {
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowPhotoOptions(false)}>
-          <View style={styles.actionSheet}>
+          <View
+            style={[
+              styles.actionSheet,
+              Platform.OS === 'android'
+                ? {
+                    marginBottom: (insets.bottom || 24) + 8,
+                    paddingBottom: 12,
+                  }
+                : { paddingBottom: insets.bottom + 12 },
+            ]}>
             <TouchableOpacity
               style={styles.actionSheetButton}
               onPress={takePhoto}
@@ -1291,7 +1297,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 8,
     paddingBottom: 8,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
@@ -1299,10 +1304,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 56,
   },
   backButton: {
-    padding: 4,
-    minWidth: 40,
+    width: 44,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backButtonText: {
     fontSize: 28,
@@ -1324,15 +1332,20 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: '#fff',
-    marginTop: 12,
+    marginTop: 10,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
+  },
+  photoSection: {
+    paddingTop: 0,
+    marginTop: 8,
   },
   sectionTitle: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   photoContainer: {
     borderRadius: 12,
@@ -1631,13 +1644,6 @@ const styles = StyleSheet.create({
   stampTextSelected: {
     color: '#fff',
   },
-  dateDisplayText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#4A90E2',
-    textAlign: 'center',
-  },
   memoInput: {
     minHeight: 100,
     padding: 12,
@@ -1655,36 +1661,29 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
   },
+  footerButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    width: '100%',
+  },
   bottomButtonContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    ...Platform.select({
-      web: {
-        boxShadow: '0px -2px 4px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 10,
-      },
-    }),
+    paddingHorizontal: 16,
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   bottomSaveButton: {
     backgroundColor: '#4A90E2',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    minWidth: 120,
+    height: 44,
+    borderRadius: 10,
+    paddingHorizontal: 16,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   bottomSaveButtonDisabled: {
     backgroundColor: '#CCC',
@@ -1693,6 +1692,7 @@ const styles = StyleSheet.create({
   bottomSaveButtonText: {
     color: '#fff',
     fontSize: 17,
+    fontWeight: '700',
     fontFamily: 'Nunito-Bold',
   },
   errorMessageContainer: {
@@ -1725,7 +1725,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 20,
+    paddingTop: 12,
+    paddingHorizontal: 16,
     zIndex: 1001,
   },
   actionSheetButton: {
