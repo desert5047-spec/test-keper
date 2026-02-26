@@ -1513,7 +1513,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scoreInputContainer: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   scoreInputRow: {
     flexDirection: 'row',

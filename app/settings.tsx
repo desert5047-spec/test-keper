@@ -14,11 +14,11 @@ import {
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield, MessageCircle } from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
 import { ResetConfirmModal } from '@/components/ResetConfirmModal';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +31,7 @@ import { TAB_BAR_HEIGHT, TAB_ITEM_PADDING_TOP, TAB_ITEM_PADDING_BOTTOM, TAB_LABE
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { safeBottom } = useSafeBottom(16);
 
   const appVersion = Constants.expoConfig?.version ?? 'unknown';
@@ -563,7 +564,10 @@ export default function SettingsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: safeBottom + 120 },
+          {
+            paddingTop: insets.top + HEADER_HEIGHT + 12,
+            paddingBottom: safeBottom + 120,
+          },
         ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
@@ -943,7 +947,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingTop: 86,
   },
   scrollContent: {
     paddingBottom: 24,

@@ -89,7 +89,7 @@ export default function RegisterChildScreen() {
     const { error } = await supabase.from('children').insert({
       name: trimmedName,
       grade: grade.toString(),
-      color: '#4A90E2',
+      color: '#999999',
       is_default: false,
       user_id: user.id,
       family_id: familyId,

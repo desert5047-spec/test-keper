@@ -87,7 +87,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
       
       // selectedChildIdが設定されていない、または現在のselectedChildIdがchildrenに存在しない場合
       if (!selectedChildId || !data.find(c => c.id === selectedChildId)) {
-        const newSelectedId = data[0].id;
+        const newSelectedId = data.length >= 2 ? data[1].id : data[0].id;
         debugLog('[ChildContext] 子供を自動選択', { platform: Platform.OS });
         setSelectedChildIdState(newSelectedId);
         // 永続化

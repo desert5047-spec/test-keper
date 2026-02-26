@@ -6,16 +6,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
-// ヘッダーバー高さ（ステータスバーはルート TopSafeAreaBg で塗る）
-export const HEADER_HEIGHT = 56;
+// ヘッダーバー高さ（外枠 = insets.top + HEADER_HEIGHT）
+export const HEADER_HEIGHT = 52;
 const BG = '#FFFFFF';
-const STATUS_BAR_OFFSET = 4; // _layout TopSafeAreaBg と一致
 
-/** コンテンツの paddingTop 用。ステータスバー領域+ヘッダー高さ */
+/** コンテンツの paddingTop 用。SafeArea + ヘッダー高さ */
 export function useHeaderTop(): number {
   const insets = useSafeAreaInsets();
-  const topOffset = Platform.OS === 'web' ? 20 : Math.max(insets.top - STATUS_BAR_OFFSET, 0);
-  return topOffset + HEADER_HEIGHT;
+  return insets.top + HEADER_HEIGHT;
 }
 
 interface AppHeaderProps {
@@ -44,7 +42,6 @@ export function AppHeader({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { year, month, setYearMonth } = useDateContext();
-  const topOffset = Platform.OS === 'web' ? 20 : Math.max(insets.top - STATUS_BAR_OFFSET, 0);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(year);
 
@@ -77,96 +74,88 @@ export function AppHeader({
     setPickerYear((y) => (direction === 'next' ? y + 1 : y - 1));
   };
 
+  const handleBack = () => {
+    const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
+    if (canGoBack) {
+      router.back();
+      return;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.history.length > 1) {
+        router.back();
+        return;
+      }
+    }
+    router.replace('/(tabs)');
+  };
+
   return (
     <>
-      <View style={[styles.container, { backgroundColor: BG, top: topOffset }]}>
-        {/* ヘッダーバー本体。ステータスバー領域は _layout TopSafeAreaBg で塗る */}
-        <View style={[styles.bar, { height: HEADER_HEIGHT, backgroundColor: BG, paddingHorizontal: 12 }]}>
-          <View style={styles.left}>
+      <View style={[styles.headerOuter, { height: insets.top + HEADER_HEIGHT, backgroundColor: BG }]}>
+        <View style={[styles.headerRow, { marginTop: insets.top, height: HEADER_HEIGHT }]}>
           {showBack ? (
-            <TouchableOpacity
-              onPress={() => {
-                const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
-                if (canGoBack) {
-                  router.back();
-                  return;
-                }
-                if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                  if (window.history.length > 1) {
-                    router.back();
-                    return;
-                  }
-                }
-                router.replace('/(tabs)');
-              }}
-              style={styles.backButton}
-              activeOpacity={0.7}>
-              <ArrowLeft size={20} color="#333" />
-            </TouchableOpacity>
+            <View style={styles.hit}>
+              <TouchableOpacity onPress={handleBack} style={styles.hitTouchable} activeOpacity={0.7}>
+                <ArrowLeft size={22} color="#333" />
+              </TouchableOpacity>
+            </View>
           ) : showChildSwitcher ? (
-            <ChildSwitcher />
+            <View style={styles.leftFlex}>
+              <ChildSwitcher />
+            </View>
           ) : (
-            <View style={styles.placeholder} />
+            <View style={styles.hit} />
           )}
-        </View>
 
-        {showYearMonthNav && (
-          <View style={styles.center}>
-            <TouchableOpacity
-              style={styles.yearArrow}
-              onPress={() => handleMonthChange('prev')}
-              activeOpacity={0.7}>
-              <ChevronLeft size={18} color="#666" />
-            </TouchableOpacity>
-            <Text style={styles.yearText}>{year}年</Text>
-            <TouchableOpacity
-              style={styles.yearArrow}
-              onPress={() => handleMonthChange('next')}
-              activeOpacity={0.7}>
-              <ChevronRight size={18} color="#666" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.monthButton}
-              onPress={() => setShowMonthPicker(true)}
-              activeOpacity={0.7}>
-              <Text style={styles.monthText}>{month}月</Text>
-              <ChevronDown size={14} color="#666" strokeWidth={2.5} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {title && (
-          <View style={styles.titleContainer}>
+          {showYearMonthNav ? (
+            <View style={styles.center}>
+              <TouchableOpacity
+                style={styles.yearArrow}
+                onPress={() => handleMonthChange('prev')}
+                activeOpacity={0.7}>
+                <ChevronLeft size={18} color="#666" />
+              </TouchableOpacity>
+              <Text style={styles.yearText}>{year}年</Text>
+              <TouchableOpacity
+                style={styles.yearArrow}
+                onPress={() => handleMonthChange('next')}
+                activeOpacity={0.7}>
+                <ChevronRight size={18} color="#666" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.monthButton}
+                onPress={() => setShowMonthPicker(true)}
+                activeOpacity={0.7}>
+                <Text style={styles.monthText}>{month}月</Text>
+                <ChevronDown size={14} color="#666" strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
+          ) : title ? (
             <Text style={styles.title}>{title}</Text>
-          </View>
-        )}
+          ) : (
+            <View style={styles.titleSpacer} />
+          )}
 
-        <View style={styles.right}>
-          {showEdit && onEdit && (
-            <TouchableOpacity
-              onPress={onEdit}
-              style={styles.iconButton}
-              activeOpacity={0.7}>
-              <Edit3 size={20} color="#666" />
-            </TouchableOpacity>
-          )}
-          {showDelete && onDelete && (
-            <TouchableOpacity
-              onPress={onDelete}
-              style={styles.iconButton}
-              activeOpacity={0.7}>
-              <Trash2 size={20} color="#666" />
-            </TouchableOpacity>
-          )}
-          {showSettings && (
-            <TouchableOpacity
-              onPress={() => router.push('/settings')}
-              style={styles.iconButton}
-              activeOpacity={0.7}>
-              <Settings size={24} color="#666" />
-            </TouchableOpacity>
-          )}
-        </View>
+          <View style={styles.hit}>
+            {showEdit && onEdit && (
+              <TouchableOpacity onPress={onEdit} style={styles.hitTouchable} activeOpacity={0.7}>
+                <Edit3 size={20} color="#666" />
+              </TouchableOpacity>
+            )}
+            {showDelete && onDelete && (
+              <TouchableOpacity onPress={onDelete} style={styles.hitTouchable} activeOpacity={0.7}>
+                <Trash2 size={20} color="#666" />
+              </TouchableOpacity>
+            )}
+            {showSettings && (
+              <TouchableOpacity
+                onPress={() => router.push('/settings')}
+                style={styles.hitTouchable}
+                activeOpacity={0.7}>
+                <Settings size={24} color="#666" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -229,67 +218,50 @@ export function AppHeader({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  headerOuter: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: 'column',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
     zIndex: 10,
   },
-  bar: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: '100%',
+    paddingHorizontal: 12,
   },
-  left: {
-    alignItems: 'flex-start',
+  hit: {
+    width: 44,
+    minWidth: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hitTouchable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
   },
   center: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  titleContainer: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    pointerEvents: 'none',
-  },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Nunito-Bold',
+    fontWeight: '700',
     color: '#333',
   },
-  right: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  titleSpacer: {
+    width: 44,
   },
-  backButton: {
-    padding: 6,
-    minWidth: 36,
-    minHeight: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconButton: {
-    padding: 6,
-    minWidth: 36,
-    minHeight: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
-  },
-  placeholder: {
-    width: 36,
+  leftFlex: {
+    minWidth: 44,
+    alignItems: 'flex-start',
   },
   yearArrow: {
     padding: 2,
