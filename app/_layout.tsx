@@ -184,7 +184,6 @@ export default function RootLayout() {
               <Stack.Screen name="consent" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="add" />
-              <Stack.Screen name="detail" />
               <Stack.Screen name="settings" />
               <Stack.Screen name="children" />
               <Stack.Screen name="register-child" />

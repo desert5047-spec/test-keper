@@ -24,7 +24,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Check } from 'lucide-react-native';
+import { X, Camera, RotateCw, RotateCcw, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { DateField, isValidYmd } from '@/components/DateField';
@@ -41,12 +41,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { log, error as logError } from '@/lib/logger';
 import { useChild } from '@/contexts/ChildContext';
 import { useSafeBottom } from '@/lib/useSafeBottom';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getBottomButtonContainerStyle } from '@/lib/bottomButtonContainer';
 
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const headerHeight = useHeaderHeight();
   const { safeBottom } = useSafeBottom(16);
+  const insets = useSafeAreaInsets();
   const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
   const { children: contextChildren } = useChild();
@@ -244,15 +247,6 @@ export default function DetailScreen() {
     }
 
     setScoreError('');
-  };
-
-  const formatDisplayDate = (dateString: string) => {
-    try {
-      const [year, month, day] = dateString.split('-');
-      return `${year}年${parseInt(month)}月${parseInt(day)}日`;
-    } catch {
-      return dateString;
-    }
   };
 
   const showPhotoActionSheet = () => {
@@ -646,7 +640,7 @@ export default function DetailScreen() {
 
       await loadRecord(record.id);
       setEditMode(false);
-      Alert.alert('成功', '記録を更新しました');
+      Alert.alert('成功', '記録を更新しました', [{ text: 'OK', onPress: () => router.replace('/(tabs)/list') }]);
     } catch (error: any) {
       logError('[記録更新] 保存エラー');
       Alert.alert('エラー', '保存に失敗しました');
@@ -758,7 +752,7 @@ export default function DetailScreen() {
         throw error;
       }
 
-      router.push('/(tabs)');
+      router.replace('/(tabs)/list');
     } catch (e: any) {
       logError('[記録削除] 削除例外', e);
       if (Platform.OS === 'web') {
@@ -870,11 +864,10 @@ export default function DetailScreen() {
               <ScrollView
                 ref={scrollViewRef}
                 style={styles.scrollView}
-                contentContainerStyle={{ paddingTop: headerTop, paddingBottom: 320 }}
+                contentContainerStyle={{ paddingTop: headerTop, paddingBottom: 140 + safeBottom }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}>
-          <View ref={scrollContentAnchorRef} collapsable={false} style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>写真</Text>
+          <View ref={scrollContentAnchorRef} collapsable={false} style={[styles.section, styles.photoSection]}>
             {photoUri ? (
               <View style={styles.photoContainer}>
                 <TouchableOpacity
@@ -930,8 +923,8 @@ export default function DetailScreen() {
           </View>
 
           {contextChildren.length > 0 && (
-            <View style={styles.editSection}>
-              <Text style={styles.editSectionTitle}>子供</Text>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>子供</Text>
               <View style={styles.childChipContainer}>
                 {contextChildren.map((child) => (
                   <TouchableOpacity
@@ -956,8 +949,8 @@ export default function DetailScreen() {
             </View>
           )}
 
-          <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>教科</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>教科</Text>
             {!showSubjectInput ? (
               <View style={styles.chipContainer}>
                 {MAIN_SUBJECTS.map((subject) => (
@@ -1019,8 +1012,8 @@ export default function DetailScreen() {
             )}
           </View>
 
-          <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>評価</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>評価</Text>
             <View style={styles.evaluationTypeContainer}>
               <TouchableOpacity
                 style={[
@@ -1125,8 +1118,8 @@ export default function DetailScreen() {
             )}
           </View>
 
-          <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>日付</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>日付</Text>
             <DateField
               value={record?.date ?? ''}
               onChange={(d) => {
@@ -1135,15 +1128,12 @@ export default function DetailScreen() {
               maxDate={new Date()}
               placeholder="タップして選択"
             />
-            {record?.date && isValidYmd(record.date) && (
-              <Text style={styles.dateDisplayText}>{formatDisplayDate(record.date)}</Text>
-            )}
           </View>
 
           <View
-            style={styles.editSection}
+            style={styles.section}
             onLayout={(e) => { memoYRef.current = e.nativeEvent.layout.y; }}>
-            <Text style={[styles.editSectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
             <TextInput
               style={styles.memoInput}
               value={memo}
@@ -1225,56 +1215,30 @@ export default function DetailScreen() {
         </ScrollView>
       )}
 
-      <View
-        style={[
-          styles.bottomButtons,
-          { bottom: safeBottom, paddingBottom: 12 + safeBottom },
-        ]}>
-        {editMode ? (
-          <>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                setEditMode(false);
-                initializeEditForm(record);
-              }}
-              activeOpacity={0.7}>
-              <Text style={styles.cancelButtonText}>キャンセル</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+      {editMode && (
+        <View style={getBottomButtonContainerStyle(insets, 'row')}>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={isSaving || !canSaveInEdit}
+            activeOpacity={0.8}
+            style={styles.bottomSaveButtonWrap}>
+            <View
               style={[
-                styles.saveButton,
-                (isSaving || !canSaveInEdit) && styles.saveButtonDisabled,
-              ]}
-              onPress={handleSave}
-              disabled={isSaving || !canSaveInEdit}
-              activeOpacity={0.7}>
+                styles.bottomSaveButton,
+                (isSaving || !canSaveInEdit) && styles.bottomSaveButtonDisabled,
+              ]}>
               {isSaving ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={[styles.bottomSaveButtonText, { marginLeft: 8 }]}>保存中...</Text>
+                </View>
               ) : (
-                <Text style={styles.saveButtonText}>保存</Text>
+                <Text style={styles.bottomSaveButtonText}>保存</Text>
               )}
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity
-              style={styles.homeButton}
-              onPress={() => router.push('/(tabs)')}
-              activeOpacity={0.7}>
-              <Home size={20} color="#fff" />
-              <Text style={styles.homeButtonText}>ホーム</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.backBottomButton}
-              onPress={() => router.back()}
-              activeOpacity={0.7}>
-              <ArrowLeft size={20} color="#4A90E2" />
-              <Text style={styles.backBottomButtonText}>戻る</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Modal
         visible={showImageModal}
@@ -1624,17 +1588,22 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 22,
   },
-  editSection: {
+  section: {
     backgroundColor: '#fff',
-    marginTop: 12,
+    marginTop: 10,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
-  editSectionTitle: {
+  sectionTitle: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  photoSection: {
+    paddingTop: 0,
+    marginTop: 8,
   },
   photoContainer: {
     borderRadius: 12,
@@ -1772,7 +1741,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scoreInputContainer: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   scoreInputRow: {
     flexDirection: 'row',
@@ -1929,13 +1898,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
   },
-  dateDisplayText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#4A90E2',
-    textAlign: 'center',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1990,80 +1952,25 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  bottomButtons: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    gap: 12,
+  bottomSaveButtonWrap: {
+    overflow: 'hidden',
   },
-  homeButton: {
-    flex: 1,
+  bottomSaveButton: {
     backgroundColor: '#4A90E2',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
+    minWidth: 120,
+    height: 44,
     borderRadius: 10,
-    gap: 6,
-  },
-  homeButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-  },
-  backBottomButton: {
-    flex: 1,
-    backgroundColor: '#F0F8FF',
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 16,
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    gap: 6,
-  },
-  backBottomButtonText: {
-    color: '#4A90E2',
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#F0F0F0',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
   },
-  cancelButtonText: {
-    color: '#333',
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-  },
-  saveButton: {
-    flex: 1,
-    backgroundColor: '#4A90E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
-  saveButtonDisabled: {
+  bottomSaveButtonDisabled: {
     backgroundColor: '#CCC',
     opacity: 0.6,
   },
-  saveButtonText: {
+  bottomSaveButtonText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 17,
     fontFamily: 'Nunito-Bold',
   },
   modalOverlay: {

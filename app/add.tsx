@@ -34,6 +34,7 @@ import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSafeBottom } from '@/lib/useSafeBottom';
+import { getBottomButtonContainerStyle } from '@/lib/bottomButtonContainer';
 import { HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
 import { log, warn, error as logError } from '@/lib/logger';
 
@@ -1147,15 +1148,7 @@ export default function AddScreen() {
         <View style={{ height: 100 }} />
       </KeyboardAwareScroll>
 
-      <View
-        style={[
-          styles.bottomButtonContainer,
-          {
-            minHeight: 72 + insets.bottom,
-            paddingBottom: 10 + insets.bottom,
-            paddingTop: 10,
-          },
-        ]}>
+      <View style={getBottomButtonContainerStyle(insets, 'column')}>
         {errorMessage ? (
           <View style={styles.errorMessageContainer}>
             <Text style={styles.errorMessageText}>{errorMessage}</Text>
@@ -1666,15 +1659,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     width: '100%',
-  },
-  bottomButtonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    flexDirection: 'column',
-    alignItems: 'stretch',
   },
   bottomSaveButton: {
     backgroundColor: '#4A90E2',

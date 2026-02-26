@@ -26,6 +26,8 @@ interface AppHeaderProps {
   showDelete?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
+  /** SafeAreaView edges={['top']} で親が top を吸収している場合 true。Header の高さ・margin を調整 */
+  safeTopByParent?: boolean;
 }
 
 export function AppHeader({
@@ -37,7 +39,8 @@ export function AppHeader({
   showEdit = false,
   showDelete = false,
   onEdit,
-  onDelete
+  onDelete,
+  safeTopByParent = false,
 }: AppHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -89,10 +92,13 @@ export function AppHeader({
     router.replace('/(tabs)');
   };
 
+  const headerOuterHeight = safeTopByParent ? HEADER_HEIGHT : insets.top + HEADER_HEIGHT;
+  const headerRowMarginTop = safeTopByParent ? 0 : insets.top;
+
   return (
     <>
-      <View style={[styles.headerOuter, { height: insets.top + HEADER_HEIGHT, backgroundColor: BG }]}>
-        <View style={[styles.headerRow, { marginTop: insets.top, height: HEADER_HEIGHT }]}>
+      <View style={[styles.headerOuter, { height: headerOuterHeight, backgroundColor: BG }]}>
+        <View style={[styles.headerRow, { marginTop: headerRowMarginTop, height: HEADER_HEIGHT }]}>
           {showBack ? (
             <View style={styles.hit}>
               <TouchableOpacity onPress={handleBack} style={styles.hitTouchable} activeOpacity={0.7}>
@@ -136,25 +142,26 @@ export function AppHeader({
             <View style={styles.titleSpacer} />
           )}
 
-          <View style={styles.hit}>
+          <View style={styles.rightRow}>
             {showEdit && onEdit && (
-              <TouchableOpacity onPress={onEdit} style={styles.hitTouchable} activeOpacity={0.7}>
+              <TouchableOpacity onPress={onEdit} style={styles.hit} activeOpacity={0.7}>
                 <Edit3 size={20} color="#666" />
               </TouchableOpacity>
             )}
             {showDelete && onDelete && (
-              <TouchableOpacity onPress={onDelete} style={styles.hitTouchable} activeOpacity={0.7}>
+              <TouchableOpacity onPress={onDelete} style={styles.hit} activeOpacity={0.7}>
                 <Trash2 size={20} color="#666" />
               </TouchableOpacity>
             )}
             {showSettings && (
               <TouchableOpacity
                 onPress={() => router.push('/settings')}
-                style={styles.hitTouchable}
+                style={styles.hit}
                 activeOpacity={0.7}>
                 <Settings size={24} color="#666" />
               </TouchableOpacity>
             )}
+            {!showEdit && !showDelete && !showSettings && <View style={styles.hit} />}
           </View>
         </View>
       </View>
@@ -233,12 +240,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 12,
   },
+  rightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   hit: {
     width: 44,
     minWidth: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
   },
   hitTouchable: {
     alignItems: 'center',
@@ -255,6 +268,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     fontWeight: '700',
     color: '#333',
+    lineHeight: 22,
+    ...(Platform.OS === 'android' && {
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+    }),
   },
   titleSpacer: {
     width: 44,

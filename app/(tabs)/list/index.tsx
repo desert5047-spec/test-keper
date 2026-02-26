@@ -164,7 +164,6 @@ export default function ListScreen() {
           Alert.alert('エラー', LOAD_ERROR_MESSAGE);
         }
         return;
-        // sections / stableSections は上書きしない（前回成功分を維持）
       }
 
       if (data) {
@@ -207,7 +206,6 @@ export default function ListScreen() {
       if (isRefresh) {
         Alert.alert('エラー', LOAD_ERROR_MESSAGE);
       }
-      // sections / stableSections は上書きしない（前回成功分を維持）
     } finally {
       setHasLoadedOnce(true);
       if (isRefresh) setRefreshing(false);
@@ -221,7 +219,7 @@ export default function ListScreen() {
 
   const handlePress = useCallback(
     (id: string) => {
-      router.push(`/detail?id=${id}`);
+      router.push(`/(tabs)/list/detail?id=${id}`);
     },
     [router]
   );

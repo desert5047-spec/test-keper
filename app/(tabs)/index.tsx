@@ -264,7 +264,7 @@ export default function HomeScreen() {
 
   const handlePress = useCallback(
     (id: string) => {
-      router.push(`/detail?id=${id}`);
+      router.push(`/(tabs)/list/detail?id=${id}`);
     },
     [router]
   );
@@ -306,9 +306,9 @@ export default function HomeScreen() {
   const showBannerAndList = hasLoadedOnce && loadError && !loading && stableRecords.length > 0;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
       <View style={styles.container}>
-      <AppHeader showYearMonthNav={true} />
+      <AppHeader showYearMonthNav={true} safeTopByParent={true} />
 
       {showBannerAndList ? (
         <View style={styles.mainWithBanner}>
