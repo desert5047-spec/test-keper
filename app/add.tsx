@@ -33,8 +33,7 @@ import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useSafeBottom } from '@/lib/useSafeBottom';
-import { getBottomButtonContainerStyle } from '@/lib/bottomButtonContainer';
+import { getFooterStyle, getScrollPaddingBottom } from '@/lib/bottomButtonContainer';
 import { HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
 import { log, warn, error as logError } from '@/lib/logger';
 
@@ -73,7 +72,6 @@ export default function AddScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const headerTop = useHeaderTop();
-  const { safeBottom } = useSafeBottom(16);
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -826,8 +824,7 @@ export default function AddScreen() {
       : '記録は保存されました。\n続けて入力しますか？';
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
-      <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }} edges={[]}>
       <View style={[styles.header, { paddingTop: headerTop - HEADER_HEIGHT }]}>
         <TouchableOpacity
           style={styles.backButton}
@@ -843,7 +840,7 @@ export default function AddScreen() {
       <KeyboardAwareScroll
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentPaddingBottom={140 + safeBottom}
+        contentPaddingBottom={getScrollPaddingBottom(insets)}
         keyboardVerticalOffsetOverride={headerTop}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.section, styles.photoSection]}>
@@ -1148,7 +1145,7 @@ export default function AddScreen() {
         <View style={{ height: 100 }} />
       </KeyboardAwareScroll>
 
-      <View style={getBottomButtonContainerStyle(insets, 'column')}>
+      <View style={[getFooterStyle(insets), { flexDirection: 'column' }]}>
         {errorMessage ? (
           <View style={styles.errorMessageContainer}>
             <Text style={styles.errorMessageText}>{errorMessage}</Text>
@@ -1278,7 +1275,6 @@ export default function AddScreen() {
           </View>
         </View>
       </Modal>
-      </View>
     </SafeAreaView>
   );
 }
@@ -1290,7 +1286,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingBottom: 8,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -1311,11 +1306,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Nunito-Bold',
+    fontWeight: '700',
     color: '#333',
+    lineHeight: 22,
     flex: 1,
     textAlign: 'center',
+    ...(Platform.OS === 'android' && {
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+    }),
   },
   headerSpacer: {
     minWidth: 40,

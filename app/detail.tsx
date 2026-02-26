@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Modal,
   ActivityIndicator,
   TextInput,
@@ -17,10 +18,12 @@ import {
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
+  StatusBar,
 } from 'react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -40,15 +43,12 @@ import { uploadImage, deleteImage, getSignedImageUrl, getStoragePathFromUrl, nor
 import { useAuth } from '@/contexts/AuthContext';
 import { log, error as logError } from '@/lib/logger';
 import { useChild } from '@/contexts/ChildContext';
-import { useSafeBottom } from '@/lib/useSafeBottom';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getBottomButtonContainerStyle } from '@/lib/bottomButtonContainer';
 
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const headerHeight = useHeaderHeight();
-  const { safeBottom } = useSafeBottom(16);
   const insets = useSafeAreaInsets();
   const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
@@ -141,8 +141,49 @@ export default function DetailScreen() {
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const allowNavigationRef = useRef(false);
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
+  const navigation = useNavigation();
   const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+
+  const hasPhotoInEdit = !!(
+    photoUri &&
+    (isValidImageUri(photoUri) || record?.photo_uri)
+  );
+  const canSaveInEdit =
+    hasPhotoInEdit ||
+    (evaluationType === 'score' &&
+      score.trim() !== '' &&
+      !scoreError &&
+      !isNaN(parseInt(score, 10)) &&
+      parseInt(score, 10) >= 0 &&
+      parseInt(maxScore, 10) > 0 &&
+      parseInt(score, 10) <= parseInt(maxScore, 10)) ||
+    (evaluationType === 'stamp' && !!stamp);
+
+  const goBackOrToList = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/list');
+    }
+  };
+
+  const handleCancel = () => {
+    if (editMode && isDirty) {
+      showUnsavedAlert(() => {
+        allowNavigationRef.current = true;
+        setIsDirty(false);
+        if (record) initializeEditForm(record);
+        goBackOrToList();
+      });
+    } else {
+      goBackOrToList();
+    }
+  };
 
   useEffect(() => {
     if (!photoUri) {
@@ -197,6 +238,7 @@ export default function DetailScreen() {
     setScoreError('');
     setSelectedSubject(data.subject || '');
     setSelectedChildId(data.child_id || null);
+    setIsDirty(false);
     if (data.subject && !MAIN_SUBJECTS.includes(data.subject)) {
       setShowSubjectInput(true);
       setNewSubject(data.subject);
@@ -206,6 +248,133 @@ export default function DetailScreen() {
     }
   };
 
+  const showUnsavedAlert = (onDiscard: () => void) => {
+    Alert.alert(
+      '保存されていません',
+      '変更を破棄してよろしいですか？',
+      [
+        { text: '続ける', style: 'cancel' },
+        {
+          text: '保存',
+          onPress: () => {
+            pendingActionRef.current = () => {
+              allowNavigationRef.current = true;
+              setIsDirty(false);
+              setEditMode(false);
+              goBackOrToList();
+            };
+            handleSaveRef.current();
+          },
+        },
+        {
+          text: 'キャンセル(破棄)',
+          style: 'destructive',
+          onPress: onDiscard,
+        },
+      ]
+    );
+  };
+
+  const HEADER_BAR_HEIGHT = 52;
+
+  useLayoutEffect(() => {
+    if (editMode && record) {
+      navigation.setOptions({
+        headerShown: true,
+        headerTitle: '',
+        headerBackVisible: false,
+        headerStyle: {
+          backgroundColor: '#fff',
+          borderBottomWidth: 1,
+          borderBottomColor: '#eee',
+          height: insets.top + HEADER_BAR_HEIGHT,
+        },
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={handleCancel}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.6}
+            style={{
+              width: 32,
+              height: 32,
+              alignItems: 'center',
+              justifyContent: 'center',
+              ...(Platform.OS === 'web' && { cursor: 'pointer' }),
+            }}>
+            <View
+              pointerEvents="none"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#666',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <X size={18} color="#fff" />
+            </View>
+          </TouchableOpacity>
+        ),
+        headerRight: () => (
+          <Pressable
+            onPress={() => handleSaveRef.current()}
+            disabled={isSaving || !canSaveInEdit}
+            hitSlop={12}
+            style={({ pressed }) => [
+              {
+                backgroundColor: !canSaveInEdit ? '#CCC' : '#4A90E2',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+                opacity: pressed && !isSaving && canSaveInEdit ? 0.8 : 1,
+              },
+            ]}>
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: '#fff',
+                }}>
+                保存
+              </Text>
+            )}
+          </Pressable>
+        ),
+      });
+    } else {
+      navigation.setOptions({ headerShown: false });
+    }
+  }, [editMode, record, isSaving, canSaveInEdit, insets.top]);
+
+  useEffect(() => {
+    if (editMode && Platform.OS === 'android') {
+      StatusBar.setTranslucent?.(false);
+    }
+    return () => {
+      if (Platform.OS === 'android') {
+        StatusBar.setTranslucent?.(true);
+      }
+    };
+  }, [editMode]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (allowNavigationRef.current) return;
+      if (!editMode || !isDirty) return;
+
+      e.preventDefault();
+      showUnsavedAlert(() => {
+        allowNavigationRef.current = true;
+        setIsDirty(false);
+        navigation.dispatch(e.data.action);
+      });
+    });
+    return unsubscribe;
+  }, [navigation, editMode, isDirty]);
+
   useEffect(() => {
     if (Platform.OS !== 'android') return;
   }, []);
@@ -213,7 +382,11 @@ export default function DetailScreen() {
   const handleOtherSubjectChange = (value: string) => {
     setNewSubject(value);
     if (value.trim().length >= 2) {
-      setSelectedSubject(value.trim());
+      const next = value.trim();
+      if (next !== selectedSubject) {
+        setSelectedSubject(next);
+        setIsDirty(true);
+      }
     }
   };
 
@@ -285,7 +458,10 @@ export default function DetailScreen() {
           Alert.alert('エラー', '画像の読み込みに失敗しました。もう一度選択してください。');
           return;
         }
-        setPhotoUri(uri);
+        if (uri !== photoUri) {
+          setPhotoUri(uri);
+          setIsDirty(true);
+        }
       }
     } catch (error: any) {
       Alert.alert('エラー', error.message || '画像の読み込みに失敗しました');
@@ -314,7 +490,10 @@ export default function DetailScreen() {
   };
 
   const handlePreviewSave = () => {
-    if (previewUri) setPhotoUri(previewUri);
+    if (previewUri && previewUri !== photoUri) {
+      setPhotoUri(previewUri);
+      setIsDirty(true);
+    }
     setShowCamera(false);
     setCameraPhase('camera');
     setPreviewUri(null);
@@ -455,6 +634,7 @@ export default function DetailScreen() {
           throw new Error('回転後の画像が無効です');
         }
         setPhotoUri(blobUrl);
+        setIsDirty(true);
         return;
       }
 
@@ -479,6 +659,7 @@ export default function DetailScreen() {
       }
 
       setPhotoUri(result.uri);
+      setIsDirty(true);
     } catch (error: any) {
       logError('[回転]', error);
       Alert.alert('エラー', error.message || '画像の回転に失敗しました');
@@ -494,6 +675,7 @@ export default function DetailScreen() {
         await deleteImage(pathToDelete);
       }
       setPhotoUri(null);
+      setIsDirty(true);
     } catch (e) {
       logError('[写真削除エラー]', e);
       Alert.alert('エラー', '写真の削除に失敗しました');
@@ -639,15 +821,25 @@ export default function DetailScreen() {
       if (error) throw error;
 
       await loadRecord(record.id);
+      setIsDirty(false);
       setEditMode(false);
-      Alert.alert('成功', '記録を更新しました', [{ text: 'OK', onPress: () => router.replace('/(tabs)/list') }]);
+
+      if (pendingActionRef.current) {
+        const action = pendingActionRef.current;
+        pendingActionRef.current = null;
+        action();
+      } else {
+        Alert.alert('成功', '記録を更新しました', [{ text: 'OK', onPress: goBackOrToList }]);
+      }
     } catch (error: any) {
+      pendingActionRef.current = null;
       logError('[記録更新] 保存エラー');
       Alert.alert('エラー', '保存に失敗しました');
     } finally {
       setIsSaving(false);
     }
   };
+  handleSaveRef.current = handleSave;
 
   const scrollToRecord = (recordId: string) => {
     const rowEl = rowRefMap.current[recordId];
@@ -681,7 +873,11 @@ export default function DetailScreen() {
   const handleScoreModalConfirm = async (value: number | null) => {
     if (!record || !familyId) return;
     const maxScoreNum = parseInt(maxScore, 10) || record.max_score || 100;
-    setScore(value != null ? String(value) : '');
+    const nextScore = value != null ? String(value) : '';
+    if (nextScore !== score) {
+      setIsDirty(true);
+    }
+    setScore(nextScore);
     setRecord((prev) => (prev ? { ...prev, score: value, max_score: maxScoreNum } : null));
     setScoreError('');
     setShowScoreModal(false);
@@ -788,26 +984,9 @@ export default function DetailScreen() {
   const editPhotoDisplayUri =
     photoUri && isValidImageUri(photoUri) ? photoUri : resolvedEditPhotoUrl;
 
-  // 編集時：写真・点数・スタンプのいずれかがあれば保存ボタン有効
-  // 写真あり = 新規選択のURI(file/https) または 既存の record.photo_uri（DBのパスは isValidImageUri で false になるため別判定）
-  const hasPhotoInEdit = !!(
-    photoUri &&
-    (isValidImageUri(photoUri) || record?.photo_uri)
-  );
-  const canSaveInEdit =
-    hasPhotoInEdit ||
-    (evaluationType === 'score' &&
-      score.trim() !== '' &&
-      !scoreError &&
-      !isNaN(parseInt(score, 10)) &&
-      parseInt(score, 10) >= 0 &&
-      parseInt(maxScore, 10) > 0 &&
-      parseInt(score, 10) <= parseInt(maxScore, 10)) ||
-    (evaluationType === 'stamp' && !!stamp);
-
   if (isSwitchingChild) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
           <Text style={styles.loadingText}>読み込み中…</Text>
@@ -818,7 +997,7 @@ export default function DetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
@@ -828,7 +1007,7 @@ export default function DetailScreen() {
 
   if (!record) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={styles.container}>
           <AppHeader showBack={true} showChildSwitcher={false} />
           <View style={styles.errorContainer}>
@@ -840,21 +1019,23 @@ export default function DetailScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1 }} edges={[]}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? headerTop : 0}>
       <View style={styles.container}>
-        <AppHeader
-          showBack={true}
-          showChildSwitcher={false}
-          showSettings={false}
-          showEdit={!editMode}
-          showDelete={!editMode}
-          onEdit={() => setEditMode(true)}
-          onDelete={confirmDelete}
-        />
+        {!editMode && (
+          <AppHeader
+            showBack={true}
+            showChildSwitcher={false}
+            showSettings={false}
+            showEdit={true}
+            showDelete={true}
+            onEdit={() => setEditMode(true)}
+            onDelete={confirmDelete}
+          />
+        )}
 
         {editMode ? (
           <KeyboardAvoidingView
@@ -864,7 +1045,7 @@ export default function DetailScreen() {
               <ScrollView
                 ref={scrollViewRef}
                 style={styles.scrollView}
-                contentContainerStyle={{ paddingTop: headerTop, paddingBottom: 140 + safeBottom }}
+                contentContainerStyle={{ paddingTop: 16, paddingBottom: 24 + insets.bottom }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}>
           <View ref={scrollContentAnchorRef} collapsable={false} style={[styles.section, styles.photoSection]}>
@@ -933,7 +1114,12 @@ export default function DetailScreen() {
                       styles.childChip,
                       selectedChildId === child.id && styles.childChipSelected,
                     ]}
-                    onPress={() => setSelectedChildId(child.id)}
+                    onPress={() => {
+                      if (child.id !== selectedChildId) {
+                        setSelectedChildId(child.id);
+                        setIsDirty(true);
+                      }
+                    }}
                     activeOpacity={0.7}>
                     <View style={[styles.childColorBadge, { backgroundColor: child.color }]} />
                     <Text
@@ -961,9 +1147,12 @@ export default function DetailScreen() {
                       selectedSubject === subject && styles.chipSelected,
                     ]}
                     onPress={() => {
-                      setSelectedSubject(subject);
-                      setShowSubjectInput(false);
-                      setNewSubject('');
+                      if (subject !== selectedSubject) {
+                        setSelectedSubject(subject);
+                        setShowSubjectInput(false);
+                        setNewSubject('');
+                        setIsDirty(true);
+                      }
                     }}
                     activeOpacity={0.7}>
                     <Text
@@ -1020,7 +1209,12 @@ export default function DetailScreen() {
                   styles.evaluationTypeButton,
                   evaluationType === 'score' && styles.evaluationTypeButtonSelected,
                 ]}
-                onPress={() => setEvaluationType('score')}
+                onPress={() => {
+                  if (evaluationType !== 'score') {
+                    setEvaluationType('score');
+                    setIsDirty(true);
+                  }
+                }}
                 activeOpacity={0.7}>
                 <Text
                   style={[
@@ -1035,7 +1229,12 @@ export default function DetailScreen() {
                   styles.evaluationTypeButton,
                   evaluationType === 'stamp' && styles.evaluationTypeButtonSelected,
                 ]}
-                onPress={() => setEvaluationType('stamp')}
+                onPress={() => {
+                  if (evaluationType !== 'stamp') {
+                    setEvaluationType('stamp');
+                    setIsDirty(true);
+                  }
+                }}
                 activeOpacity={0.7}>
                 <Text
                   style={[
@@ -1103,7 +1302,12 @@ export default function DetailScreen() {
                       styles.stampButton,
                       stamp === s && styles.stampButtonSelected,
                     ]}
-                    onPress={() => setStamp(s)}
+                    onPress={() => {
+                      if (s !== stamp) {
+                        setStamp(s);
+                        setIsDirty(true);
+                      }
+                    }}
                     activeOpacity={0.7}>
                     <Text
                       style={[
@@ -1123,7 +1327,10 @@ export default function DetailScreen() {
             <DateField
               value={record?.date ?? ''}
               onChange={(d) => {
-                if (record && isValidYmd(d)) setRecord({ ...record, date: d });
+                if (record && isValidYmd(d)) {
+                  setRecord({ ...record, date: d });
+                  setIsDirty(true);
+                }
               }}
               maxDate={new Date()}
               placeholder="タップして選択"
@@ -1137,7 +1344,10 @@ export default function DetailScreen() {
             <TextInput
               style={styles.memoInput}
               value={memo}
-              onChangeText={setMemo}
+              onChangeText={(t) => {
+                setMemo(t);
+                setIsDirty(true);
+              }}
               placeholder="メモを入力（例：計算がんばった！）"
               placeholderTextColor="#999"
               multiline
@@ -1213,31 +1423,6 @@ export default function DetailScreen() {
             <View style={{ height: 100 }} />
           </View>
         </ScrollView>
-      )}
-
-      {editMode && (
-        <View style={getBottomButtonContainerStyle(insets, 'row')}>
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={isSaving || !canSaveInEdit}
-            activeOpacity={0.8}
-            style={styles.bottomSaveButtonWrap}>
-            <View
-              style={[
-                styles.bottomSaveButton,
-                (isSaving || !canSaveInEdit) && styles.bottomSaveButtonDisabled,
-              ]}>
-              {isSaving ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color="#fff" />
-                  <Text style={[styles.bottomSaveButtonText, { marginLeft: 8 }]}>保存中...</Text>
-                </View>
-              ) : (
-                <Text style={styles.bottomSaveButtonText}>保存</Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
       )}
 
       <Modal
@@ -1367,8 +1552,12 @@ export default function DetailScreen() {
             initialValue={maxScore.trim() ? parseInt(maxScore, 10) || null : null}
             onClose={() => setShowFullScoreModal(false)}
             onConfirm={(value) => {
-              setMaxScore(String(value));
-              validateScore(score, String(value));
+              const next = String(value);
+              if (next !== maxScore) {
+                setMaxScore(next);
+                setIsDirty(true);
+              }
+              validateScore(score, next);
               setShowFullScoreModal(false);
             }}
           />

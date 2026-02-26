@@ -183,6 +183,7 @@ export default function RootLayout() {
               <Stack.Screen name="onboarding" />
               <Stack.Screen name="consent" />
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="detail" />
               <Stack.Screen name="add" />
               <Stack.Screen name="settings" />
               <Stack.Screen name="children" />

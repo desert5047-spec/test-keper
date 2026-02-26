@@ -264,7 +264,7 @@ export default function HomeScreen() {
 
   const handlePress = useCallback(
     (id: string) => {
-      router.push(`/(tabs)/list/detail?id=${id}`);
+      router.push(`/detail?id=${id}`);
     },
     [router]
   );

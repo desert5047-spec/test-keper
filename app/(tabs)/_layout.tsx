@@ -11,7 +11,7 @@ export default function TabLayout() {
 
   return (
     <DateProvider>
-      <Tabs
+    <Tabs
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: '#333',

@@ -1,41 +1,42 @@
-import { Platform } from 'react-native';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 
+/** 保存ボタン高さ */
+const SAVE_BUTTON_HEIGHT = 44;
+
+/** 固定フッターの paddingTop */
+const FOOTER_PADDING_TOP = 10;
+
 /**
- * bottomButtonContainer の共通スタイル。
- * 画面下部に固定する保存ボタン用コンテナに使用。
- *
- * 仕様:
- * - Android: bottom -2, paddingBottom insets.bottom + 6
- * - iOS: bottom 0, paddingBottom insets.bottom + 10
+ * 固定フッター（画面下部）のスタイル。
+ * 記録・編集両画面で同一レイアウトに統一。
+ * 白塗りなし、保存ボタンのみ表示。
  */
-export function getBottomButtonContainerStyle(
-  insets: EdgeInsets,
-  layout: 'row' | 'column'
-): {
+export function getFooterStyle(insets: EdgeInsets): {
   position: 'absolute';
-  bottom: number;
   left: number;
   right: number;
+  bottom: number;
   paddingHorizontal: number;
   paddingTop: number;
   paddingBottom: number;
-  flexDirection: 'row' | 'column';
-  justifyContent?: 'flex-end';
-  alignItems: 'center' | 'stretch';
 } {
   return {
     position: 'absolute',
-    bottom: Platform.OS === 'android' ? -2 : 0,
     left: 0,
     right: 0,
+    bottom: 0,
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom:
-      Platform.OS === 'android' ? insets.bottom + 6 : insets.bottom + 10,
-    flexDirection: layout,
-    ...(layout === 'row'
-      ? { justifyContent: 'flex-end' as const, alignItems: 'center' as const }
-      : { alignItems: 'stretch' as const }),
+    paddingTop: FOOTER_PADDING_TOP,
+    paddingBottom: Math.max(insets.bottom, 12),
   };
+}
+
+/**
+ * ScrollView の contentContainerStyle.paddingBottom 用。
+ * 固定フッターでコンテンツが隠れないよう余白を確保する。
+ */
+export function getScrollPaddingBottom(insets: EdgeInsets): number {
+  const footerHeight =
+    SAVE_BUTTON_HEIGHT + FOOTER_PADDING_TOP + Math.max(insets.bottom, 12);
+  return footerHeight + 12;
 }
