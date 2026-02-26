@@ -1,0 +1,8 @@
+﻿node_modules
+.expo
+.next
+dist
+build
+coverage
+.git
+*.log

@@ -6,8 +6,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
-// ステータスバー(=insets.top)を除いた「中身だけ」の高さ
-export const HEADER_HEIGHT = 58;
+// ヘッダーバー高さ（ステータスバーはルート TopSafeAreaBg で塗る）
+export const HEADER_HEIGHT = 56;
+const BG = '#FFFFFF';
+const STATUS_BAR_OFFSET = 4; // _layout TopSafeAreaBg と一致
+
+/** コンテンツの paddingTop 用。ステータスバー領域+ヘッダー高さ */
+export function useHeaderTop(): number {
+  const insets = useSafeAreaInsets();
+  const topOffset = Platform.OS === 'web' ? 20 : Math.max(insets.top - STATUS_BAR_OFFSET, 0);
+  return topOffset + HEADER_HEIGHT;
+}
 
 interface AppHeaderProps {
   showBack?: boolean;
@@ -35,10 +44,9 @@ export function AppHeader({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { year, month, setYearMonth } = useDateContext();
+  const topOffset = Platform.OS === 'web' ? 20 : Math.max(insets.top - STATUS_BAR_OFFSET, 0);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(year);
-
-  const headerPaddingTop = Platform.OS === 'web' ? 20 : insets.top;
 
   useEffect(() => {
     if (showMonthPicker) setPickerYear(year);
@@ -71,15 +79,10 @@ export function AppHeader({
 
   return (
     <>
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: headerPaddingTop,
-            minHeight: HEADER_HEIGHT + headerPaddingTop,
-          },
-        ]}>
-        <View style={styles.left}>
+      <View style={[styles.container, { backgroundColor: BG, top: topOffset }]}>
+        {/* ヘッダーバー本体。ステータスバー領域は _layout TopSafeAreaBg で塗る */}
+        <View style={[styles.bar, { height: HEADER_HEIGHT, backgroundColor: BG, paddingHorizontal: 12 }]}>
+          <View style={styles.left}>
           {showBack ? (
             <TouchableOpacity
               onPress={() => {
@@ -164,6 +167,7 @@ export function AppHeader({
             </TouchableOpacity>
           )}
         </View>
+        </View>
       </View>
 
       <Modal
@@ -230,15 +234,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFF',
-    paddingBottom: 8,
-    paddingHorizontal: 12,
+    flexDirection: 'column',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    zIndex: 10,
+  },
+  bar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 10,
+    width: '100%',
   },
   left: {
     alignItems: 'flex-start',
@@ -250,6 +255,8 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     position: 'absolute',
+    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -312,7 +319,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   monthPickerContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     width: '80%',
     maxWidth: 360,

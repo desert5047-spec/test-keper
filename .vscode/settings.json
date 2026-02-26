@@ -1,0 +1,12 @@
+{
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": null,
+    "source.fixAll.eslint": null,
+    "source.organizeImports": null
+  },
+  "eslint.run": "off",
+  "eslint.format.enable": false,
+  "files.autoSave": "off"
+}
+

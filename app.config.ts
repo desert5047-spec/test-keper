@@ -2,6 +2,7 @@ import 'dotenv/config';
 import type { ExpoConfig, ConfigContext } from 'expo/config';
 import dotenv from 'dotenv';
 import path from 'path';
+import pkg from './package.json';
 
 // NODE_ENV=production のとき .env.production を読み込む（ローカル事前評価・config:prod 用）
 if (process.env.NODE_ENV === 'production') {
@@ -44,6 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
     ...config,
+    version: pkg.version, // ← version を package.json から取得
     name: 'Test Album',
     slug: 'test-album',
     scheme: 'testalbum',
@@ -52,7 +54,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.ios,
       newArchEnabled: false,
       bundleIdentifier: 'jp.testalbum.app',
-      buildNumber: '5',
+      buildNumber: '6',
       infoPlist: {
         ...(config.ios?.infoPlist ?? {}),
         CFBundleDevelopmentRegion: 'ja',
@@ -76,7 +78,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.android,
       newArchEnabled: false,
       package: 'jp.testalbum.app',
-      versionCode: 5,
+      versionCode: 6,
       intentFilters: [
         {
           action: 'VIEW',

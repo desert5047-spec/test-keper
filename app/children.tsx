@@ -269,7 +269,7 @@ export default function ChildrenScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
@@ -278,7 +278,7 @@ export default function ChildrenScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity

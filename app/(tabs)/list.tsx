@@ -20,8 +20,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
 import { getSignedImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppHeader, useHeaderTop } from '@/components/AppHeader';
 import { log, logLoadError } from '@/lib/logger';
 
 const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
@@ -102,8 +102,7 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
 
 export default function ListScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
+  const headerTop = useHeaderTop();
   const params = useLocalSearchParams();
   const { year, month, setYearMonth } = useDateContext();
   const { selectedChildId } = useChild();
@@ -239,7 +238,7 @@ export default function ListScreen() {
   const showBannerAndList = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length > 0;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 

@@ -172,7 +172,7 @@ export default function ResetPasswordScreen() {
 
   if (checkingToken) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
         <View style={[styles.container, styles.centerContent]}>
           <ActivityIndicator size="large" color="#4A90E2" />
           <Text style={styles.loadingText}>リンクを確認中...</Text>
@@ -183,7 +183,7 @@ export default function ResetPasswordScreen() {
 
   if (!isValidToken && !isDebug) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}>
@@ -222,7 +222,7 @@ export default function ResetPasswordScreen() {
 
   if (success) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
         <View style={[styles.container, styles.centerContent]}>
           <View style={styles.successIcon}>
             <Check size={48} color="#4CAF50" strokeWidth={3} />
@@ -235,7 +235,7 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}>

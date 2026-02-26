@@ -19,8 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
 import { getSignedImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppHeader, useHeaderTop } from '@/components/AppHeader';
 import { Platform } from 'react-native';
 import { log, logLoadError } from '@/lib/logger';
 
@@ -139,8 +139,7 @@ export default function HomeScreen() {
     }
   };
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
+  const headerTop = useHeaderTop();
   const [records, setRecords] = useState<RecordWithImageUrl[]>([]);
   const [stableRecords, setStableRecords] = useState<RecordWithImageUrl[]>([]);
   const stableRef = useRef<RecordWithImageUrl[]>([]);
@@ -307,7 +306,7 @@ export default function HomeScreen() {
   const showBannerAndList = hasLoadedOnce && loadError && !loading && stableRecords.length > 0;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 

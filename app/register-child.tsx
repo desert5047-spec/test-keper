@@ -111,7 +111,7 @@ export default function RegisterChildScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.header}>

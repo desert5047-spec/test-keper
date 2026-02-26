@@ -14,8 +14,8 @@ import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppHeader, useHeaderTop } from '@/components/AppHeader';
 import { logLoadError } from '@/lib/logger';
 
 const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
@@ -33,8 +33,7 @@ interface MonthSummary {
 
 export default function MonthlyScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
+  const headerTop = useHeaderTop();
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
@@ -239,7 +238,7 @@ export default function MonthlyScreen() {
   const hasMore = displaySummaries.length > displayCount;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 

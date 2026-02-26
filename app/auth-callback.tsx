@@ -434,7 +434,7 @@ export default function AuthCallbackDeepLink() {
   }, [status]);
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>認証処理</Text>

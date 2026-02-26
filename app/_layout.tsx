@@ -5,7 +5,7 @@ import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LogBox, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
@@ -32,6 +32,32 @@ void SplashScreen.preventAutoHideAsync().catch((error) => {
 
 // 無効なリフレッシュトークンエラーはアプリ側で signOut して処理するため、コンソールの ERROR 表示を抑制
 LogBox.ignoreLogs(['Invalid Refresh Token', 'Refresh Token Not Found', 'AuthApiError']);
+
+if (__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
+
+const BG = '#FFFFFF';
+const STATUS_BAR_OFFSET = 4;
+
+function TopSafeAreaBg() {
+  const insets = useSafeAreaInsets();
+  const h = Math.max(insets.top - STATUS_BAR_OFFSET, 0);
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: h,
+        backgroundColor: BG,
+        zIndex: 9998,
+      }}
+    />
+  );
+}
 
 /** 無効なリフレッシュトークンエラーかどうか（Expo Go 等で未処理の Promise 拒否を拾う用） */
 function isInvalidRefreshTokenError(reason: unknown): boolean {
@@ -124,8 +150,10 @@ export default function RootLayout() {
   debugLog('[RootLayout] レンダリング開始', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: BG }}>
+      <SafeAreaProvider style={{ flex: 1, backgroundColor: BG }}>
+        <TopSafeAreaBg />
+        {Platform.OS !== 'web' && <StatusBar style="dark" backgroundColor={BG} />}
         <DebugLabel />
         {Platform.OS === 'web' && (
         <style>{`
@@ -159,7 +187,6 @@ export default function RootLayout() {
               <Stack.Screen name="terms-of-service" />
               <Stack.Screen name="+not-found" />
             </Stack>
-            <StatusBar style="dark" backgroundColor="#ffffff" />
           </DateProvider>
         </ChildProvider>
       </AuthProvider>
