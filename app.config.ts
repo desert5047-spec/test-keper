@@ -54,7 +54,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.ios,
       newArchEnabled: false,
       bundleIdentifier: 'jp.testalbum.app',
-      buildNumber: '7',
+      buildNumber: '8',
       infoPlist: {
         ...(config.ios?.infoPlist ?? {}),
         CFBundleDevelopmentRegion: 'ja',
@@ -78,7 +78,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.android,
       newArchEnabled: false,
       package: 'jp.testalbum.app',
-      versionCode: 7,
+      versionCode: 8,
       intentFilters: [
         {
           action: 'VIEW',
