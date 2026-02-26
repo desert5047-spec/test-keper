@@ -184,13 +184,16 @@ export function AppHeader({
               <Pressable
                 onPress={onSave}
                 disabled={saveDisabled || isSaving}
-                style={[
+                style={({ pressed }) => [
                   styles.editSaveButton,
                   (saveDisabled || isSaving) && styles.editSaveButtonDisabled,
+                  pressed && styles.editSaveButtonPressed,
                 ]}
                 {...(Platform.OS === 'web' && { cursor: saveDisabled || isSaving ? 'default' : 'pointer' } as any)}>
-                {isSaving && <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />}
-                <Text style={styles.editSaveButtonText}>{isSaving ? '保存中...' : '保存'}</Text>
+                <View style={styles.editSaveButtonInner} collapsable={false}>
+                  {isSaving && <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />}
+                  <Text style={styles.editSaveButtonText}>{isSaving ? '保存中...' : '保存'}</Text>
+                </View>
               </Pressable>
             ) : (
               <>
@@ -446,10 +449,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     minWidth: 100,
+    overflow: 'hidden',
+    ...(Platform.OS === 'android' && { elevation: 2 }),
+  },
+  editSaveButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editSaveButtonPressed: {
+    opacity: 0.85,
   },
   editSaveButtonDisabled: {
-    backgroundColor: '#CCC',
-    opacity: 0.6,
+    backgroundColor: '#999',
+    opacity: 1,
   },
   editSaveButtonText: {
     color: '#fff',

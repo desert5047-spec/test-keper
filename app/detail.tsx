@@ -1436,7 +1436,7 @@ export default function DetailScreen() {
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowPhotoOptions(false)}>
-          <View style={styles.actionSheet}>
+          <View style={[styles.actionSheet, { paddingBottom: 12 + Math.max(insets.bottom, 12) }]}>
             <TouchableOpacity
               style={styles.actionSheetButton}
               onPress={takePhoto}
@@ -2118,7 +2118,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 20,
   },
   actionSheetButton: {
     paddingVertical: 18,

@@ -1192,12 +1192,7 @@ export default function AddScreen() {
           <View
             style={[
               styles.actionSheet,
-              Platform.OS === 'android'
-                ? {
-                    marginBottom: (insets.bottom || 24) + 8,
-                    paddingBottom: 12,
-                  }
-                : { paddingBottom: insets.bottom + 12 },
+              { paddingBottom: 12 + Math.max(insets.bottom, 12) },
             ]}>
             <TouchableOpacity
               style={styles.actionSheetButton}

@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RotateCcw, Check } from 'lucide-react-native';
-import { useSafeBottom } from '@/lib/useSafeBottom';
+
+const ACTION_GAP = Platform.select({ android: 20, default: 16 }) as number;
 
 interface CameraPreviewScreenProps {
   imageUri: string;
@@ -14,13 +15,17 @@ interface CameraPreviewScreenProps {
  * 撮影後のプレビュー画面。「再撮影」「保存」をアプリ側で表示（OS標準の Retake/Use Photo を使わない）
  */
 export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPreviewScreenProps) {
-  const { safeBottom } = useSafeBottom(16);
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 12); // ナビ回避（最低12）
+
   return (
-    <SafeAreaView style={[styles.container, { flex: 1 }]} edges={['top', 'bottom']}>
-      <View style={styles.imageContainer}>
-        <Image source={{ uri: imageUri }} style={styles.image} contentFit="contain" />
+    <SafeAreaView style={[styles.container, { flex: 1 }]} edges={['top']}>
+      <View style={styles.contentWrap}>
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: imageUri }} style={styles.image} contentFit="cover" />
+        </View>
       </View>
-      <View style={[styles.actions, { paddingBottom: 24 + safeBottom }]}>
+      <View style={[styles.actions, { paddingBottom: ACTION_GAP + bottomInset }]}>
         <TouchableOpacity
           style={styles.retakeButton}
           onPress={onRetake}
@@ -47,19 +52,23 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    flex: 1,
   },
   image: {
     width: '100%',
     height: '100%',
+  },
+  contentWrap: {
+    flex: 1,
   },
   actions: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 24,
-    paddingVertical: 24,
+    paddingTop: 12,
     paddingHorizontal: 16,
+    backgroundColor: '#000',
   },
   retakeButton: {
     flexDirection: 'row',
