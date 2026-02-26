@@ -27,7 +27,7 @@ export function getFooterStyle(insets: EdgeInsets): {
     bottom: 0,
     paddingHorizontal: 16,
     paddingTop: FOOTER_PADDING_TOP,
-    paddingBottom: Math.max(insets.bottom, 12),
+    paddingBottom: Math.max(insets.bottom, 8),
   };
 }
 
@@ -37,6 +37,6 @@ export function getFooterStyle(insets: EdgeInsets): {
  */
 export function getScrollPaddingBottom(insets: EdgeInsets): number {
   const footerHeight =
-    SAVE_BUTTON_HEIGHT + FOOTER_PADDING_TOP + Math.max(insets.bottom, 12);
+    SAVE_BUTTON_HEIGHT + FOOTER_PADDING_TOP + Math.max(insets.bottom, 8);
   return footerHeight + 12;
 }

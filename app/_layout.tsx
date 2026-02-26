@@ -40,6 +40,19 @@ if (__DEV__) {
 const BG = '#FFFFFF';
 const STATUS_BAR_OFFSET = 4;
 
+/**
+ * [1] StatusBar / Stack / SafeArea 構成（__DEV__デバッグ用メモ）
+ *
+ * StatusBar 制御:
+ *   - setTranslucent / setBackgroundColor: なし（削除済み）
+ *   - <StatusBar style="dark" backgroundColor="#fff" /> (expo-status-bar, web以外)
+ *   - app.config: androidStatusBar 未指定（デフォルト＝translucent の可能性あり）
+ *
+ * Stack: screenOptions={{ headerShown: false }}（各画面が独自ヘッダー）
+ * SafeAreaProvider: 使用（react-native-safe-area-context）
+ * TopSafeAreaBg: insets.top - 4 の高さで画面上部に白背景オーバーレイ
+ */
+
 function TopSafeAreaBg() {
   const insets = useSafeAreaInsets();
   const h = Math.max(insets.top - STATUS_BAR_OFFSET, 0);
@@ -158,7 +171,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaProvider style={{ flex: 1, backgroundColor: BG }}>
         <TopSafeAreaBg />
-        {Platform.OS !== 'web' && <StatusBar style="dark" backgroundColor={BG} />}
+        {Platform.OS !== 'web' && <StatusBar style="dark" translucent={false} backgroundColor="#fff" />}
         <DebugLabel />
         {Platform.OS === 'web' && (
         <style>{`

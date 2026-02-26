@@ -131,6 +131,7 @@ export default function DetailScreen() {
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showFullScoreModal, setShowFullScoreModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const rootLayoutRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const scrollContentAnchorRef = useRef<View>(null);
   const rowRefMap = useRef<Record<string, View | null>>({});
   const memoYRef = useRef(0);
@@ -275,90 +276,19 @@ export default function DetailScreen() {
     );
   };
 
-  const HEADER_BAR_HEIGHT = 52;
+  // Stack headerShown: false のためヘッダーは自前（AppHeader）で統一
+  // useLayoutEffect による headerStyle 設定は削除済み
 
-  useLayoutEffect(() => {
-    if (editMode && record) {
-      navigation.setOptions({
-        headerShown: true,
-        headerTitle: '',
-        headerBackVisible: false,
-        headerStyle: {
-          backgroundColor: '#fff',
-          borderBottomWidth: 1,
-          borderBottomColor: '#eee',
-          height: insets.top + HEADER_BAR_HEIGHT,
-        },
-        headerLeft: () => (
-          <TouchableOpacity
-            onPress={handleCancel}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            activeOpacity={0.6}
-            style={{
-              width: 32,
-              height: 32,
-              alignItems: 'center',
-              justifyContent: 'center',
-              ...(Platform.OS === 'web' && { cursor: 'pointer' }),
-            }}>
-            <View
-              pointerEvents="none"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: '#666',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <X size={18} color="#fff" />
-            </View>
-          </TouchableOpacity>
-        ),
-        headerRight: () => (
-          <Pressable
-            onPress={() => handleSaveRef.current()}
-            disabled={isSaving || !canSaveInEdit}
-            hitSlop={12}
-            style={({ pressed }) => [
-              {
-                backgroundColor: !canSaveInEdit ? '#CCC' : '#4A90E2',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 8,
-                opacity: pressed && !isSaving && canSaveInEdit ? 0.8 : 1,
-              },
-            ]}>
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: '600',
-                  color: '#fff',
-                }}>
-                保存
-              </Text>
-            )}
-          </Pressable>
-        ),
-      });
-    } else {
-      navigation.setOptions({ headerShown: false });
-    }
-  }, [editMode, record, isSaving, canSaveInEdit, insets.top]);
-
+  // [2] 実測ログ（__DEV__のみ）
   useEffect(() => {
-    if (editMode && Platform.OS === 'android') {
-      StatusBar.setTranslucent?.(false);
-    }
-    return () => {
-      if (Platform.OS === 'android') {
-        StatusBar.setTranslucent?.(true);
-      }
-    };
-  }, [editMode]);
+    if (!__DEV__ || !editMode || !record) return;
+    const sb = StatusBar.currentHeight ?? 'N/A';
+    console.log(
+      `[DETAIL][Insets] top=${insets.top} bottom=${insets.bottom}`
+    );
+    console.log(`[DETAIL][StatusBar] currentHeight=${sb}`);
+    console.log(`[DETAIL][HeaderHeight] useHeaderHeight=${headerHeight}`);
+  }, [__DEV__, editMode, record, insets.top, insets.bottom, headerHeight]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
@@ -374,10 +304,6 @@ export default function DetailScreen() {
     });
     return unsubscribe;
   }, [navigation, editMode, isDirty]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-  }, []);
 
   const handleOtherSubjectChange = (value: string) => {
     setNewSubject(value);
@@ -1018,13 +944,22 @@ export default function DetailScreen() {
     );
   }
 
+  const handleRootLayout = (e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
+    if (!__DEV__ || !editMode) return;
+    const { x, y, width, height } = e.nativeEvent.layout;
+    rootLayoutRef.current = { x, y, w: width, h: height };
+    console.log(`[DETAIL][RootLayout] x=${x} y=${y} w=${width} h=${height}`);
+    // 編集時: ヘッダーは Stack が描画。コンテナの y = ヘッダー下端のオフセット
+    console.log(`[DETAIL][HeaderLayout] (Stack描画のため推測) y=0 h=${headerHeight}`);
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={[]}>
+    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? headerTop : 0}>
-      <View style={styles.container}>
+      <View style={styles.container} onLayout={handleRootLayout}>
         {!editMode && (
           <AppHeader
             showBack={true}
@@ -1037,6 +972,17 @@ export default function DetailScreen() {
           />
         )}
 
+        {editMode && (
+          <AppHeader
+            showCancel={true}
+            showSave={true}
+            onCancel={handleCancel}
+            onSave={() => handleSaveRef.current()}
+            isSaving={isSaving}
+            saveDisabled={!canSaveInEdit}
+          />
+        )}
+
         {editMode ? (
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1045,7 +991,7 @@ export default function DetailScreen() {
               <ScrollView
                 ref={scrollViewRef}
                 style={styles.scrollView}
-                contentContainerStyle={{ paddingTop: 16, paddingBottom: 24 + insets.bottom }}
+                contentContainerStyle={{ paddingTop: headerTop, paddingBottom: 24 + insets.bottom }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}>
           <View ref={scrollContentAnchorRef} collapsable={false} style={[styles.section, styles.photoSection]}>
@@ -1104,7 +1050,7 @@ export default function DetailScreen() {
           </View>
 
           {contextChildren.length > 0 && (
-            <View style={styles.section}>
+            <View style={[styles.section, { marginTop: 4 }]}>
               <Text style={styles.sectionTitle}>子供</Text>
               <View style={styles.childChipContainer}>
                 {contextChildren.map((child) => (
@@ -1793,6 +1739,7 @@ const styles = StyleSheet.create({
   photoSection: {
     paddingTop: 0,
     marginTop: 8,
+    paddingBottom: 0,
   },
   photoContainer: {
     borderRadius: 12,
@@ -1801,7 +1748,7 @@ const styles = StyleSheet.create({
   },
   photoWrapper: {
     width: '100%',
-    height: 300,
+    height: 280,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -1844,8 +1791,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 12,
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 6,
   },
   rotateButton: {
     width: 48,

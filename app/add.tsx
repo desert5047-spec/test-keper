@@ -823,12 +823,20 @@ export default function AddScreen() {
       ? '記録は保存されましたが、写真のアップロードに失敗しました。\n続けて入力しますか？'
       : '記録は保存されました。\n続けて入力しますか？';
 
+  const goBackOrToList = () => {
+    if (router.canGoBack?.()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/list');
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1 }} edges={[]}>
       <View style={[styles.header, { paddingTop: headerTop - HEADER_HEIGHT }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={goBackOrToList}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={styles.backButtonText}>←</Text>
@@ -1391,7 +1399,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 12,
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 8,
   },
   rotateButton: {

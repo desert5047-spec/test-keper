@@ -46,7 +46,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   imageContainer: {
-    flex: 1,
+    width: '100%',
+    aspectRatio: 4 / 3,
   },
   image: {
     width: '100%',

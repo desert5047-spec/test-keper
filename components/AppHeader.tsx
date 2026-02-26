@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform, ActivityIndicator, Pressable } from 'react-native';
+import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,13 @@ interface AppHeaderProps {
   onDelete?: () => void;
   /** SafeAreaView edges={['top']} で親が top を吸収している場合 true。Header の高さ・margin を調整 */
   safeTopByParent?: boolean;
+  /** 編集モード: ✖(キャンセル) + 保存ボタン */
+  showCancel?: boolean;
+  showSave?: boolean;
+  onCancel?: () => void;
+  onSave?: () => void;
+  isSaving?: boolean;
+  saveDisabled?: boolean;
 }
 
 export function AppHeader({
@@ -41,6 +48,12 @@ export function AppHeader({
   onEdit,
   onDelete,
   safeTopByParent = false,
+  showCancel = false,
+  showSave = false,
+  onCancel,
+  onSave,
+  isSaving = false,
+  saveDisabled = false,
 }: AppHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -92,14 +105,36 @@ export function AppHeader({
     router.replace('/(tabs)');
   };
 
-  const headerOuterHeight = safeTopByParent ? HEADER_HEIGHT : insets.top + HEADER_HEIGHT;
-  const headerRowMarginTop = safeTopByParent ? 0 : insets.top;
+  const headerTopInset = safeTopByParent ? 0 : insets.top;
+  const headerOuterHeight = headerTopInset + HEADER_HEIGHT;
+
+  const isEditMode = showCancel && showSave;
 
   return (
     <>
-      <View style={[styles.headerOuter, { height: headerOuterHeight, backgroundColor: BG }]}>
-        <View style={[styles.headerRow, { marginTop: headerRowMarginTop, height: HEADER_HEIGHT }]}>
-          {showBack ? (
+      <View
+        style={[
+          styles.headerOuter,
+          {
+            paddingTop: headerTopInset,
+            height: headerOuterHeight,
+            backgroundColor: BG,
+            borderBottomColor: isEditMode ? '#eee' : '#F0F0F0',
+          },
+        ]}>
+        <View style={[styles.headerRow, { height: HEADER_HEIGHT }]}>
+          {isEditMode ? (
+            <TouchableOpacity
+              onPress={onCancel}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.6}
+              style={styles.editCancelButton}
+              {...(Platform.OS === 'web' && { cursor: 'pointer' } as any)}>
+              <View style={styles.editCancelButtonInner}>
+                <X size={18} color="#fff" />
+              </View>
+            </TouchableOpacity>
+          ) : showBack ? (
             <View style={styles.hit}>
               <TouchableOpacity onPress={handleBack} style={styles.hitTouchable} activeOpacity={0.7}>
                 <ArrowLeft size={22} color="#333" />
@@ -113,7 +148,9 @@ export function AppHeader({
             <View style={styles.hit} />
           )}
 
-          {showYearMonthNav ? (
+          {isEditMode ? (
+            <View style={styles.titleSpacer} />
+          ) : showYearMonthNav ? (
             <View style={styles.center}>
               <TouchableOpacity
                 style={styles.yearArrow}
@@ -143,25 +180,41 @@ export function AppHeader({
           )}
 
           <View style={styles.rightRow}>
-            {showEdit && onEdit && (
-              <TouchableOpacity onPress={onEdit} style={styles.hit} activeOpacity={0.7}>
-                <Edit3 size={20} color="#666" />
-              </TouchableOpacity>
+            {isEditMode ? (
+              <Pressable
+                onPress={onSave}
+                disabled={saveDisabled || isSaving}
+                style={[
+                  styles.editSaveButton,
+                  (saveDisabled || isSaving) && styles.editSaveButtonDisabled,
+                ]}
+                {...(Platform.OS === 'web' && { cursor: saveDisabled || isSaving ? 'default' : 'pointer' } as any)}>
+                {isSaving && <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />}
+                <Text style={styles.editSaveButtonText}>{isSaving ? '保存中...' : '保存'}</Text>
+              </Pressable>
+            ) : (
+              <>
+                {showEdit && onEdit && (
+                  <TouchableOpacity onPress={onEdit} style={styles.hit} activeOpacity={0.7}>
+                    <Edit3 size={20} color="#666" />
+                  </TouchableOpacity>
+                )}
+                {showDelete && onDelete && (
+                  <TouchableOpacity onPress={onDelete} style={styles.hit} activeOpacity={0.7}>
+                    <Trash2 size={20} color="#666" />
+                  </TouchableOpacity>
+                )}
+                {showSettings && (
+                  <TouchableOpacity
+                    onPress={() => router.push('/settings')}
+                    style={styles.hit}
+                    activeOpacity={0.7}>
+                    <Settings size={24} color="#666" />
+                  </TouchableOpacity>
+                )}
+                {!showEdit && !showDelete && !showSettings && <View style={styles.hit} />}
+              </>
             )}
-            {showDelete && onDelete && (
-              <TouchableOpacity onPress={onDelete} style={styles.hit} activeOpacity={0.7}>
-                <Trash2 size={20} color="#666" />
-              </TouchableOpacity>
-            )}
-            {showSettings && (
-              <TouchableOpacity
-                onPress={() => router.push('/settings')}
-                style={styles.hit}
-                activeOpacity={0.7}>
-                <Settings size={24} color="#666" />
-              </TouchableOpacity>
-            )}
-            {!showEdit && !showDelete && !showSettings && <View style={styles.hit} />}
           </View>
         </View>
       </View>
@@ -369,5 +422,39 @@ const styles = StyleSheet.create({
   },
   monthPickerItemTextSelected: {
     color: '#fff',
+  },
+  editCancelButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editCancelButtonInner: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#666',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  editSaveButtonDisabled: {
+    backgroundColor: '#CCC',
+    opacity: 0.6,
+  },
+  editSaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Nunito-SemiBold',
   },
 });
