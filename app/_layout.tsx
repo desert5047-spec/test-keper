@@ -13,10 +13,10 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
 import { isSupabaseConfigured, supabaseConfigError, supabase } from '@/lib/supabase';
-import { DebugLabel } from '@/components/DebugLabel';
+import DebugLabel from '@/components/DebugLabel';
 import { log, warn, error as logError } from '@/lib/logger';
 
-// 本番（!__DEV__）では log/info/debug/warn を無効化。error はクラッシュ情報のため残す
+// 本番（!__DEV__）では log/info/debug/warn を無効化。console.error は上書きしない（クラッシュ情報用）
 if (!__DEV__) {
   console.log = () => {};
   console.info = () => {};
@@ -77,7 +77,12 @@ export default function RootLayout() {
   try {
     useFrameworkReady();
   } catch (error) {
-    logError('[RootLayout] useFrameworkReadyエラー');
+    if (__DEV__) {
+      console.error('[RootLayout] useFrameworkReadyエラー', error);
+    } else {
+      console.warn('[RootLayout] framework init failed');
+    }
+    // 本番では絶対に throw しない
   }
 
   const [fontsLoaded, fontError] = useFonts({
