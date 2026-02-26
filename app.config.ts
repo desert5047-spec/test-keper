@@ -45,7 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
     ...config,
-    version: pkg.version, // ← version を package.json から取得 (1.0.2)
+    version: pkg.version, // ← version を package.json から取得
     name: 'Test Album',
     slug: 'test-album',
     scheme: 'testalbum',
