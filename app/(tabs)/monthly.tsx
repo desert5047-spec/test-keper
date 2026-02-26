@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,8 @@ import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppHeader, useHeaderTop } from '@/components/AppHeader';
 import { logLoadError } from '@/lib/logger';
 
 const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
@@ -33,8 +33,7 @@ interface MonthSummary {
 
 export default function MonthlyScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
+  const headerTop = useHeaderTop();
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
@@ -45,23 +44,6 @@ export default function MonthlyScreen() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<'offline' | 'unknown' | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [switchingChild, setSwitchingChild] = useState(false);
-
-  // 子ども切替時は一度表示をリセットしてローディングに固定（空状態の一瞬表示を防ぐ）
-  useEffect(() => {
-    setLoadError(null);
-    setHasLoadedOnce(false);
-    setLoading(true);
-    setMonthlySummaries([]);
-    setStableSummaries([]);
-  }, [selectedChildId]);
-
-  // 切替直後の短いブリッジ時間は空状態を出さずスピナーを維持
-  useEffect(() => {
-    setSwitchingChild(true);
-    const t = setTimeout(() => setSwitchingChild(false), 200);
-    return () => clearTimeout(t);
-  }, [selectedChildId]);
 
   const loadMonthlySummaries = useCallback(async () => {
     if (!selectedChildId || !isFamilyReady || !familyId) {
@@ -246,19 +228,17 @@ export default function MonthlyScreen() {
     return `${h}:${m}`;
   };
 
-  const listData = useMemo(() => stableSummaries, [stableSummaries]);
-  const hasData = listData.length > 0;
-  const showSpinner = !isFamilyReady || ((loading || switchingChild) && !hasData);
-  const showEmptyState = isFamilyReady && !switchingChild && hasLoadedOnce && !loading && !hasData && !loadError;
-  const showLoadErrorFullScreen = hasLoadedOnce && loadError && !loading && !hasData;
-  const showBannerAndList = hasLoadedOnce && loadError && !loading && hasData;
+  const showSpinner = !isFamilyReady || (stableSummaries.length === 0 && (!hasLoadedOnce || loading));
+  const showEmptyState = isFamilyReady && hasLoadedOnce && !loading && stableSummaries.length === 0 && !loadError;
+  const showLoadErrorFullScreen = hasLoadedOnce && loadError && !loading && stableSummaries.length === 0;
+  const showBannerAndList = hasLoadedOnce && loadError && !loading && stableSummaries.length > 0;
 
-  const displaySummaries = listData;
+  const displaySummaries = showBannerAndList ? stableSummaries : monthlySummaries;
   const visibleSummaries = displaySummaries.slice(0, displayCount);
   const hasMore = displaySummaries.length > displayCount;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
@@ -297,11 +277,11 @@ export default function MonthlyScreen() {
       ) : null}
 
       {showSpinner ? (
-        <View style={[styles.loadingContainer, { paddingTop: headerTop + 2 }]}>
+        <View style={[styles.loadingContainer, { paddingTop: headerTop + 8 }]}>
           <ActivityIndicator size="large" color="#4CAF50" />
         </View>
       ) : showLoadErrorFullScreen ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 2 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
           {lastUpdatedAt ? (
             <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
@@ -315,7 +295,7 @@ export default function MonthlyScreen() {
           </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 2 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>記録がありません</Text>
           <Text style={styles.emptySubText}>
             ＋ボタンから記録を残しましょう
@@ -324,7 +304,7 @@ export default function MonthlyScreen() {
       ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingTop: headerTop + 2 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: headerTop + 8 }]}
           showsVerticalScrollIndicator={false}
         >
           {visibleSummaries.map((summary, index) => renderMonthCard(summary, index))}

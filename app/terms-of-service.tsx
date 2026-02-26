@@ -4,7 +4,7 @@ import { AppHeader } from '@/components/AppHeader';
 
 export default function TermsOfServiceScreen() {
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="利用規約" />
 

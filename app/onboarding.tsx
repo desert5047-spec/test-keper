@@ -9,23 +9,16 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import { useRouter, usePathname, useFocusEffect } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 const { height: screenHeight } = Dimensions.get('window');
 
-type Step = 'loading' | 'parent' | 'child' | 'done';
-
 export default function OnboardingScreen() {
   const router = useRouter();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    if (__DEV__) console.log('[route]', pathname);
-  }, [pathname]);
-
   const {
     user,
     familyId,
@@ -36,7 +29,6 @@ export default function OnboardingScreen() {
     refreshSetupStatus,
     familyDisplayName,
   } = useAuth();
-  const [step, setStep] = useState<Step>('loading');
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [displayNameError, setDisplayNameError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -44,17 +36,6 @@ export default function OnboardingScreen() {
   const displayNameValue = displayNameInput.trim();
   const remainingChars = 4 - displayNameValue.length;
   const isDisplayNameValid = displayNameValue.length >= 1 && displayNameValue.length <= 4;
-
-  // 判定中は何も出さない。step を1つに決めてからだけ描画する（両カード同時表示を防ぐ）
-  useEffect(() => {
-    if (!isFamilyReady || !isSetupReady) {
-      setStep('loading');
-      return;
-    }
-    if (needsDisplayName) setStep('parent');
-    else if (needsChildSetup) setStep('child');
-    else setStep('done');
-  }, [isFamilyReady, isSetupReady, needsDisplayName, needsChildSetup]);
 
   useEffect(() => {
     setDisplayNameInput(familyDisplayName ?? '');
@@ -111,29 +92,21 @@ export default function OnboardingScreen() {
     }
   };
 
-  if (step === 'loading') {
-    return (
-      <View style={{ flex: 1 }}>
-        <View style={styles.container}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
-            <Text style={styles.loadingMessage}>初期設定を確認中…</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <View style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
+      {!isFamilyReady || !isSetupReady ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>初期セットアップ</Text>
           <Text style={styles.description}>
-            {step === 'parent' ? '名前設定' : step === 'child' ? 'お子さま登録' : 'はじめましょう'}
+            {needsDisplayName || needsChildSetup ? '名前設定' : 'はじめましょう'}
           </Text>
 
-          {step === 'parent' && (
+          {(needsDisplayName || needsChildSetup) && (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>親の名前（ユーザーネーム）</Text>
               <Text style={styles.sectionDescription}>
@@ -169,56 +142,59 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          {step === 'child' && (
+          {!needsDisplayName && (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>お子さま登録</Text>
-              <Text style={styles.sectionDescription}>
-                最初に1人だけ登録してください。あとから増やせます。
-              </Text>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => router.replace('/register-child')}
-                activeOpacity={0.7}>
-                <Text style={styles.primaryButtonText}>お子さま登録へ</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {step === 'done' && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>🎉 準備完了</Text>
-              <Text style={styles.sectionDescription}>
-                準備ができました！{'\n'}
-                さっそくテストを写真で残してみましょう。
-              </Text>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => router.replace('/add')}
-                activeOpacity={0.7}>
-                <Text style={styles.primaryButtonText}>テストを撮影する</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => router.replace('/(tabs)')}
-                activeOpacity={0.7}>
-                <Text style={styles.secondaryButtonText}>あとで登録する</Text>
-              </TouchableOpacity>
-              <Image
-                source={require('@/assets/images/onboarding-camera-promo.png')}
-                style={{
-                  width: '100%',
-                  height: screenHeight * 0.32,
-                  maxHeight: screenHeight * 0.4,
-                  marginTop: 24,
-                  alignSelf: 'center',
-                }}
-                contentFit="contain"
-              />
+              {needsChildSetup ? (
+                <>
+                  <Text style={styles.sectionTitle}>お子さま登録</Text>
+                  <Text style={styles.sectionDescription}>
+                    最初に1人だけ登録してください。あとから増やせます。
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={() => router.push('/register-child')}
+                    activeOpacity={0.7}>
+                    <Text style={styles.primaryButtonText}>お子さま登録へ</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.sectionTitle}>🎉 準備完了</Text>
+                  <Text style={styles.sectionDescription}>
+                    準備ができました！{'\n'}
+                    さっそくテストを写真で残してみましょう。
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={() => router.replace('/add')}
+                    activeOpacity={0.7}>
+                    <Text style={styles.primaryButtonText}>テストを撮影する</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => router.replace('/(tabs)')}
+                    activeOpacity={0.7}>
+                    <Text style={styles.secondaryButtonText}>あとで登録する</Text>
+                  </TouchableOpacity>
+                  <Image
+                    source={require('@/assets/images/onboarding-camera-promo.png')}
+                    style={{
+                      width: '100%',
+                      height: screenHeight * 0.32,
+                      maxHeight: screenHeight * 0.4,
+                      marginTop: 24,
+                      alignSelf: 'center',
+                    }}
+                    contentFit="contain"
+                  />
+                </>
+              )}
             </View>
           )}
         </ScrollView>
+      )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -231,12 +207,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingMessage: {
-    marginTop: 12,
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#666',
   },
   content: {
     padding: 24,

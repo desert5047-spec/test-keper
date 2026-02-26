@@ -33,6 +33,7 @@ import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeBottom } from '@/lib/useSafeBottom';
 import { log, warn, error as logError } from '@/lib/logger';
 
 // Androidでexpo-cameraを使用するため、このキーは使用されませんが、エラー回避のため定義
@@ -70,6 +71,7 @@ const ADD_HEADER_HEIGHT = 102;
 export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
+  const { safeBottom } = useSafeBottom(16);
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -826,7 +828,7 @@ export default function AddScreen() {
       : '記録は保存されました。\n続けて入力しますか？';
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
@@ -842,7 +844,7 @@ export default function AddScreen() {
       <KeyboardAwareScroll
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentPaddingBottom={120}
+        contentPaddingBottom={140 + safeBottom}
         keyboardVerticalOffsetOverride={ADD_HEADER_HEIGHT}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
@@ -1151,7 +1153,14 @@ export default function AddScreen() {
         <View style={{ height: 100 }} />
       </KeyboardAwareScroll>
 
-      <View style={styles.bottomButtonContainer}>
+      <View
+        style={[
+          styles.bottomButtonContainer,
+          {
+            bottom: safeBottom,
+            paddingBottom: 12 + safeBottom,
+          },
+        ]}>
         {errorMessage ? (
           <View style={styles.errorMessageContainer}>
             <Text style={styles.errorMessageText}>{errorMessage}</Text>

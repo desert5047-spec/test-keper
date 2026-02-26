@@ -1,12 +1,13 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Home, List, Plus, Calendar } from 'lucide-react-native';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DateProvider } from '@/contexts/DateContext';
+import { useSafeBottom } from '@/lib/useSafeBottom';
+import { TAB_BAR_HEIGHT, TAB_ITEM_PADDING_TOP, TAB_ITEM_PADDING_BOTTOM, TAB_LABEL_FONT_SIZE, TAB_LABEL_MARGIN_TOP, TAB_LABEL_LINE_HEIGHT, ADD_BUTTON_SIZE } from '@/components/TabBar/shared';
 
 export default function TabLayout() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { safeBottom } = useSafeBottom(16);
 
   return (
     <DateProvider>
@@ -25,9 +26,9 @@ export default function TabLayout() {
             style={[
               styles.tabBarContainer,
               {
-                height: 56 + insets.bottom,
-                paddingTop: 8,
-                paddingBottom: Math.max(insets.bottom, 8),
+                height: TAB_BAR_HEIGHT + TAB_ITEM_PADDING_TOP + TAB_ITEM_PADDING_BOTTOM + safeBottom,
+                paddingTop: TAB_ITEM_PADDING_TOP,
+                paddingBottom: TAB_ITEM_PADDING_BOTTOM + safeBottom,
               },
             ]}>
             {/* ホーム */}
@@ -199,9 +200,10 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     flexDirection: 'row',
+    overflow: 'hidden',
     borderTopWidth: 1,
     borderTopColor: '#eee',
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     ...Platform.select({
       web: {
         boxShadow: '0px -1px 3px rgba(0, 0, 0, 0.1)',
@@ -219,19 +221,20 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 4,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: TAB_LABEL_FONT_SIZE,
+    lineHeight: TAB_LABEL_LINE_HEIGHT,
     fontFamily: 'Nunito-Bold',
-    marginTop: 4,
+    marginTop: TAB_LABEL_MARGIN_TOP,
   },
   addButtonContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: ADD_BUTTON_SIZE,
+    height: ADD_BUTTON_SIZE,
+    borderRadius: ADD_BUTTON_SIZE / 2,
     backgroundColor: '#4A90E2',
     justifyContent: 'center',
     alignItems: 'center',

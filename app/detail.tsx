@@ -25,7 +25,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Check } from 'lucide-react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
@@ -35,18 +35,19 @@ import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
-import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { AppHeader, HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
 import { uploadImage, deleteImage, getSignedImageUrl, getStoragePathFromUrl, normalizePhotoUriForDb } from '@/utils/imageUpload';
 import { useAuth } from '@/contexts/AuthContext';
 import { log, error as logError } from '@/lib/logger';
 import { useChild } from '@/contexts/ChildContext';
+import { useSafeBottom } from '@/lib/useSafeBottom';
 
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const headerHeight = useHeaderHeight();
-  const insets = useSafeAreaInsets();
-  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
+  const { safeBottom } = useSafeBottom(16);
+  const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
   const { children: contextChildren } = useChild();
   const [record, setRecord] = useState<TestRecord | null>(null);
@@ -812,7 +813,7 @@ export default function DetailScreen() {
 
   if (isSwitchingChild) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
           <Text style={styles.loadingText}>読み込み中…</Text>
@@ -823,7 +824,7 @@ export default function DetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
@@ -833,7 +834,7 @@ export default function DetailScreen() {
 
   if (!record) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
         <View style={styles.container}>
           <AppHeader showBack={true} showChildSwitcher={false} />
           <View style={styles.errorContainer}>
@@ -845,7 +846,7 @@ export default function DetailScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1224,7 +1225,11 @@ export default function DetailScreen() {
         </ScrollView>
       )}
 
-      <View style={styles.bottomButtons}>
+      <View
+        style={[
+          styles.bottomButtons,
+          { bottom: safeBottom, paddingBottom: 12 + safeBottom },
+        ]}>
         {editMode ? (
           <>
             <TouchableOpacity

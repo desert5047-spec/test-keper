@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RotateCcw, Check } from 'lucide-react-native';
+import { useSafeBottom } from '@/lib/useSafeBottom';
 
 interface CameraPreviewScreenProps {
   imageUri: string;
@@ -13,12 +14,13 @@ interface CameraPreviewScreenProps {
  * 撮影後のプレビュー画面。「再撮影」「保存」をアプリ側で表示（OS標準の Retake/Use Photo を使わない）
  */
 export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPreviewScreenProps) {
+  const { safeBottom } = useSafeBottom(16);
   return (
     <SafeAreaView style={[styles.container, { flex: 1 }]} edges={['top', 'bottom']}>
       <View style={styles.imageContainer}>
         <Image source={{ uri: imageUri }} style={styles.image} contentFit="contain" />
       </View>
-      <View style={styles.actions}>
+      <View style={[styles.actions, { paddingBottom: 24 + safeBottom }]}>
         <TouchableOpacity
           style={styles.retakeButton}
           onPress={onRetake}

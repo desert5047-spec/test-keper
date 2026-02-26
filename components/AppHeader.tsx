@@ -1,13 +1,22 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import { Settings, ArrowLeft, ChevronLeft, ChevronRight, Edit3, Trash2 } from 'lucide-react-native';
+import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChildSwitcher } from './ChildSwitcher';
 import { useDateContext } from '@/contexts/DateContext';
 
-// ステータスバー(=insets.top)を除いた「中身だけ」の高さ
-export const HEADER_HEIGHT = 52;
+// ヘッダーバー高さ（ステータスバーはルート TopSafeAreaBg で塗る）
+export const HEADER_HEIGHT = 56;
+const BG = '#FFFFFF';
+const STATUS_BAR_OFFSET = 4; // _layout TopSafeAreaBg と一致
+
+/** コンテンツの paddingTop 用。ステータスバー領域+ヘッダー高さ */
+export function useHeaderTop(): number {
+  const insets = useSafeAreaInsets();
+  const topOffset = Platform.OS === 'web' ? 20 : Math.max(insets.top - STATUS_BAR_OFFSET, 0);
+  return topOffset + HEADER_HEIGHT;
+}
 
 interface AppHeaderProps {
   showBack?: boolean;
@@ -35,10 +44,9 @@ export function AppHeader({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { year, month, setYearMonth } = useDateContext();
+  const topOffset = Platform.OS === 'web' ? 20 : Math.max(insets.top - STATUS_BAR_OFFSET, 0);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(year);
-
-  const headerInsetTop = Platform.OS === 'web' ? 12 : insets.top;
 
   useEffect(() => {
     if (showMonthPicker) setPickerYear(year);
@@ -71,107 +79,94 @@ export function AppHeader({
 
   return (
     <>
-      <View
-        style={[
-          styles.container,
-          {
-            height: HEADER_HEIGHT + headerInsetTop,
-            paddingTop: headerInsetTop,
-          },
-        ]}>
-        <View
-          style={[
-            styles.bar,
-            { height: HEADER_HEIGHT },
-            showYearMonthNav && styles.barWithYearMonthNav,
-          ]}>
+      <View style={[styles.container, { backgroundColor: BG, top: topOffset }]}>
+        {/* ヘッダーバー本体。ステータスバー領域は _layout TopSafeAreaBg で塗る */}
+        <View style={[styles.bar, { height: HEADER_HEIGHT, backgroundColor: BG, paddingHorizontal: 12 }]}>
           <View style={styles.left}>
-            {showBack ? (
-              <TouchableOpacity
-                onPress={() => {
-                  const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
-                  if (canGoBack) {
+          {showBack ? (
+            <TouchableOpacity
+              onPress={() => {
+                const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
+                if (canGoBack) {
+                  router.back();
+                  return;
+                }
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                  if (window.history.length > 1) {
                     router.back();
                     return;
                   }
-                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                    if (window.history.length > 1) {
-                      router.back();
-                      return;
-                    }
-                  }
-                  router.replace('/(tabs)');
-                }}
-                style={styles.backButton}
-                activeOpacity={0.7}>
-                <ArrowLeft size={20} color="#333" />
-              </TouchableOpacity>
-            ) : showChildSwitcher ? (
-              <ChildSwitcher />
-            ) : (
-              <View style={styles.placeholder} />
-            )}
-          </View>
-
-          {showYearMonthNav && (
-            <View style={styles.center}>
-              <View style={styles.yearRow}>
-                <TouchableOpacity
-                  style={styles.arrowButton}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={() => handleMonthChange('prev')}
-                  activeOpacity={0.7}>
-                  <ChevronLeft size={20} color="#666" strokeWidth={2.2} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.yearMonthButton}
-                  onPress={() => setShowMonthPicker(true)}
-                  activeOpacity={0.7}>
-                  <Text style={styles.yearText}>{`${year}年${month}月`}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.arrowButton}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={() => handleMonthChange('next')}
-                  activeOpacity={0.7}>
-                  <ChevronRight size={20} color="#666" strokeWidth={2.2} />
-                </TouchableOpacity>
-              </View>
-            </View>
+                }
+                router.replace('/(tabs)');
+              }}
+              style={styles.backButton}
+              activeOpacity={0.7}>
+              <ArrowLeft size={20} color="#333" />
+            </TouchableOpacity>
+          ) : showChildSwitcher ? (
+            <ChildSwitcher />
+          ) : (
+            <View style={styles.placeholder} />
           )}
+        </View>
 
-          {title && (
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>{title}</Text>
-            </View>
-          )}
-
-          <View style={styles.right}>
-            {showEdit && onEdit && (
-              <TouchableOpacity
-                onPress={onEdit}
-                style={styles.iconButton}
-                activeOpacity={0.7}>
-                <Edit3 size={20} color="#666" />
-              </TouchableOpacity>
-            )}
-            {showDelete && onDelete && (
-              <TouchableOpacity
-                onPress={onDelete}
-                style={styles.iconButton}
-                activeOpacity={0.7}>
-                <Trash2 size={20} color="#666" />
-              </TouchableOpacity>
-            )}
-            {showSettings && (
-              <TouchableOpacity
-                onPress={() => router.push('/settings')}
-                style={styles.iconButton}
-                activeOpacity={0.7}>
-                <Settings size={24} color="#666" />
-              </TouchableOpacity>
-            )}
+        {showYearMonthNav && (
+          <View style={styles.center}>
+            <TouchableOpacity
+              style={styles.yearArrow}
+              onPress={() => handleMonthChange('prev')}
+              activeOpacity={0.7}>
+              <ChevronLeft size={18} color="#666" />
+            </TouchableOpacity>
+            <Text style={styles.yearText}>{year}年</Text>
+            <TouchableOpacity
+              style={styles.yearArrow}
+              onPress={() => handleMonthChange('next')}
+              activeOpacity={0.7}>
+              <ChevronRight size={18} color="#666" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.monthButton}
+              onPress={() => setShowMonthPicker(true)}
+              activeOpacity={0.7}>
+              <Text style={styles.monthText}>{month}月</Text>
+              <ChevronDown size={14} color="#666" strokeWidth={2.5} />
+            </TouchableOpacity>
           </View>
+        )}
+
+        {title && (
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>{title}</Text>
+          </View>
+        )}
+
+        <View style={styles.right}>
+          {showEdit && onEdit && (
+            <TouchableOpacity
+              onPress={onEdit}
+              style={styles.iconButton}
+              activeOpacity={0.7}>
+              <Edit3 size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+          {showDelete && onDelete && (
+            <TouchableOpacity
+              onPress={onDelete}
+              style={styles.iconButton}
+              activeOpacity={0.7}>
+              <Trash2 size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+          {showSettings && (
+            <TouchableOpacity
+              onPress={() => router.push('/settings')}
+              style={styles.iconButton}
+              activeOpacity={0.7}>
+              <Settings size={24} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
         </View>
       </View>
 
@@ -239,43 +234,29 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFF',
-    justifyContent: 'flex-end',
-    borderBottomWidth: 0,
+    flexDirection: 'column',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
     zIndex: 10,
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingBottom: 2,
-  },
-  barWithYearMonthNav: {
-    alignItems: 'center',
-    paddingBottom: 2,
+    width: '100%',
   },
   left: {
     alignItems: 'flex-start',
   },
   center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 0,
-  },
-  yearRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  yearMonthButton: {
-    paddingHorizontal: 4,
-    paddingVertical: 2,
+    gap: 8,
   },
   titleContainer: {
     position: 'absolute',
+    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -310,15 +291,24 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 36,
   },
-  arrowButton: {
-    height: 44,
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+  yearArrow: {
+    padding: 2,
   },
   yearText: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+  },
+  monthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 4,
+    marginLeft: 4,
+  },
+  monthText: {
+    fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
   },
@@ -329,7 +319,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   monthPickerContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     width: '80%',
     maxWidth: 360,

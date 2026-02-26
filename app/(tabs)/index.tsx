@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
 import { getSignedImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppHeader, HEADER_HEIGHT } from '@/components/AppHeader';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppHeader, useHeaderTop } from '@/components/AppHeader';
 import { Platform } from 'react-native';
 import { log, logLoadError } from '@/lib/logger';
 
@@ -139,8 +139,7 @@ export default function HomeScreen() {
     }
   };
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const headerTop = HEADER_HEIGHT + (Platform.OS === 'web' ? 20 : insets.top);
+  const headerTop = useHeaderTop();
   const [records, setRecords] = useState<RecordWithImageUrl[]>([]);
   const [stableRecords, setStableRecords] = useState<RecordWithImageUrl[]>([]);
   const stableRef = useRef<RecordWithImageUrl[]>([]);
@@ -150,7 +149,6 @@ export default function HomeScreen() {
   const [loadError, setLoadError] = useState<'offline' | 'unknown' | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
-  const [switchingChild, setSwitchingChild] = useState(false);
   const canceledRef = useRef(false);
 
   const formatLastUpdated = (d: Date) => {
@@ -165,22 +163,6 @@ export default function HomeScreen() {
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
-
-  // 子ども切替時は一度表示をリセットしてローディングに固定（空状態の一瞬表示を防ぐ）
-  useEffect(() => {
-    setLoadError(null);
-    setHasLoadedOnce(false);
-    setLoading(true);
-    setRecords([]);
-    setStableRecords([]);
-  }, [selectedChildId]);
-
-  // 切替直後の短いブリッジ時間は空状態を出さずスピナーを維持
-  useEffect(() => {
-    setSwitchingChild(true);
-    const t = setTimeout(() => setSwitchingChild(false), 200);
-    return () => clearTimeout(t);
-  }, [selectedChildId]);
 
   const loadRecords = useCallback(async (opts: { isRefresh?: boolean } = {}) => {
     const isRefresh = opts.isRefresh === true;
@@ -309,7 +291,6 @@ export default function HomeScreen() {
   );
 
   const keyExtractor = useCallback((item: RecordWithImageUrl) => item.id, []);
-  const listData = useMemo(() => stableRecords, [stableRecords]);
 
   if (!isFamilyReady) {
     return (
@@ -319,22 +300,55 @@ export default function HomeScreen() {
     );
   }
 
-  const hasData = listData.length > 0;
-  const showSpinner = (loading || switchingChild) && !hasData;
-  const showEmptyState = !switchingChild && hasLoadedOnce && !loading && !hasData && !loadError;
-  const showLoadErrorFullScreen = hasLoadedOnce && loadError && !loading && !hasData;
+  const showSpinner = !hasLoadedOnce && loading && stableRecords.length === 0;
+  const showEmptyState = hasLoadedOnce && !loading && !refreshing && stableRecords.length === 0 && !loadError;
+  const showLoadErrorFullScreen = hasLoadedOnce && loadError && !loading && stableRecords.length === 0;
+  const showBannerAndList = hasLoadedOnce && loadError && !loading && stableRecords.length > 0;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <AppHeader showYearMonthNav={true} />
 
+      {showBannerAndList ? (
+        <View style={styles.mainWithBanner}>
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText} numberOfLines={2}>
+              通信できません{lastUpdatedAt ? `（最終更新: ${formatLastUpdated(lastUpdatedAt)}）` : ''}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButtonSmall}
+              onPress={() => loadRecords()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>再試行</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={stableRecords}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            removeClippedSubviews={false}
+            windowSize={5}
+            initialNumToRender={10}
+            contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8, paddingBottom: 24 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadRecords({ isRefresh: true })}
+              />
+            }
+          />
+        </View>
+      ) : null}
+
       {showSpinner ? (
-        <View style={[styles.loadingContainer, { paddingTop: headerTop + 2 }]}>
+        <View style={[styles.loadingContainer, { paddingTop: headerTop + 8 }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
       ) : showLoadErrorFullScreen ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 2 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
           {lastUpdatedAt ? (
             <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
@@ -348,44 +362,35 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 2 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
           <Text style={styles.emptyText}>まだ記録がありません</Text>
           <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
-      ) : null}
-      {!showSpinner && !showLoadErrorFullScreen && !showEmptyState && hasData ? (
-        <View style={styles.mainWithBanner}>
-          {loadError ? (
-            <View style={styles.offlineBanner}>
-              <Text style={styles.offlineBannerText} numberOfLines={2}>
-                通信できません{lastUpdatedAt ? `（最終更新: ${formatLastUpdated(lastUpdatedAt)}）` : ''}
-              </Text>
-              <TouchableOpacity
-                style={styles.retryButtonSmall}
-                onPress={() => loadRecords()}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.retryButtonText}>再試行</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-          <FlatList
-            data={listData}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            removeClippedSubviews={false}
-            windowSize={5}
-            initialNumToRender={10}
-            contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 2, paddingBottom: 24 }]}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={() => loadRecords({ isRefresh: true })}
-              />
-            }
-          />
-        </View>
+      ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
+        <FlatList
+          data={stableRecords}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          removeClippedSubviews={false}
+          windowSize={5}
+          initialNumToRender={10}
+          contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8 }]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            refreshing ? null : (
+              <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
+                <Text style={styles.emptyText}>まだ記録がありません</Text>
+                <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
+              </View>
+            )
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadRecords({ isRefresh: true })}
+            />
+          }
+        />
       ) : null}
       </View>
     </SafeAreaView>

@@ -43,7 +43,7 @@ export default function ConsentScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={[styles.container, { paddingTop: 24 }]}>
       <Text style={styles.title}>利用規約への同意</Text>
       <Text style={styles.description}>

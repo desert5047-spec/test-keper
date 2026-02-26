@@ -13,7 +13,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ChildProvider } from '@/contexts/ChildContext';
 import { DateProvider } from '@/contexts/DateContext';
 import { isSupabaseConfigured, supabaseConfigError, supabase } from '@/lib/supabase';
-import DebugLabel from '@/components/DebugLabel';
+import { DebugLabel } from '@/components/DebugLabel';
 import { log, warn, error as logError } from '@/lib/logger';
 
 // 本番（!__DEV__）では log/info/debug/warn を無効化。error はクラッシュ情報のため残す
@@ -33,6 +33,32 @@ void SplashScreen.preventAutoHideAsync().catch((error) => {
 // 無効なリフレッシュトークンエラーはアプリ側で signOut して処理するため、コンソールの ERROR 表示を抑制
 LogBox.ignoreLogs(['Invalid Refresh Token', 'Refresh Token Not Found', 'AuthApiError']);
 
+if (__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
+
+const BG = '#FFFFFF';
+const STATUS_BAR_OFFSET = 4;
+
+function TopSafeAreaBg() {
+  const insets = useSafeAreaInsets();
+  const h = Math.max(insets.top - STATUS_BAR_OFFSET, 0);
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: h,
+        backgroundColor: BG,
+        zIndex: 9998,
+      }}
+    />
+  );
+}
+
 /** 無効なリフレッシュトークンエラーかどうか（Expo Go 等で未処理の Promise 拒否を拾う用） */
 function isInvalidRefreshTokenError(reason: unknown): boolean {
   if (!reason || typeof reason !== 'object') return false;
@@ -44,24 +70,6 @@ function isInvalidRefreshTokenError(reason: unknown): boolean {
     msg.includes('refresh_token') ||
     msg.includes('Refresh Token Not Found') ||
     msg.includes('Invalid Refresh Token')
-  );
-}
-
-function TopSafeAreaBg() {
-  const insets = useSafeAreaInsets();
-  return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: insets.top,
-        backgroundColor: '#fff',
-        zIndex: 9998,
-      }}
-    />
   );
 }
 
@@ -142,10 +150,11 @@ export default function RootLayout() {
   debugLog('[RootLayout] レンダリング開始', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: BG }}>
+      <SafeAreaProvider style={{ flex: 1, backgroundColor: BG }}>
         <TopSafeAreaBg />
-        <StatusBar style="dark" />
+        {Platform.OS !== 'web' && <StatusBar style="dark" backgroundColor={BG} />}
+        <DebugLabel />
         {Platform.OS === 'web' && (
         <style>{`
           button:focus,
@@ -163,25 +172,7 @@ export default function RootLayout() {
       <AuthProvider>
         <ChildProvider>
           <DateProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                headerStyle: {
-                  backgroundColor: '#ffffff',
-                  height: 56,
-                  borderBottomWidth: 0,
-                  shadowColor: 'transparent',
-                  elevation: 0,
-                },
-                headerShadowVisible: false,
-                headerTitleStyle: {
-                  fontSize: 18,
-                  fontWeight: '600',
-                },
-                contentStyle: {
-                  backgroundColor: '#ffffff',
-                },
-              }}>
+            <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="auth-callback" />
             <Stack.Screen name="(auth)" />
               <Stack.Screen name="onboarding" />
@@ -196,7 +187,6 @@ export default function RootLayout() {
               <Stack.Screen name="terms-of-service" />
               <Stack.Screen name="+not-found" />
             </Stack>
-            <DebugLabel />
           </DateProvider>
         </ChildProvider>
       </AuthProvider>

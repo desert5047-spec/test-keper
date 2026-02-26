@@ -11,6 +11,7 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { X, RotateCw } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { log, error as logError } from '@/lib/logger';
+import { useSafeBottom } from '@/lib/useSafeBottom';
 
 const debugLog = log;
 
@@ -24,6 +25,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+  const { safeBottom } = useSafeBottom(16);
 
   useEffect(() => {
     if (!permission) {
@@ -108,7 +110,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         </View>
         </SafeAreaView>
 
-        <View style={styles.controls}>
+        <View style={[styles.controls, { bottom: safeBottom, paddingBottom: 8 + safeBottom }]}>
           <TouchableOpacity
             style={styles.flipButton}
             onPress={toggleFacing}

@@ -14,10 +14,10 @@ import {
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield, MessageCircle } from 'lucide-react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
-import Constants from 'expo-constants';
 import { AppHeader } from '@/components/AppHeader';
 import { ResetConfirmModal } from '@/components/ResetConfirmModal';
 import { useChild } from '@/contexts/ChildContext';
@@ -26,11 +26,19 @@ import { supabase } from '@/lib/supabase';
 import { deleteImage } from '@/utils/imageUpload';
 import { warn, error as logError } from '@/lib/logger';
 import { webUrls } from '@/lib/urls';
+import { useSafeBottom } from '@/lib/useSafeBottom';
+import { TAB_BAR_HEIGHT, TAB_ITEM_PADDING_TOP, TAB_ITEM_PADDING_BOTTOM, TAB_LABEL_FONT_SIZE, TAB_LABEL_MARGIN_TOP, TAB_LABEL_LINE_HEIGHT, ADD_BUTTON_SIZE } from '@/components/TabBar/shared';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const { safeBottom } = useSafeBottom(16);
+
+  const appVersion = Constants.expoConfig?.version ?? 'unknown';
+  const buildNumber =
+    Platform.OS === 'ios'
+      ? Constants.expoConfig?.ios?.buildNumber
+      : Constants.expoConfig?.android?.versionCode?.toString();
+
   const { children, loadChildren } = useChild();
   const {
     signOut,
@@ -547,7 +555,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
       <View style={styles.container}>
       <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
 
@@ -555,7 +563,7 @@ export default function SettingsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 12) + 120 },
+          { paddingBottom: safeBottom + 120 },
         ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
@@ -865,7 +873,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>アプリについて</Text>
           <View style={styles.infoCard}>
             <Text style={styles.appName}>テストアルバム</Text>
-            <Text style={styles.appVersion}>v{appVersion}</Text>
+            <Text style={styles.appVersion}>{`Version ${appVersion} (${buildNumber ?? '-'})`}</Text>
             <Text style={styles.appDescription}>
               子供のテストや成績を記録して、{'\n'}
               頑張りを見える化するアプリです。
@@ -874,7 +882,15 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
+      <View
+        style={[
+          styles.bottomNav,
+          {
+            height: TAB_BAR_HEIGHT + TAB_ITEM_PADDING_TOP + TAB_ITEM_PADDING_BOTTOM + safeBottom,
+            paddingTop: TAB_ITEM_PADDING_TOP,
+            paddingBottom: TAB_ITEM_PADDING_BOTTOM + safeBottom,
+          },
+        ]}>
         <TouchableOpacity
           style={styles.tabButton}
           onPress={() => router.push('/(tabs)')}
@@ -892,10 +908,12 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.addButton}
+          style={styles.tabButton}
           onPress={() => router.push('/add')}
           activeOpacity={0.85}>
-          <Plus size={32} color="#fff" strokeWidth={2.5} />
+          <View style={styles.addButton}>
+            <Plus size={28} color="#fff" strokeWidth={3} />
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -925,13 +943,13 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingTop: 108,
+    paddingTop: 86,
   },
   scrollContent: {
     paddingBottom: 24,
   },
   section: {
-    marginTop: 24,
+    marginTop: 12,
     paddingHorizontal: 20,
   },
   sectionTitle: {
@@ -1404,9 +1422,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#eee',
-    paddingTop: 8,
     paddingHorizontal: 8,
-    alignItems: 'flex-end',
+    alignItems: 'center',
     ...Platform.select({
       web: {
         boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.05)',
@@ -1422,24 +1439,24 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 4,
   },
   tabLabel: {
-    fontSize: 11,
-    fontFamily: 'Nunito-SemiBold',
+    fontSize: TAB_LABEL_FONT_SIZE,
+    lineHeight: TAB_LABEL_LINE_HEIGHT,
+    fontFamily: 'Nunito-Bold',
+    marginTop: TAB_LABEL_MARGIN_TOP,
     color: '#999',
   },
   addButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: ADD_BUTTON_SIZE,
+    height: ADD_BUTTON_SIZE,
+    borderRadius: ADD_BUTTON_SIZE / 2,
     backgroundColor: '#4A90E2',
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 8,
-    marginBottom: 8,
     ...Platform.select({
       web: {
         boxShadow: '0px 4px 8px rgba(74, 144, 226, 0.3)',
