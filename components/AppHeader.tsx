@@ -125,9 +125,11 @@ export function AppHeader({
         <View style={[styles.headerRow, { height: HEADER_HEIGHT }]}>
           {isEditMode ? (
             <TouchableOpacity
-              onPress={onCancel}
+              onPress={() => onCancel?.()}
+              onPressOut={() => onCancel?.()}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              activeOpacity={0.6}
+              activeOpacity={0.75}
+              delayPressIn={0}
               style={styles.editCancelButton}
               {...(Platform.OS === 'web' && { cursor: 'pointer' } as any)}>
               <View style={styles.editCancelButtonInner}>

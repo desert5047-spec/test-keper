@@ -15,9 +15,6 @@ import {
   Animated,
   findNodeHandle,
   UIManager,
-  KeyboardAvoidingView,
-  TouchableWithoutFeedback,
-  Keyboard,
   StatusBar,
 } from 'react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -33,6 +30,7 @@ import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State }
 import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
+import { CommentComposer } from '@/components/CommentComposer';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +61,7 @@ export default function DetailScreen() {
   const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [scoreError, setScoreError] = useState<string>('');
   const [resolvedRecordPhotoUrl, setResolvedRecordPhotoUrl] = useState<string | null>(null);
   const [resolvedEditPhotoUrl, setResolvedEditPhotoUrl] = useState<string | null>(null);
@@ -134,9 +133,9 @@ export default function DetailScreen() {
   const rootLayoutRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const scrollContentAnchorRef = useRef<View>(null);
   const rowRefMap = useRef<Record<string, View | null>>({});
-  const memoYRef = useRef(0);
   const [stamp, setStamp] = useState<string | null>(null);
   const [memo, setMemo] = useState<string>('');
+  const [isEditingMemo, setIsEditingMemo] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -145,6 +144,7 @@ export default function DetailScreen() {
   const [isDirty, setIsDirty] = useState(false);
   const allowNavigationRef = useRef(false);
   const pendingActionRef = useRef<(() => void) | null>(null);
+  const unsavedDiscardRef = useRef<(() => void) | null>(null);
   const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const navigation = useNavigation();
@@ -250,30 +250,8 @@ export default function DetailScreen() {
   };
 
   const showUnsavedAlert = (onDiscard: () => void) => {
-    Alert.alert(
-      '保存されていません',
-      '変更を破棄してよろしいですか？',
-      [
-        { text: '続ける', style: 'cancel' },
-        {
-          text: '保存',
-          onPress: () => {
-            pendingActionRef.current = () => {
-              allowNavigationRef.current = true;
-              setIsDirty(false);
-              setEditMode(false);
-              goBackOrToList();
-            };
-            handleSaveRef.current();
-          },
-        },
-        {
-          text: 'キャンセル(破棄)',
-          style: 'destructive',
-          onPress: onDiscard,
-        },
-      ]
-    );
+    unsavedDiscardRef.current = onDiscard;
+    setShowUnsavedModal(true);
   };
 
   // Stack headerShown: false のためヘッダーは自前（AppHeader）で統一
@@ -955,10 +933,6 @@ export default function DetailScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? headerTop : 0}>
       <View style={styles.container} onLayout={handleRootLayout}>
         {!editMode && (
           <AppHeader
@@ -984,16 +958,19 @@ export default function DetailScreen() {
         )}
 
         {editMode ? (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ flex: 1 }}>
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <ScrollView
-                ref={scrollViewRef}
-                style={styles.scrollView}
-                contentContainerStyle={{ paddingTop: headerTop, paddingBottom: 24 + insets.bottom }}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}>
+          <View style={styles.editModeRoot}>
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.scrollView}
+              contentContainerStyle={{
+                paddingTop: headerTop,
+                paddingBottom: isEditingMemo ? 200 + insets.bottom : 100 + insets.bottom,
+              }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              contentInsetAdjustmentBehavior="never"
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
+              showsVerticalScrollIndicator={false}>
           <View ref={scrollContentAnchorRef} collapsable={false} style={[styles.section, styles.photoSection]}>
             {photoUri ? (
               <View style={styles.photoContainer}>
@@ -1283,42 +1260,43 @@ export default function DetailScreen() {
             />
           </View>
 
-          <View
-            style={styles.section}
-            onLayout={(e) => { memoYRef.current = e.nativeEvent.layout.y; }}>
+          <View style={styles.section}>
             <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
-            <TextInput
-              style={styles.memoInput}
-              value={memo}
-              onChangeText={(t) => {
-                setMemo(t);
-                setIsDirty(true);
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                setIsEditingMemo(true);
               }}
-              placeholder="メモを入力（例：計算がんばった！）"
-              placeholderTextColor="#999"
-              multiline
-              blurOnSubmit={false}
-              scrollEnabled={false}
-              textAlignVertical="top"
-              maxLength={200}
-              onFocus={() => {
-                requestAnimationFrame(() => {
-                  requestAnimationFrame(() => {
-                    scrollViewRef.current?.scrollTo({
-                      y: Math.max(0, memoYRef.current - 80),
-                      animated: true,
-                    });
-                  });
-                });
-              }}
-            />
+              style={styles.memoCard}>
+              <Text style={memo.trim().length > 0 ? styles.memoText : styles.memoPlaceholder}>
+                {memo.trim().length > 0 ? memo : 'メモを追加'}
+              </Text>
+            </TouchableOpacity>
             <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
           </View>
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: 16 }} />
             </ScrollView>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+            {isEditingMemo && (
+              <CommentComposer
+                autoFocus
+                value={memo}
+                placeholder="コメントを追加"
+                maxLength={200}
+                onChangeText={(t) => {
+                  setMemo(t);
+                  setIsDirty(true);
+                }}
+                onSubmit={(v) => {
+                  const trimmed = v.trim();
+                  setMemo(trimmed);
+                  if (trimmed !== memo.trim()) setIsDirty(true);
+                  setIsEditingMemo(false);
+                }}
+                onBlur={() => setIsEditingMemo(false)}
+              />
+            )}
+          </View>
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -1362,7 +1340,7 @@ export default function DetailScreen() {
             {record.memo && (
               <View style={styles.memoSection}>
                 <Text style={styles.memoLabel}>メモ</Text>
-                <Text style={styles.memoText}>{record.memo}</Text>
+                <Text style={styles.memoBodyText}>{record.memo}</Text>
               </View>
             )}
 
@@ -1425,6 +1403,47 @@ export default function DetailScreen() {
             )}
           </View>
         </GestureHandlerRootView>
+      </Modal>
+
+      <Modal
+        visible={showUnsavedModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowUnsavedModal(false)}>
+        <View style={styles.unsavedOverlay}>
+          <View style={styles.unsavedCard}>
+            <Text style={styles.unsavedTitle}>保存されていません</Text>
+            <Text style={styles.unsavedMessage}>変更を破棄してよろしいですか？</Text>
+            <View style={styles.unsavedActions}>
+              <TouchableOpacity
+                style={[styles.unsavedActionButton, styles.unsavedSaveButton]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowUnsavedModal(false);
+                  pendingActionRef.current = () => {
+                    allowNavigationRef.current = true;
+                    setIsDirty(false);
+                    setEditMode(false);
+                    goBackOrToList();
+                  };
+                  handleSaveRef.current();
+                }}>
+                <Text style={[styles.unsavedActionText, styles.unsavedSaveText]}>保存</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.unsavedActionButton, styles.unsavedDiscardButton]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowUnsavedModal(false);
+                  const onDiscard = unsavedDiscardRef.current;
+                  unsavedDiscardRef.current = null;
+                  onDiscard?.();
+                }}>
+                <Text style={[styles.unsavedActionText, styles.unsavedDiscardText]}>キャンセル(破棄)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <Modal
@@ -1510,7 +1529,6 @@ export default function DetailScreen() {
         </>
       )}
     </View>
-    </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -1521,6 +1539,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8f8',
   },
   scrollView: {
+    flex: 1,
+  },
+  editModeRoot: {
     flex: 1,
   },
   imageContainer: {
@@ -1718,7 +1739,7 @@ const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: '#fff',
   },
-  memoText: {
+  memoBodyText: {
     fontSize: 15,
     color: '#333',
     lineHeight: 22,
@@ -2017,16 +2038,25 @@ const styles = StyleSheet.create({
     marginLeft: -36,
     marginRight: 8,
   },
-  memoInput: {
-    minHeight: 100,
-    padding: 12,
+  memoCard: {
+    minHeight: 80,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
-    fontSize: 16,
-    fontFamily: 'Nunito-Regular',
+    borderColor: '#E5E5E5',
+    padding: 14,
+    backgroundColor: '#FFF',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  memoText: {
+    fontSize: 15,
     color: '#222',
+    textAlign: 'left',
+  },
+  memoPlaceholder: {
+    fontSize: 15,
+    color: '#999',
+    textAlign: 'left',
   },
   memoCharCount: {
     textAlign: 'right',
@@ -2138,5 +2168,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  unsavedOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  unsavedCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+  },
+  unsavedTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#222',
+    marginBottom: 8,
+  },
+  unsavedMessage: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#444',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  unsavedActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  unsavedActionButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
+  },
+  unsavedSaveButton: {
+    borderColor: '#4A90E2',
+  },
+  unsavedDiscardButton: {
+    borderColor: '#E74C3C',
+  },
+  unsavedActionText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+  },
+  unsavedSaveText: {
+    color: '#4A90E2',
+  },
+  unsavedDiscardText: {
+    color: '#E74C3C',
   },
 });

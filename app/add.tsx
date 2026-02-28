@@ -23,7 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
-import KeyboardAwareScroll from '@/components/KeyboardAwareScroll';
+import { CommentComposer } from '@/components/CommentComposer';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,7 +33,7 @@ import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getFooterStyle, getScrollPaddingBottom } from '@/lib/bottomButtonContainer';
+import { getFooterStyle } from '@/lib/bottomButtonContainer';
 import { HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
 import { log, warn, error as logError } from '@/lib/logger';
 
@@ -87,6 +87,7 @@ export default function AddScreen() {
   const getTodayLocal = () => new Date().toLocaleDateString('sv-SE');
   const [date, setDate] = useState<string>(getTodayLocal());
   const [memo, setMemo] = useState<string>('');
+  const [isEditingMemo, setIsEditingMemo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -845,11 +846,17 @@ export default function AddScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAwareScroll
+      <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentPaddingBottom={getScrollPaddingBottom(insets)}
-        keyboardVerticalOffsetOverride={headerTop}
+        contentContainerStyle={{
+          paddingTop: headerTop,
+          paddingBottom: isEditingMemo ? 200 + insets.bottom : 100 + insets.bottom,
+        }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.section, styles.photoSection]}>
           {photoUri ? (
@@ -1135,25 +1142,40 @@ export default function AddScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>メモ</Text>
-          <TextInput
-            style={styles.memoInput}
-            value={memo}
-            onChangeText={setMemo}
-            placeholder="メモを入力（例：計算がんばった！）"
-            placeholderTextColor="#999"
-            multiline
-            blurOnSubmit={false}
-            scrollEnabled={false}
-            textAlignVertical="top"
-            maxLength={200}
-          />
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              setIsEditingMemo(true);
+            }}
+            style={styles.memoCard}>
+            <Text style={memo.trim().length > 0 ? styles.memoText : styles.memoPlaceholder}>
+              {memo.trim().length > 0 ? memo : 'メモを追加'}
+            </Text>
+          </TouchableOpacity>
           <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
         <View style={{ height: 100 }} />
-      </KeyboardAwareScroll>
+      </ScrollView>
 
-      <View style={[getFooterStyle(insets), { flexDirection: 'column' }]}>
+      {isEditingMemo && (
+        <CommentComposer
+          autoFocus
+          value={memo}
+          onChangeText={setMemo}
+          onSubmit={(t) => {
+            const trimmed = t.trim();
+            setMemo(trimmed);
+            setIsEditingMemo(false);
+          }}
+          onBlur={() => setIsEditingMemo(false)}
+          placeholder="コメントを追加"
+          maxLength={200}
+          submitLabel="登録"
+        />
+      )}
+
+      {!isEditingMemo && <View style={[getFooterStyle(insets), { flexDirection: 'column' }]}>
         {errorMessage ? (
           <View style={styles.errorMessageContainer}>
             <Text style={styles.errorMessageText}>{errorMessage}</Text>
@@ -1178,7 +1200,7 @@ export default function AddScreen() {
           )}
           </TouchableOpacity>
         </View>
-      </View>
+      </View>}
 
       <Modal
         visible={showPhotoOptions}
@@ -1657,6 +1679,26 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 4,
     fontSize: 12,
+  },
+  memoText: {
+    fontSize: 15,
+    color: '#222',
+    textAlign: 'left',
+  },
+  memoCard: {
+    minHeight: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    padding: 14,
+    backgroundColor: '#FFF',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  memoPlaceholder: {
+    fontSize: 15,
+    color: '#999',
+    textAlign: 'left',
   },
   footerButtonRow: {
     flexDirection: 'row',
