@@ -78,7 +78,10 @@ export default function AddScreen() {
   const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const isAndroid = Platform.OS === 'android';
+  const footerH = 72;
+  const bottomPad = (isAndroid ? footerH : 0) + Math.max(insets.bottom, 12) + 16;
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -92,6 +95,7 @@ export default function AddScreen() {
   const [date, setDate] = useState<string>(getTodayLocal());
   const [memo, setMemo] = useState<string>('');
   const [isMemoOpen, setIsMemoOpen] = useState(false);
+  const [isMemoFocused, setIsMemoFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -853,13 +857,17 @@ export default function AddScreen() {
       </View>
 
       <ScrollView
-        ref={scrollViewRef}
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={{
           paddingTop: 0,
-          paddingBottom: 24,
+          paddingBottom: isAndroid ? bottomPad : 24,
         }}
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          if (!isAndroid || !isMemoFocused) return;
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+        }}
         keyboardDismissMode="interactive"
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
@@ -1171,6 +1179,15 @@ export default function AddScreen() {
               returnKeyType="send"
               blurOnSubmit
               onSubmitEditing={() => Keyboard.dismiss()}
+              onFocus={() => {
+                if (!isAndroid) return;
+                setIsMemoFocused(true);
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+              }}
+              onBlur={() => {
+                if (!isAndroid) return;
+                setIsMemoFocused(false);
+              }}
             />
           )}
           <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
@@ -1291,7 +1308,7 @@ export default function AddScreen() {
                   setPhotoUploadFailed(false);
                   resetForm();
                   setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                    scrollRef.current?.scrollTo({ y: 0, animated: true });
                   }, 0);
                 }}
                 activeOpacity={0.7}>

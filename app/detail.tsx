@@ -131,13 +131,17 @@ export default function DetailScreen() {
   const [maxScore, setMaxScore] = useState<string>('100');
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showFullScoreModal, setShowFullScoreModal] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const isAndroid = Platform.OS === 'android';
+  const footerH = 72;
+  const bottomPad = (isAndroid ? footerH : 0) + Math.max(insets.bottom, 12) + 16;
   const rootLayoutRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const scrollContentAnchorRef = useRef<View>(null);
   const rowRefMap = useRef<Record<string, View | null>>({});
   const [stamp, setStamp] = useState<string | null>(null);
   const [memo, setMemo] = useState<string>('');
   const [isMemoOpen, setIsMemoOpen] = useState(false);
+  const [isMemoFocused, setIsMemoFocused] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -749,7 +753,7 @@ export default function DetailScreen() {
 
   const scrollToRecord = (recordId: string) => {
     const rowEl = rowRefMap.current[recordId];
-    const scrollEl = scrollViewRef.current;
+    const scrollEl = scrollRef.current;
     const anchorEl = scrollContentAnchorRef.current;
     if (!rowEl || !scrollEl || !anchorEl) return;
     const rowNode = findNodeHandle(rowEl);
@@ -967,13 +971,17 @@ export default function DetailScreen() {
               keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
               <View style={{ flex: 1 }}>
             <ScrollView
-              ref={scrollViewRef}
+              ref={scrollRef}
               style={styles.scrollView}
               contentContainerStyle={{
                 paddingTop: headerTop,
-                paddingBottom: Platform.OS === 'android' ? 160 + insets.bottom : 100 + insets.bottom,
+                paddingBottom: isAndroid ? bottomPad : 100 + insets.bottom,
               }}
               keyboardShouldPersistTaps="handled"
+              onContentSizeChange={() => {
+                if (!isAndroid || !isMemoFocused) return;
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+              }}
               keyboardDismissMode="interactive"
               contentInsetAdjustmentBehavior="never"
               automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
@@ -1295,6 +1303,15 @@ export default function DetailScreen() {
                 returnKeyType="send"
                 blurOnSubmit
                 onSubmitEditing={() => Keyboard.dismiss()}
+                onFocus={() => {
+                  if (!isAndroid) return;
+                  setIsMemoFocused(true);
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+                }}
+                onBlur={() => {
+                  if (!isAndroid) return;
+                  setIsMemoFocused(false);
+                }}
               />
             )}
             <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
