@@ -738,7 +738,7 @@ export default function DetailScreen() {
         pendingActionRef.current = null;
         action();
       } else {
-        Alert.alert('成功', '記録を更新しました', [{ text: 'OK', onPress: goBackOrToList }]);
+        // 編集保存後は一覧へ戻さず、更新後の詳細表示（非編集モード）に留まる
       }
     } catch (error: any) {
       pendingActionRef.current = null;
