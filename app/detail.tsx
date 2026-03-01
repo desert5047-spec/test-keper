@@ -16,6 +16,8 @@ import {
   findNodeHandle,
   UIManager,
   StatusBar,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Image } from 'expo-image';
@@ -30,9 +32,9 @@ import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State }
 import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
-import { CommentComposer } from '@/components/CommentComposer';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
+import { CommentComposer } from '@/components/CommentComposer';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
@@ -135,7 +137,7 @@ export default function DetailScreen() {
   const rowRefMap = useRef<Record<string, View | null>>({});
   const [stamp, setStamp] = useState<string | null>(null);
   const [memo, setMemo] = useState<string>('');
-  const [isEditingMemo, setIsEditingMemo] = useState(false);
+  const [isMemoOpen, setIsMemoOpen] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -959,12 +961,17 @@ export default function DetailScreen() {
 
         {editMode ? (
           <View style={styles.editModeRoot}>
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
+              <View style={{ flex: 1 }}>
             <ScrollView
               ref={scrollViewRef}
               style={styles.scrollView}
               contentContainerStyle={{
                 paddingTop: headerTop,
-                paddingBottom: isEditingMemo ? 200 + insets.bottom : 100 + insets.bottom,
+                paddingBottom: Platform.OS === 'android' ? 160 + insets.bottom : 100 + insets.bottom,
               }}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
@@ -1262,27 +1269,44 @@ export default function DetailScreen() {
 
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                setIsEditingMemo(true);
-              }}
-              style={styles.memoCard}>
-              <Text style={memo.trim().length > 0 ? styles.memoText : styles.memoPlaceholder}>
-                {memo.trim().length > 0 ? memo : 'メモを追加'}
-              </Text>
-            </TouchableOpacity>
+            {Platform.OS === 'ios' ? (
+              <>
+                <Pressable
+                  onPress={() => setIsMemoOpen(true)}
+                  style={styles.memoCard}>
+                  <Text style={memo?.length ? styles.memoText : styles.memoPlaceholder}>
+                    {memo?.length ? memo : 'メモを入力（例：計算がんばった！）'}
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <TextInput
+                value={memo}
+                onChangeText={(t) => {
+                  setMemo(t);
+                  setIsDirty(true);
+                }}
+                placeholder="メモを入力（例：計算がんばった！）"
+                placeholderTextColor="#999"
+                style={[styles.memoInput, { minHeight: 44, paddingVertical: 10, textAlignVertical: 'center' as const }]}
+                maxLength={200}
+                multiline={false}
+                numberOfLines={1}
+                returnKeyType="send"
+                blurOnSubmit
+                onSubmitEditing={() => Keyboard.dismiss()}
+              />
+            )}
             <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
           </View>
 
-          <View style={{ height: 16 }} />
+          <View style={{ height: 16, backgroundColor: '#fff' }} />
             </ScrollView>
-            {isEditingMemo && (
+
+            {Platform.OS === 'ios' && isMemoOpen && (
               <CommentComposer
                 autoFocus
                 value={memo}
-                placeholder="コメントを追加"
-                maxLength={200}
                 onChangeText={(t) => {
                   setMemo(t);
                   setIsDirty(true);
@@ -1291,11 +1315,16 @@ export default function DetailScreen() {
                   const trimmed = v.trim();
                   setMemo(trimmed);
                   if (trimmed !== memo.trim()) setIsDirty(true);
-                  setIsEditingMemo(false);
+                  setIsMemoOpen(false);
                 }}
-                onBlur={() => setIsEditingMemo(false)}
+                onBlur={() => setIsMemoOpen(false)}
+                onClose={() => setIsMemoOpen(false)}
+                placeholder="メモを入力（例：計算がんばった！）"
+                maxLength={200}
               />
             )}
+              </View>
+            </KeyboardAvoidingView>
           </View>
       ) : (
         <ScrollView
@@ -1540,6 +1569,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   editModeRoot: {
     flex: 1,
@@ -1898,7 +1928,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scoreInputContainer: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   scoreInputRow: {
     flexDirection: 'row',
@@ -2063,6 +2093,17 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 4,
     fontSize: 12,
+  },
+  memoInput: {
+    minHeight: 100,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
+    fontSize: 16,
+    fontFamily: 'Nunito-Regular',
+    color: '#222',
   },
   loadingContainer: {
     flex: 1,

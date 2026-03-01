@@ -72,6 +72,19 @@ function TopSafeAreaBg() {
   );
 }
 
+function DebugInsets() {
+  const insets = useSafeAreaInsets();
+  const hasLoggedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (hasLoggedRef.current) return;
+    hasLoggedRef.current = true;
+    console.log('[ROOT][Insets]', insets);
+  }, [insets]);
+
+  return null;
+}
+
 /** 無効なリフレッシュトークンエラーかどうか（Expo Go 等で未処理の Promise 拒否を拾う用） */
 function isInvalidRefreshTokenError(reason: unknown): boolean {
   if (!reason || typeof reason !== 'object') return false;
@@ -171,6 +184,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaProvider style={{ flex: 1, backgroundColor: BG }}>
         <TopSafeAreaBg />
+        <DebugInsets />
         {Platform.OS !== 'web' && <StatusBar style="dark" translucent={false} backgroundColor="#fff" />}
         <DebugLabel />
         {Platform.OS === 'web' && (

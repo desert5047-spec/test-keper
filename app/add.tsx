@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -13,6 +14,8 @@ import {
   ActionSheetIOS,
   AppState,
   InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,9 +26,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
-import { CommentComposer } from '@/components/CommentComposer';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
+import { CommentComposer } from '@/components/CommentComposer';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
@@ -33,7 +36,7 @@ import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getFooterStyle } from '@/lib/bottomButtonContainer';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
 import { log, warn, error as logError } from '@/lib/logger';
 
@@ -71,6 +74,7 @@ export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
@@ -87,13 +91,12 @@ export default function AddScreen() {
   const getTodayLocal = () => new Date().toLocaleDateString('sv-SE');
   const [date, setDate] = useState<string>(getTodayLocal());
   const [memo, setMemo] = useState<string>('');
-  const [isEditingMemo, setIsEditingMemo] = useState(false);
+  const [isMemoOpen, setIsMemoOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
   const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [showToast, setShowToast] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
@@ -751,11 +754,9 @@ export default function AddScreen() {
         // 成功時の処理もtry-catchで保護（描画完了後にモーダル表示で遷移を確実に）
         try {
           setIsSaving(false);
-          setShowToast(true);
           InteractionManager.runAfterInteractions(() => {
             setShowSaveConfirm(true);
           });
-          setTimeout(() => setShowToast(false), 300);
         } catch (successError: any) {
           logError('[記録保存] 成功処理エラー');
           // 成功処理に失敗しても、保存は完了しているので、エラーを表示しない
@@ -833,7 +834,12 @@ export default function AddScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={[]}>
+    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+        <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
+        <View style={{ flex: 1 }}>
       <View style={[styles.header, { paddingTop: headerTop - HEADER_HEIGHT }]}>
         <TouchableOpacity
           style={styles.backButton}
@@ -850,8 +856,8 @@ export default function AddScreen() {
         ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={{
-          paddingTop: headerTop,
-          paddingBottom: isEditingMemo ? 200 + insets.bottom : 100 + insets.bottom,
+          paddingTop: 0,
+          paddingBottom: 24,
         }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -1142,46 +1148,40 @@ export default function AddScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>メモ</Text>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => {
-              setIsEditingMemo(true);
-            }}
-            style={styles.memoCard}>
-            <Text style={memo.trim().length > 0 ? styles.memoText : styles.memoPlaceholder}>
-              {memo.trim().length > 0 ? memo : 'メモを追加'}
-            </Text>
-          </TouchableOpacity>
+          {Platform.OS === 'ios' ? (
+            <>
+              <Pressable
+                onPress={() => setIsMemoOpen(true)}
+                style={styles.memoCard}>
+                <Text style={memo?.length ? styles.memoText : styles.memoPlaceholder}>
+                  {memo?.length ? memo : 'メモを入力（例：計算がんばった！）'}
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <TextInput
+              value={memo}
+              onChangeText={setMemo}
+              placeholder="メモを入力（例：計算がんばった！）"
+              placeholderTextColor="#999"
+              style={[styles.memoInput, { minHeight: 44, paddingVertical: 10, textAlignVertical: 'center' as const }]}
+              maxLength={200}
+              multiline={false}
+              numberOfLines={1}
+              returnKeyType="send"
+              blurOnSubmit
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+          )}
           <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
-
-      {isEditingMemo && (
-        <CommentComposer
-          autoFocus
-          value={memo}
-          onChangeText={setMemo}
-          onSubmit={(t) => {
-            const trimmed = t.trim();
-            setMemo(trimmed);
-            setIsEditingMemo(false);
-          }}
-          onBlur={() => setIsEditingMemo(false)}
-          placeholder="コメントを追加"
-          maxLength={200}
-          submitLabel="登録"
-        />
-      )}
-
-      {!isEditingMemo && <View style={[getFooterStyle(insets), { flexDirection: 'column' }]}>
         {errorMessage ? (
           <View style={styles.errorMessageContainer}>
             <Text style={styles.errorMessageText}>{errorMessage}</Text>
           </View>
         ) : null}
-        <View style={styles.footerButtonRow}>
+        <View style={[styles.footerButtonRow, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity
             style={[
               styles.bottomSaveButton,
@@ -1200,7 +1200,25 @@ export default function AddScreen() {
           )}
           </TouchableOpacity>
         </View>
-      </View>}
+      </ScrollView>
+
+      {Platform.OS === 'ios' && isMemoOpen && (
+        <CommentComposer
+          autoFocus
+          value={memo}
+          onChangeText={setMemo}
+          onSubmit={(v) => {
+            setMemo(v.trim());
+            setIsMemoOpen(false);
+          }}
+          onBlur={() => setIsMemoOpen(false)}
+          onClose={() => setIsMemoOpen(false)}
+          placeholder="メモを入力（例：計算がんばった！）"
+          maxLength={200}
+        />
+      )}
+        </View>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={showPhotoOptions}
@@ -1255,12 +1273,6 @@ export default function AddScreen() {
           />
         )}
       </Modal>
-
-      {showToast && (
-        <View style={styles.toastContainer}>
-          <Text style={styles.toastText}>記録を残しました</Text>
-        </View>
-      )}
 
       <Modal
         visible={showSaveConfirm}
@@ -1348,6 +1360,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   section: {
     backgroundColor: '#fff',
@@ -1532,7 +1545,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scoreInputContainer: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   scoreInputRow: {
     flexDirection: 'row',
@@ -1702,13 +1715,13 @@ const styles = StyleSheet.create({
   },
   footerButtonRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
     width: '100%',
+    paddingHorizontal: 20,
   },
   bottomSaveButton: {
+    flex: 1,
     backgroundColor: '#4A90E2',
-    minWidth: 120,
     height: 44,
     borderRadius: 10,
     paddingHorizontal: 16,
@@ -1778,22 +1791,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
     color: '#333',
-  },
-  toastContainer: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 20,
-    backgroundColor: '#333',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  toastText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
   },
   saveConfirmOverlay: {
     flex: 1,

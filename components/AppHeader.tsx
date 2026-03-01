@@ -139,7 +139,7 @@ export function AppHeader({
           ) : showBack ? (
             <View style={styles.hit}>
               <TouchableOpacity onPress={handleBack} style={styles.hitTouchable} activeOpacity={0.7}>
-                <ArrowLeft size={22} color="#333" />
+                <ArrowLeft size={22} color="#4A90E2" />
               </TouchableOpacity>
             </View>
           ) : showChildSwitcher ? (
