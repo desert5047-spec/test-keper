@@ -1381,20 +1381,20 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: '#fff',
-    marginTop: 10,
+    marginTop: 6,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
   photoSection: {
     paddingTop: 0,
-    marginTop: 8,
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   photoContainer: {
     borderRadius: 12,

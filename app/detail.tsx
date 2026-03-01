@@ -141,7 +141,6 @@ export default function DetailScreen() {
   const [stamp, setStamp] = useState<string | null>(null);
   const [memo, setMemo] = useState<string>('');
   const [isMemoOpen, setIsMemoOpen] = useState(false);
-  const [isMemoFocused, setIsMemoFocused] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -974,14 +973,11 @@ export default function DetailScreen() {
               ref={scrollRef}
               style={styles.scrollView}
               contentContainerStyle={{
+                flexGrow: 1,
                 paddingTop: headerTop,
                 paddingBottom: isAndroid ? bottomPad : 100 + insets.bottom,
               }}
               keyboardShouldPersistTaps="handled"
-              onContentSizeChange={() => {
-                if (!isAndroid || !isMemoFocused) return;
-                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-              }}
               keyboardDismissMode="interactive"
               contentInsetAdjustmentBehavior="never"
               automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
@@ -1305,12 +1301,7 @@ export default function DetailScreen() {
                 onSubmitEditing={() => Keyboard.dismiss()}
                 onFocus={() => {
                   if (!isAndroid) return;
-                  setIsMemoFocused(true);
                   setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-                }}
-                onBlur={() => {
-                  if (!isAndroid) return;
-                  setIsMemoFocused(false);
                 }}
               />
             )}
@@ -1793,20 +1784,20 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: '#fff',
-    marginTop: 10,
+    marginTop: 6,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
   sectionTitle: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   photoSection: {
     paddingTop: 0,
-    marginTop: 8,
+    marginTop: 4,
     paddingBottom: 0,
   },
   photoContainer: {
