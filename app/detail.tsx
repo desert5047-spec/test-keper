@@ -973,7 +973,6 @@ export default function DetailScreen() {
               ref={scrollRef}
               style={styles.scrollView}
               contentContainerStyle={{
-                flexGrow: 1,
                 paddingTop: headerTop,
                 paddingBottom: isAndroid ? bottomPad : 100 + insets.bottom,
               }}
@@ -1256,7 +1255,7 @@ export default function DetailScreen() {
             )}
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, styles.tightSection]}>
             <Text style={styles.sectionTitle}>日付</Text>
             <DateField
               value={record?.date ?? ''}
@@ -1271,7 +1270,7 @@ export default function DetailScreen() {
             />
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, styles.tightSection]}>
             <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
             {Platform.OS === 'ios' ? (
               <>
@@ -1308,7 +1307,7 @@ export default function DetailScreen() {
             <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
           </View>
 
-          <View style={{ height: 16, backgroundColor: '#fff' }} />
+          <View style={{ height: isAndroid ? bottomPad : 16, backgroundColor: '#fff' }} />
             </ScrollView>
 
             {Platform.OS === 'ios' && isMemoOpen && (
@@ -1794,6 +1793,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 8,
+  },
+  tightSection: {
+    marginTop: 4,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   photoSection: {
     paddingTop: 0,

@@ -1144,7 +1144,7 @@ export default function AddScreen() {
           )}
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.section, styles.tightSection]}>
           <Text style={styles.sectionTitle}>日付</Text>
           <DateField
             value={date}
@@ -1154,7 +1154,7 @@ export default function AddScreen() {
           />
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.section, styles.tightSection]}>
           <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>メモ</Text>
           {Platform.OS === 'ios' ? (
             <>
@@ -1395,6 +1395,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     color: '#333',
     marginBottom: 8,
+  },
+  tightSection: {
+    marginTop: 4,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   photoContainer: {
     borderRadius: 12,
