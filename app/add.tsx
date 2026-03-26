@@ -43,7 +43,7 @@ import { log, warn, error as logError } from '@/lib/logger';
 // Androidでexpo-cameraを使用するため、このキーは使用されませんが、エラー回避のため定義
 const PENDING_CAMERA_RESULT_KEY = '@pending_camera_result';
 
-const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+import { getSubjectsForLevel, getSubjectColor, type SchoolLevel } from '@/lib/subjects';
 const LAST_SUBJECT_KEY = '@last_record_subject';
 const LAST_CHILD_KEY = '@last_record_child_id';
 
@@ -77,7 +77,7 @@ export default function AddScreen() {
   const headerHeight = useHeaderHeight();
   const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
-  const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
+  const { selectedChildId: contextSelectedChildId, children: contextChildren, selectedChild } = useChild();
   const scrollRef = useRef<ScrollView>(null);
   const isAndroid = Platform.OS === 'android';
   const footerH = 72;
@@ -86,6 +86,8 @@ export default function AddScreen() {
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
+  const [showOtherSubjects, setShowOtherSubjects] = useState(false);
+  const subjectSet = getSubjectsForLevel((selectedChild?.school_level as SchoolLevel) ?? null);
   const [type, setType] = useState<RecordType>('テスト');
   const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
   const [score, setScore] = useState<string>('');
@@ -957,14 +959,15 @@ export default function AddScreen() {
           {!showSubjectInput ? (
             <>
               <View style={styles.chipContainer}>
-                {MAIN_SUBJECTS.map((subject) => (
+                {subjectSet.main.map((subject) => (
                   <TouchableOpacity
                     key={subject}
                     style={[
                       styles.chip,
                       selectedSubject === subject && styles.chipSelected,
+                      selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
                     ]}
-                    onPress={() => setSelectedSubject(subject)}
+                    onPress={() => { setSelectedSubject(subject); setShowOtherSubjects(false); }}
                     activeOpacity={0.7}>
                     <Text
                       style={[
@@ -975,11 +978,46 @@ export default function AddScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+
+              {showOtherSubjects && (
+                <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                  {subjectSet.other.map((subject) => (
+                    <TouchableOpacity
+                      key={subject}
+                      style={[
+                        styles.chip,
+                        selectedSubject === subject && styles.chipSelected,
+                        selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
+                      ]}
+                      onPress={() => setSelectedSubject(subject)}
+                      activeOpacity={0.7}>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selectedSubject === subject && styles.chipTextSelected,
+                        ]}>
+                        {subject}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                {!showOtherSubjects && subjectSet.other.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.chipOther}
+                    onPress={() => setShowOtherSubjects(true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.chipOtherText}>その他の教科</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.chipAdd}
                   onPress={() => setShowSubjectInput(true)}
                   activeOpacity={0.7}>
-                  <Text style={styles.chipAddText}>+ その他</Text>
+                  <Text style={styles.chipAddText}>+ 教科を追加</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -992,7 +1030,7 @@ export default function AddScreen() {
                 ]}
                 value={newSubject}
                 onChangeText={handleOtherSubjectChange}
-                placeholder="教科名を入力（例：生活、図工、音楽、体育）"
+                placeholder="教科名を入力（例：生活、図工、音楽）"
                 placeholderTextColor="#999"
                 autoFocus
               />
@@ -1504,6 +1542,19 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: '#fff',
+  },
+  chipOther: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
+  },
+  chipOtherText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
   },
   chipAdd: {
     paddingHorizontal: 16,

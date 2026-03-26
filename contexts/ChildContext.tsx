@@ -16,6 +16,7 @@ interface Child {
   id: string;
   name: string | null;
   grade: number | null;
+  school_level: string | null;
   color: string;
 }
 
@@ -69,7 +70,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
 
     const { data, error } = await supabase
       .from('children')
-      .select('id, name, grade, color')
+      .select('*')
       .eq('family_id', familyId)
       .order('created_at');
 

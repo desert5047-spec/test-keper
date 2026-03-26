@@ -20,10 +20,13 @@ import { supabase } from '@/lib/supabase';
 import { deleteImage } from '@/utils/imageUpload';
 import { error as logError } from '@/lib/logger';
 
+import { SCHOOL_LEVELS, getGradesForLevel, getGradeDisplayLabel, type SchoolLevel } from '@/lib/subjects';
+
 interface Child {
   id: string;
   name: string | null;
   grade: string | null;
+  school_level: SchoolLevel | null;
   color: string;
   is_default: boolean;
 }
@@ -31,15 +34,6 @@ interface Child {
 const COLORS = [
   '#4ECDC4', '#FF6B6B', '#45B7D1', '#FFA07A', '#98D8C8',
   '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B195', '#C06C84'
-];
-
-const GRADES = [
-  { label: '小学1年', value: 1 },
-  { label: '小学2年', value: 2 },
-  { label: '小学3年', value: 3 },
-  { label: '小学4年', value: 4 },
-  { label: '小学5年', value: 5 },
-  { label: '小学6年', value: 6 },
 ];
 
 export default function ChildrenScreen() {
@@ -52,6 +46,7 @@ export default function ChildrenScreen() {
   const [showModal, setShowModal] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
   const [name, setName] = useState('');
+  const [schoolLevel, setSchoolLevel] = useState<SchoolLevel>('elementary');
   const [grade, setGrade] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
 
@@ -88,6 +83,7 @@ export default function ChildrenScreen() {
     }
     setEditingChild(null);
     setName('');
+    setSchoolLevel('elementary');
     setGrade(null);
     setSelectedColor(COLORS[0]);
     setShowModal(true);
@@ -96,6 +92,7 @@ export default function ChildrenScreen() {
   const openEditModal = (child: Child) => {
     setEditingChild(child);
     setName(child.name || '');
+    setSchoolLevel(child.school_level || 'elementary');
     setGrade(child.grade ? parseInt(child.grade) : null);
     setSelectedColor(child.color);
     setShowModal(true);
@@ -135,6 +132,7 @@ export default function ChildrenScreen() {
         .update({
           name: trimmedName,
           grade: grade?.toString(),
+          school_level: schoolLevel,
           color: selectedColor,
         })
         .eq('id', editingChild.id)
@@ -158,6 +156,7 @@ export default function ChildrenScreen() {
         .insert({
           name: trimmedName,
           grade: grade?.toString(),
+          school_level: schoolLevel,
           color: selectedColor,
           is_default: false,
           user_id: user.id,
@@ -312,7 +311,7 @@ export default function ChildrenScreen() {
                     <View style={styles.childInfo}>
                       <Text style={styles.childName}>{child.name || '未設定'}</Text>
                       {child.grade && (
-                        <Text style={styles.childGrade}>小学{child.grade}年</Text>
+                        <Text style={styles.childGrade}>{getGradeDisplayLabel(child.school_level, child.grade)}</Text>
                       )}
                     </View>
                   </View>
@@ -408,11 +407,38 @@ export default function ChildrenScreen() {
             </View>
 
             <View style={styles.modalSection}>
+              <Text style={styles.modalLabel}>学校区分</Text>
+              <View style={styles.levelRow}>
+                {SCHOOL_LEVELS.map((level) => (
+                  <TouchableOpacity
+                    key={level.value}
+                    style={[
+                      styles.levelButton,
+                      schoolLevel === level.value && styles.levelButtonSelected,
+                    ]}
+                    onPress={() => {
+                      setSchoolLevel(level.value);
+                      setGrade(null);
+                    }}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.levelButtonText,
+                        schoolLevel === level.value && styles.levelButtonTextSelected,
+                      ]}>
+                      {level.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.modalSection}>
               <Text style={styles.modalLabel}>
                 学年 <Text style={styles.required}>*</Text>
               </Text>
               <View style={styles.gradeGrid}>
-                {GRADES.map((gradeOption) => (
+                {getGradesForLevel(schoolLevel).map((gradeOption) => (
                   <TouchableOpacity
                     key={gradeOption.value}
                     style={[
@@ -656,6 +682,31 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#999',
     marginTop: 4,
+  },
+  levelRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  levelButton: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#D0D0D0',
+  },
+  levelButtonSelected: {
+    borderColor: '#4A90E2',
+    backgroundColor: '#EFF6FF',
+  },
+  levelButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  levelButtonTextSelected: {
+    color: '#4A90E2',
   },
   gradeGrid: {
     flexDirection: 'row',

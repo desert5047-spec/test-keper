@@ -43,6 +43,7 @@ import { uploadImage, deleteImage, getSignedImageUrl, getStoragePathFromUrl, nor
 import { useAuth } from '@/contexts/AuthContext';
 import { log, error as logError } from '@/lib/logger';
 import { useChild } from '@/contexts/ChildContext';
+import { getSubjectColor, getSubjectsForLevel, type SchoolLevel } from '@/lib/subjects';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DetailScreen() {
@@ -145,6 +146,7 @@ export default function DetailScreen() {
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
+  const [showOtherSubjects, setShowOtherSubjects] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const allowNavigationRef = useRef(false);
@@ -153,7 +155,8 @@ export default function DetailScreen() {
   const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const navigation = useNavigation();
-  const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+  const currentChild = contextChildren.find(c => c.id === selectedChildId) ?? null;
+  const subjectSet = getSubjectsForLevel((currentChild?.school_level as SchoolLevel) ?? null);
 
   const hasPhotoInEdit = !!(
     photoUri &&
@@ -245,10 +248,14 @@ export default function DetailScreen() {
     setSelectedSubject(data.subject || '');
     setSelectedChildId(data.child_id || null);
     setIsDirty(false);
-    if (data.subject && !MAIN_SUBJECTS.includes(data.subject)) {
+    const allStandard = [...subjectSet.main, ...subjectSet.other];
+    if (data.subject && !allStandard.includes(data.subject)) {
       setShowSubjectInput(true);
       setNewSubject(data.subject);
     } else {
+      if (data.subject && subjectSet.other.includes(data.subject)) {
+        setShowOtherSubjects(true);
+      }
       setShowSubjectInput(false);
       setNewSubject('');
     }
@@ -873,20 +880,6 @@ export default function DetailScreen() {
     return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
   };
 
-  const getSubjectColor = (subject: string) => {
-    const colors: { [key: string]: string } = {
-      '国語': '#E74C3C',
-      '算数': '#3498DB',
-      '理科': '#27AE60',
-      '社会': '#E67E22',
-      '英語': '#2C3E50',
-      '生活': '#9B59B6',
-      '図工': '#F39C12',
-      '音楽': '#1ABC9C',
-      '体育': '#E91E63',
-    };
-    return colors[subject] || '#95A5A6';
-  };
 
   const recordPhotoDisplayUri =
     resolvedRecordPhotoUrl || (record?.photo_uri && isValidImageUri(record.photo_uri) ? record.photo_uri : null);
@@ -1071,39 +1064,83 @@ export default function DetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>教科</Text>
             {!showSubjectInput ? (
-              <View style={styles.chipContainer}>
-                {MAIN_SUBJECTS.map((subject) => (
-                  <TouchableOpacity
-                    key={subject}
-                    style={[
-                      styles.chip,
-                      selectedSubject === subject && styles.chipSelected,
-                    ]}
-                    onPress={() => {
-                      if (subject !== selectedSubject) {
-                        setSelectedSubject(subject);
-                        setShowSubjectInput(false);
-                        setNewSubject('');
-                        setIsDirty(true);
-                      }
-                    }}
-                    activeOpacity={0.7}>
-                    <Text
+              <>
+                <View style={styles.chipContainer}>
+                  {subjectSet.main.map((subject) => (
+                    <TouchableOpacity
+                      key={subject}
                       style={[
-                        styles.chipText,
-                        selectedSubject === subject && styles.chipTextSelected,
-                      ]}>
-                      {subject}
-                    </Text>
+                        styles.chip,
+                        selectedSubject === subject && styles.chipSelected,
+                        selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
+                      ]}
+                      onPress={() => {
+                        if (subject !== selectedSubject) {
+                          setSelectedSubject(subject);
+                          setShowSubjectInput(false);
+                          setNewSubject('');
+                          setIsDirty(true);
+                          setShowOtherSubjects(false);
+                        }
+                      }}
+                      activeOpacity={0.7}>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selectedSubject === subject && styles.chipTextSelected,
+                        ]}>
+                        {subject}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {showOtherSubjects && (
+                  <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                    {subjectSet.other.map((subject) => (
+                      <TouchableOpacity
+                        key={subject}
+                        style={[
+                          styles.chip,
+                          selectedSubject === subject && styles.chipSelected,
+                          selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
+                        ]}
+                        onPress={() => {
+                          if (subject !== selectedSubject) {
+                            setSelectedSubject(subject);
+                            setIsDirty(true);
+                          }
+                        }}
+                        activeOpacity={0.7}>
+                        <Text
+                          style={[
+                            styles.chipText,
+                            selectedSubject === subject && styles.chipTextSelected,
+                          ]}>
+                          {subject}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                  {!showOtherSubjects && subjectSet.other.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.chipOther}
+                      onPress={() => setShowOtherSubjects(true)}
+                      activeOpacity={0.7}>
+                      <Text style={styles.chipOtherText}>その他の教科</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.chipAdd}
+                    onPress={() => setShowSubjectInput(true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.chipAddText}>+ 教科を追加</Text>
                   </TouchableOpacity>
-                ))}
-                <TouchableOpacity
-                  style={styles.chipAdd}
-                  onPress={() => setShowSubjectInput(true)}
-                  activeOpacity={0.7}>
-                  <Text style={styles.chipAddText}>+ その他</Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              </>
             ) : (
               <View style={styles.subjectInputRow}>
                 <TextInput
@@ -1113,7 +1150,7 @@ export default function DetailScreen() {
                   ]}
                   value={newSubject}
                   onChangeText={handleOtherSubjectChange}
-                  placeholder="教科名を入力（例：生活、図工、音楽、体育）"
+                  placeholder="教科名を入力（例：生活、図工、音楽）"
                   placeholderTextColor="#999"
                   autoFocus
                 />
@@ -1745,6 +1782,19 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: '#fff',
+  },
+  chipOther: {
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
+    backgroundColor: '#F5F5F5',
+  },
+  chipOtherText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
   },
   chipAdd: {
     borderRadius: 16,

@@ -16,13 +16,11 @@ import { isSupabaseConfigured, supabaseConfigError, supabase } from '@/lib/supab
 import DebugLabel from '@/components/DebugLabel';
 import { log, warn, error as logError } from '@/lib/logger';
 
-// 本番（!__DEV__）では log/info/debug/warn を無効化。console.error は上書きしない（クラッシュ情報用）
-if (!__DEV__) {
-  console.log = () => {};
-  console.info = () => {};
-  console.debug = () => {};
-  console.warn = () => {};
-}
+// ログを無効化（console.error はクラッシュ情報用に維持）
+console.log = () => {};
+console.info = () => {};
+console.debug = () => {};
+console.warn = () => {};
 
 const debugLog = log;
 

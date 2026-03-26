@@ -33,18 +33,7 @@ interface Section {
   data: RecordWithImageUrl[];
 }
 
-const SUBJECT_COLORS: { [key: string]: string } = {
-  '国語': '#E74C3C',
-  '算数': '#3498DB',
-  '理科': '#27AE60',
-  '社会': '#E67E22',
-  '英語': '#2C3E50',
-  '生活': '#9B59B6',
-  '図工': '#F39C12',
-  '音楽': '#1ABC9C',
-  '体育': '#E91E63',
-};
-const getSubjectColor = (subject: string) => SUBJECT_COLORS[subject] || '#95A5A6';
+import { getSubjectColor } from '@/lib/subjects';
 
 const THUMB_SIZE = 96;
 
@@ -95,6 +84,11 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
           </View>
           <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
         </View>
+        {item.memo ? (
+          <Text style={styles.memoText} numberOfLines={2} ellipsizeMode="tail">
+            {item.memo}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -453,6 +447,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     marginLeft: 10,
     lineHeight: 18,
+  },
+  memoText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Nunito-Regular',
+    marginTop: 4,
   },
   emptyContainer: {
     flex: 1,

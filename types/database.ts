@@ -6,6 +6,7 @@ export interface Child {
   id: string;
   name: string | null;
   grade: string | null;
+  school_level: string | null;
   color: string;
   is_default: boolean;
   user_id: string;

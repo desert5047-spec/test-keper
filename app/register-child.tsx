@@ -16,21 +16,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useFonts, Nunito_400Regular, Nunito_700Bold, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
-
-const GRADES = [
-  { label: '小学1年', value: 1 },
-  { label: '小学2年', value: 2 },
-  { label: '小学3年', value: 3 },
-  { label: '小学4年', value: 4 },
-  { label: '小学5年', value: 5 },
-  { label: '小学6年', value: 6 },
-];
+import { SCHOOL_LEVELS, getGradesForLevel, type SchoolLevel } from '@/lib/subjects';
 
 export default function RegisterChildScreen() {
   const router = useRouter();
   const { user, familyId, isFamilyReady, refreshSetupStatus } = useAuth();
   const { loadChildren } = useChild();
   const [name, setName] = useState('');
+  const [schoolLevel, setSchoolLevel] = useState<SchoolLevel>('elementary');
   const [grade, setGrade] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -40,7 +33,6 @@ export default function RegisterChildScreen() {
     'Nunito-Bold': Nunito_700Bold,
   });
 
-  // お子様が既に登録されている場合はオンボーディングへリダイレクト
   useEffect(() => {
     const checkExistingChildren = async () => {
       if (!user || !fontsLoaded || !isFamilyReady || !familyId) return;
@@ -58,6 +50,13 @@ export default function RegisterChildScreen() {
 
     checkExistingChildren();
   }, [user, fontsLoaded, router]);
+
+  const grades = getGradesForLevel(schoolLevel);
+
+  const handleSchoolLevelChange = (level: SchoolLevel) => {
+    setSchoolLevel(level);
+    setGrade(null);
+  };
 
   if (!fontsLoaded) {
     return null;
@@ -89,6 +88,7 @@ export default function RegisterChildScreen() {
     const { error } = await supabase.from('children').insert({
       name: trimmedName,
       grade: grade.toString(),
+      school_level: schoolLevel,
       color: '#999999',
       is_default: false,
       user_id: user.id,
@@ -103,7 +103,6 @@ export default function RegisterChildScreen() {
       return;
     }
 
-    // 子供リストを更新
     await loadChildren();
     await refreshSetupStatus();
 
@@ -139,10 +138,35 @@ export default function RegisterChildScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
+              学校区分 <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.levelRow}>
+              {SCHOOL_LEVELS.map((level) => (
+                <Pressable
+                  key={level.value}
+                  style={[
+                    styles.levelButton,
+                    schoolLevel === level.value && styles.levelButtonSelected,
+                  ]}
+                  onPress={() => handleSchoolLevelChange(level.value)}>
+                  <Text
+                    style={[
+                      styles.levelButtonText,
+                      schoolLevel === level.value && styles.levelButtonTextSelected,
+                    ]}>
+                    {level.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
               学年 <Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.gradeGrid}>
-              {GRADES.map((gradeOption) => (
+              {grades.map((gradeOption) => (
                 <Pressable
                   key={gradeOption.value}
                   style={({ pressed }) => [
@@ -165,6 +189,7 @@ export default function RegisterChildScreen() {
                 </Pressable>
               ))}
             </View>
+            <Text style={styles.hint}>あとから変更できます</Text>
           </View>
         </View>
 
@@ -239,6 +264,37 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 4,
   },
+  levelRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  levelButton: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    borderWidth: 2,
+    borderColor: '#D0D0D0',
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none' as any,
+      cursor: 'pointer',
+    }),
+  },
+  levelButtonSelected: {
+    borderColor: '#4A90E2',
+    backgroundColor: '#EFF6FF',
+  },
+  levelButtonText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  levelButtonTextSelected: {
+    color: '#4A90E2',
+  },
   gradeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -246,7 +302,7 @@ const styles = StyleSheet.create({
   },
   gradeButton: {
     flex: 1,
-    minWidth: '47%',
+    minWidth: '47%' as any,
     backgroundColor: '#FFF',
     borderRadius: 12,
     paddingVertical: 12,
@@ -259,7 +315,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     ...(Platform.OS === 'web' && {
-      outlineStyle: 'none',
+      outlineStyle: 'none' as any,
       outlineWidth: 0,
       cursor: 'pointer',
       WebkitTapHighlightColor: 'transparent',

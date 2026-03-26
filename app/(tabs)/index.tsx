@@ -28,18 +28,7 @@ const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度�
 
 type RecordWithImageUrl = TestRecord & { imageUrl: string | null };
 
-const SUBJECT_COLORS: { [key: string]: string } = {
-  '国語': '#E74C3C',
-  '算数': '#3498DB',
-  '理科': '#27AE60',
-  '社会': '#E67E22',
-  '英語': '#2C3E50',
-  '生活': '#9B59B6',
-  '図工': '#F39C12',
-  '音楽': '#1ABC9C',
-  '体育': '#E91E63',
-};
-const getSubjectColor = (subject: string) => SUBJECT_COLORS[subject] || '#95A5A6';
+import { getSubjectColor } from '@/lib/subjects';
 
 const CARD_IMAGE_SIZE = Dimensions.get('window').width - 32;
 const CARD_IMAGE_HEIGHT_PHOTO = CARD_IMAGE_SIZE;
@@ -57,6 +46,7 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
   imageError,
   onImageError,
 }: HomeRecordCardProps) {
+  const [imgHeight, setImgHeight] = useState(CARD_IMAGE_HEIGHT_PHOTO);
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -66,7 +56,7 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
   const subjectColor = getSubjectColor(item.subject);
   const hasPhoto = !!(item.imageUrl && isValidImageUri(item.imageUrl));
   const shouldShowPhoto = hasPhoto && !imageError;
-  const imageHeight = shouldShowPhoto ? CARD_IMAGE_HEIGHT_PHOTO : CARD_IMAGE_HEIGHT_NO_PHOTO;
+  const imageHeight = shouldShowPhoto ? imgHeight : CARD_IMAGE_HEIGHT_NO_PHOTO;
 
   return (
     <TouchableOpacity
@@ -85,21 +75,26 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
               <Image
                 source={item.imageUrl ? { uri: item.imageUrl } : undefined}
                 style={styles.cardImage}
-                contentFit="cover"
+                contentFit="contain"
                 cachePolicy="memory-disk"
                 transition={0}
                 recyclingKey={item.id}
-                onLoad={() => onImageError(item.id, false)}
+                onLoad={(e: any) => {
+                  onImageError(item.id, false);
+                  const w = e?.source?.width;
+                  const h = e?.source?.height;
+                  if (w && h && w > 0 && h > 0) {
+                    const ratio = h / w;
+                    const computed = Math.round(CARD_IMAGE_SIZE * ratio);
+                    const clamped = Math.min(CARD_IMAGE_HEIGHT_PHOTO, Math.max(200, computed));
+                    setImgHeight(clamped);
+                  }
+                }}
                 onError={(e) => {
                   log('[THUMB][ImageError]', { id: item.id, hasUrl: !!item.imageUrl, errorMsg: e?.error?.message ?? null });
                   onImageError(item.id, true);
                 }}
               />
-              {__DEV__ && (
-                <Text numberOfLines={1} style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
-                  {item.imageUrl ? 'signed' : 'imageUrl:null'}
-                </Text>
-              )}
             </View>
             <View style={styles.dateOverlay}>
               <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
@@ -127,6 +122,11 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
           </View>
           <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
         </View>
+        {item.memo ? (
+          <Text style={styles.memoText} numberOfLines={2} ellipsizeMode="tail">
+            {item.memo}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -170,6 +170,7 @@ export default function HomeScreen() {
       if (!canceledRef.current) {
         if (isRefresh) setRefreshing(false);
         else setLoading(false);
+        if (isFamilyReady && familyId) setHasLoadedOnce(true);
       }
       return;
     }
@@ -425,7 +426,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: 'relative',
-    backgroundColor: '#eee',
+    backgroundColor: '#F5F5F5',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -493,6 +494,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     marginLeft: 12,
     lineHeight: 20,
+  },
+  memoText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Nunito-Regular',
+    marginTop: 4,
   },
   emptyContainer: {
     flex: 1,
