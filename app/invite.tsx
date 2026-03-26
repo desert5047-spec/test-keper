@@ -229,8 +229,7 @@ export default function InviteScreen() {
     });
   };
 
-  // TODO: 家族招待機能は次フェーズで再開予定
-  const ENABLE_INVITE_FEATURE = false;
+  const ENABLE_INVITE_FEATURE = true;
 
   const hasToken = inviteToken.trim().length > 0;
   const showLoading = !user && hasToken;

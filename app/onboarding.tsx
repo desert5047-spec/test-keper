@@ -93,7 +93,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top', 'bottom']}>
       <View style={styles.container}>
       {!isFamilyReady || !isSetupReady ? (
         <View style={styles.loadingContainer}>
