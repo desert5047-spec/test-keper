@@ -39,7 +39,8 @@ import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader, HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
-import { uploadImage, deleteImage, getSignedImageUrl, getStoragePathFromUrl, normalizePhotoUriForDb } from '@/utils/imageUpload';
+import { uploadImage, deleteImage, getStoragePathFromUrl, normalizePhotoUriForDb } from '@/utils/imageUpload';
+import { resolveImageUrl } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { log, error as logError } from '@/lib/logger';
 import { useChild } from '@/contexts/ChildContext';
@@ -204,7 +205,7 @@ export default function DetailScreen() {
       return;
     }
     let cancelled = false;
-    getSignedImageUrl(photoUri).then((resolved) => {
+    resolveImageUrl(photoUri).then((resolved) => {
       if (!cancelled && resolved) setResolvedEditPhotoUrl(resolved);
     });
     return () => { cancelled = true; };
@@ -231,7 +232,7 @@ export default function DetailScreen() {
     if (data) {
       setRecord(data);
       initializeEditForm(data);
-      const resolved = data.photo_uri ? await getSignedImageUrl(data.photo_uri) : null;
+      const resolved = data.photo_uri ? await resolveImageUrl(data.photo_uri) : null;
       setResolvedRecordPhotoUrl(resolved);
     }
     setLoading(false);
@@ -531,7 +532,7 @@ export default function DetailScreen() {
       // 編集時は photoUri が DB のパス（recordId/xxx.jpg）のことがある → 回転には読み込み可能な URL が必要
       let uriToRotate = photoUri;
       if (!isValidImageUri(photoUri)) {
-        const signed = await getSignedImageUrl(photoUri);
+        const signed = await resolveImageUrl(photoUri);
         if (!signed) {
           Alert.alert('エラー', '画像の読み込みに失敗しました');
           return;

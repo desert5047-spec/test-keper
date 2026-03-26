@@ -3,6 +3,7 @@ import { Platform, Image as RNImage } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 import { log, warn, error as logError } from '@/lib/logger';
+import { resolveImageUrl } from '@/lib/storage';
 
 /** 画像サイズを取得（ネイティブで軽量、フルデコードしない） */
 const getImageSizeAsync = (uri: string): Promise<{ width: number; height: number }> => {
@@ -14,8 +15,6 @@ const getImageSizeAsync = (uri: string): Promise<{ width: number; height: number
     );
   });
 };
-
-const SIGNED_URL_EXPIRES_IN = 60 * 60;
 
 const isHttpUrl = (value: string) => value.startsWith('http://') || value.startsWith('https://');
 
@@ -78,35 +77,11 @@ export const getPublicImageUrl = (pathOrUri: string | null): string | null => {
   return data.publicUrl ?? null;
 };
 
-export const getSignedImageUrl = async (
-  uriOrPath: string | null,
-  expiresIn = SIGNED_URL_EXPIRES_IN
-): Promise<string | null> => {
-  if (!uriOrPath) return null;
-  if (isHttpUrl(uriOrPath)) {
-    const storagePath = getStoragePathFromUrl(uriOrPath);
-    if (!storagePath) {
-      return uriOrPath;
-    }
-    const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .createSignedUrl(storagePath, expiresIn);
-    if (error || !data?.signedUrl) {
-      warn('[画像URL] 署名付きURL取得失敗');
-      return uriOrPath;
-    }
-    return data.signedUrl;
-  }
-
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(uriOrPath, expiresIn);
-  if (error || !data?.signedUrl) {
-    warn('[画像URL] 署名付きURL取得失敗');
-    return null;
-  }
-  return data.signedUrl;
-};
+/**
+ * @deprecated lib/storage.ts の resolveImageUrl を直接使ってください。
+ * 後方互換のため残しています。キャッシュ付きの resolveImageUrl に委譲します。
+ */
+export const getSignedImageUrl = resolveImageUrl;
 
 const convertBlobToArrayBuffer = async (blob: Blob): Promise<ArrayBuffer> => {
   return new Promise((resolve, reject) => {
@@ -517,6 +492,7 @@ export const uploadImage = async (
         .from(STORAGE_BUCKET)
         .upload(filePath, uploadBody, {
           contentType: 'image/jpeg',
+          cacheControl: '31536000',
           upsert: true,
         });
       
