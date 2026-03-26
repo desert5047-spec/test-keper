@@ -96,12 +96,6 @@ export function AppHeader({
       router.back();
       return;
     }
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (window.history.length > 1) {
-        router.back();
-        return;
-      }
-    }
     router.replace('/(tabs)');
   };
 
