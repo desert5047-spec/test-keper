@@ -164,6 +164,19 @@ export default function HomeScreen() {
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
 
+  const prevMonthKey = useRef(`${year}-${month}-${selectedChildId}`);
+  useEffect(() => {
+    const key = `${year}-${month}-${selectedChildId}`;
+    if (key !== prevMonthKey.current) {
+      prevMonthKey.current = key;
+      setRecords([]);
+      setStableRecords([]);
+      setHasLoadedOnce(false);
+      setLoading(true);
+      setLoadError(null);
+    }
+  }, [year, month, selectedChildId]);
+
   const loadRecords = useCallback(async (opts: { isRefresh?: boolean } = {}) => {
     const isRefresh = opts.isRefresh === true;
     if (!selectedChildId || !isFamilyReady || !familyId) {
