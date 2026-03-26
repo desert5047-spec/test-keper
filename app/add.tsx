@@ -87,7 +87,6 @@ export default function AddScreen() {
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
   const [showOtherSubjects, setShowOtherSubjects] = useState(false);
-  const subjectSet = getSubjectsForLevel((selectedChild?.school_level as SchoolLevel) ?? null);
   const [type, setType] = useState<RecordType>('テスト');
   const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
   const [score, setScore] = useState<string>('');
@@ -107,6 +106,8 @@ export default function AddScreen() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(contextSelectedChildId);
+  const currentChild = contextChildren.find(c => c.id === selectedChildId) ?? selectedChild;
+  const subjectSet = getSubjectsForLevel((currentChild?.school_level as SchoolLevel) ?? null);
   const [scoreError, setScoreError] = useState<string>('');
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showFullScoreModal, setShowFullScoreModal] = useState(false);
@@ -938,7 +939,17 @@ export default function AddScreen() {
                     styles.childChip,
                     selectedChildId === child.id && styles.childChipSelected,
                   ]}
-                  onPress={() => setSelectedChildId(child.id)}
+                  onPress={() => {
+                    setSelectedChildId(child.id);
+                    setShowOtherSubjects(false);
+                    setShowSubjectInput(false);
+                    setNewSubject('');
+                    const nextChild = contextChildren.find(c => c.id === child.id);
+                    const nextSubjects = getSubjectsForLevel((nextChild?.school_level as SchoolLevel) ?? null);
+                    if (!nextSubjects.main.includes(selectedSubject) && !nextSubjects.other.includes(selectedSubject)) {
+                      setSelectedSubject(nextSubjects.main[0] || '国語');
+                    }
+                  }}
                   activeOpacity={0.7}>
                   <View style={[styles.childColorBadge, { backgroundColor: child.color }]} />
                   <Text
