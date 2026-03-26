@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, useHeaderTop } from '@/components/AppHeader';
 import { ResetConfirmModal } from '@/components/ResetConfirmModal';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,10 +27,11 @@ import { deleteImage } from '@/utils/imageUpload';
 import { warn, error as logError } from '@/lib/logger';
 import { webUrls } from '@/lib/urls';
 import { useSafeBottom } from '@/lib/useSafeBottom';
-import { TAB_BAR_HEIGHT, TAB_ITEM_PADDING_TOP, TAB_ITEM_PADDING_BOTTOM, TAB_LABEL_FONT_SIZE, TAB_LABEL_MARGIN_TOP, TAB_LABEL_LINE_HEIGHT, ADD_BUTTON_SIZE } from '@/components/TabBar/shared';
+import { TAB_BAR_HEIGHT, TAB_ITEM_PADDING_TOP, TAB_ITEM_PADDING_BOTTOM, BOTTOM_NAV_BASE_HEIGHT, TAB_LABEL_FONT_SIZE, TAB_LABEL_MARGIN_TOP, TAB_LABEL_LINE_HEIGHT, ADD_BUTTON_SIZE } from '@/components/TabBar/shared';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const headerTop = useHeaderTop();
   const { safeBottom } = useSafeBottom(16);
 
   const appVersion = Constants.expoConfig?.version ?? 'unknown';
@@ -555,18 +556,21 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
       <View style={styles.container}>
-      <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" />
+      <AppHeader showBack={true} showSettings={false} showChildSwitcher={false} title="設定" safeTopByParent={true} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: safeBottom + 120 },
+          {
+            paddingTop: headerTop + 4,
+            paddingBottom: BOTTOM_NAV_BASE_HEIGHT + 24,
+          },
         ]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
+        <View style={[styles.section, styles.sectionFirst]}>
           <Text style={styles.sectionTitle}>機能</Text>
 
           <TouchableOpacity
@@ -740,7 +744,6 @@ export default function SettingsScreen() {
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>親の名前（ユーザーネーム）</Text>
           <Text style={styles.sectionDescription}>
             親の名前を設定できます（最大4文字）
           </Text>
@@ -943,7 +946,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingTop: 86,
   },
   scrollContent: {
     paddingBottom: 24,
@@ -951,6 +953,9 @@ const styles = StyleSheet.create({
   section: {
     marginTop: 12,
     paddingHorizontal: 20,
+  },
+  sectionFirst: {
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 13,

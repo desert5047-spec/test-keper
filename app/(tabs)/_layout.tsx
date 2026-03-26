@@ -11,7 +11,7 @@ export default function TabLayout() {
 
   return (
     <DateProvider>
-      <Tabs
+    <Tabs
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: '#333',
@@ -112,7 +112,7 @@ export default function TabLayout() {
               );
             })}
 
-            {/* ＋ボタン（記録を追加） */}
+            {/* ＋ボタン（記録を追加）アイコン＋ラベル(42px)と円(48px)の高さ差を補正して一直線に */}
             <TouchableOpacity
               onPress={() => router.push('/add')}
               style={styles.tabButton}
@@ -234,6 +234,7 @@ const styles = StyleSheet.create({
   addButtonContainer: {
     width: ADD_BUTTON_SIZE,
     height: ADD_BUTTON_SIZE,
+    marginTop: 3,
     borderRadius: ADD_BUTTON_SIZE / 2,
     backgroundColor: '#4A90E2',
     justifyContent: 'center',

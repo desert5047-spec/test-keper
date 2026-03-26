@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -13,6 +14,8 @@ import {
   ActionSheetIOS,
   AppState,
   InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,23 +26,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DateField, isValidYmd } from '@/components/DateField';
 import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
-import KeyboardAwareScroll from '@/components/KeyboardAwareScroll';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
+import { CommentComposer } from '@/components/CommentComposer';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import type { RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { useChild } from '@/contexts/ChildContext';
 import { uploadImage, normalizePhotoUriForDb } from '@/utils/imageUpload';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSafeBottom } from '@/lib/useSafeBottom';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
 import { log, warn, error as logError } from '@/lib/logger';
 
 // Androidでexpo-cameraを使用するため、このキーは使用されませんが、エラー回避のため定義
 const PENDING_CAMERA_RESULT_KEY = '@pending_camera_result';
 
-const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+import { getSubjectsForLevel, getSubjectColor, type SchoolLevel } from '@/lib/subjects';
 const LAST_SUBJECT_KEY = '@last_record_subject';
 const LAST_CHILD_KEY = '@last_record_child_id';
 
@@ -66,19 +70,24 @@ interface Child {
   color: string;
 }
 
-const ADD_HEADER_HEIGHT = 102;
-
 export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
-  const { safeBottom } = useSafeBottom(16);
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
-  const { selectedChildId: contextSelectedChildId, children: contextChildren } = useChild();
-  const scrollViewRef = useRef<ScrollView>(null);
+  const { selectedChildId: contextSelectedChildId, children: contextChildren, selectedChild } = useChild();
+  const scrollRef = useRef<ScrollView>(null);
+  const isAndroid = Platform.OS === 'android';
+  const footerH = 72;
+  const bottomPad = (isAndroid ? footerH : 0) + Math.max(insets.bottom, 12) + 16;
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
+  const [showOtherSubjects, setShowOtherSubjects] = useState(false);
+  const subjectSet = getSubjectsForLevel((selectedChild?.school_level as SchoolLevel) ?? null);
   const [type, setType] = useState<RecordType>('テスト');
   const [evaluationType, setEvaluationType] = useState<'score' | 'stamp'>('score');
   const [score, setScore] = useState<string>('');
@@ -87,12 +96,13 @@ export default function AddScreen() {
   const getTodayLocal = () => new Date().toLocaleDateString('sv-SE');
   const [date, setDate] = useState<string>(getTodayLocal());
   const [memo, setMemo] = useState<string>('');
+  const [isMemoOpen, setIsMemoOpen] = useState(false);
+  const [isMemoFocused, setIsMemoFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
   const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [showToast, setShowToast] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
@@ -106,6 +116,12 @@ export default function AddScreen() {
   useEffect(() => {
     requestPermissions();
   }, []);
+
+  useEffect(() => {
+    if (__DEV__ && showPhotoOptions) {
+      debugLog('[ActionSheet] insets.bottom=', insets.bottom);
+    }
+  }, [showPhotoOptions, insets.bottom]);
 
   useEffect(() => {
     const loadLastSelections = async () => {
@@ -319,16 +335,6 @@ export default function AddScreen() {
 
     setScoreError('');
   };
-
-  const formatDisplayDate = (dateString: string) => {
-    try {
-      const [year, month, day] = dateString.split('-');
-      return `${year}年${parseInt(month)}月${parseInt(day)}日`;
-    } catch {
-      return dateString;
-    }
-  };
-
 
   const showPhotoActionSheet = () => {
     if (Platform.OS === 'ios') {
@@ -754,11 +760,9 @@ export default function AddScreen() {
         // 成功時の処理もtry-catchで保護（描画完了後にモーダル表示で遷移を確実に）
         try {
           setIsSaving(false);
-          setShowToast(true);
           InteractionManager.runAfterInteractions(() => {
             setShowSaveConfirm(true);
           });
-          setTimeout(() => setShowToast(false), 300);
         } catch (successError: any) {
           logError('[記録保存] 成功処理エラー');
           // 成功処理に失敗しても、保存は完了しているので、エラーを表示しない
@@ -827,28 +831,50 @@ export default function AddScreen() {
       ? '記録は保存されましたが、写真のアップロードに失敗しました。\n続けて入力しますか？'
       : '記録は保存されました。\n続けて入力しますか？';
 
+  const goBackOrToList = () => {
+    if (router.canGoBack?.()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/list');
+    }
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
-      <View style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+        <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
+        <View style={{ flex: 1 }}>
+      <View style={[styles.header, { paddingTop: headerTop - HEADER_HEIGHT }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}>
+          onPress={goBackOrToList}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>記録を残す</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAwareScroll
-        ref={scrollViewRef}
+      <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
-        contentPaddingBottom={140 + safeBottom}
-        keyboardVerticalOffsetOverride={ADD_HEADER_HEIGHT}
+        contentContainerStyle={{
+          paddingTop: 0,
+          paddingBottom: isAndroid ? bottomPad : 24,
+        }}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          if (!isAndroid || !isMemoFocused) return;
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+        }}
+        keyboardDismissMode="interactive"
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>写真</Text>
+        <View style={[styles.section, styles.photoSection]}>
           {photoUri ? (
             <View style={styles.photoContainer}>
               <TouchableOpacity
@@ -933,14 +959,15 @@ export default function AddScreen() {
           {!showSubjectInput ? (
             <>
               <View style={styles.chipContainer}>
-                {MAIN_SUBJECTS.map((subject) => (
+                {subjectSet.main.map((subject) => (
                   <TouchableOpacity
                     key={subject}
                     style={[
                       styles.chip,
                       selectedSubject === subject && styles.chipSelected,
+                      selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
                     ]}
-                    onPress={() => setSelectedSubject(subject)}
+                    onPress={() => { setSelectedSubject(subject); setShowOtherSubjects(false); }}
                     activeOpacity={0.7}>
                     <Text
                       style={[
@@ -951,11 +978,46 @@ export default function AddScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+
+              {showOtherSubjects && (
+                <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                  {subjectSet.other.map((subject) => (
+                    <TouchableOpacity
+                      key={subject}
+                      style={[
+                        styles.chip,
+                        selectedSubject === subject && styles.chipSelected,
+                        selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
+                      ]}
+                      onPress={() => setSelectedSubject(subject)}
+                      activeOpacity={0.7}>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selectedSubject === subject && styles.chipTextSelected,
+                        ]}>
+                        {subject}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                {!showOtherSubjects && subjectSet.other.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.chipOther}
+                    onPress={() => setShowOtherSubjects(true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.chipOtherText}>その他の教科</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.chipAdd}
                   onPress={() => setShowSubjectInput(true)}
                   activeOpacity={0.7}>
-                  <Text style={styles.chipAddText}>+ その他</Text>
+                  <Text style={styles.chipAddText}>+ 教科を追加</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -968,7 +1030,7 @@ export default function AddScreen() {
                 ]}
                 value={newSubject}
                 onChangeText={handleOtherSubjectChange}
-                placeholder="教科名を入力（例：生活、図工、音楽、体育）"
+                placeholder="教科名を入力（例：生活、図工、音楽）"
                 placeholderTextColor="#999"
                 autoFocus
               />
@@ -1120,7 +1182,7 @@ export default function AddScreen() {
           )}
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.section, styles.tightSection]}>
           <Text style={styles.sectionTitle}>日付</Text>
           <DateField
             value={date}
@@ -1128,52 +1190,61 @@ export default function AddScreen() {
             maxDate={new Date()}
             placeholder="タップして選択"
           />
-          {date && isValidYmd(date) ? (
-            <Text style={styles.dateDisplayText}>{formatDisplayDate(date)}</Text>
-          ) : null}
         </View>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
-          <TextInput
-            style={styles.memoInput}
-            value={memo}
-            onChangeText={setMemo}
-            placeholder="メモを入力（例：計算がんばった！）"
-            placeholderTextColor="#999"
-            multiline
-            blurOnSubmit={false}
-            scrollEnabled={false}
-            textAlignVertical="top"
-            maxLength={200}
-          />
+        <View style={[styles.section, styles.tightSection]}>
+          <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>メモ</Text>
+          {Platform.OS === 'ios' ? (
+            <>
+              <Pressable
+                onPress={() => setIsMemoOpen(true)}
+                style={styles.memoCard}>
+                <Text style={memo?.length ? styles.memoText : styles.memoPlaceholder}>
+                  {memo?.length ? memo : 'メモを入力（例：計算がんばった！）'}
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <TextInput
+              value={memo}
+              onChangeText={setMemo}
+              placeholder="メモを入力（例：計算がんばった！）"
+              placeholderTextColor="#999"
+              style={[styles.memoInput, { minHeight: 44, paddingVertical: 10, textAlignVertical: 'center' as const }]}
+              maxLength={200}
+              multiline={false}
+              numberOfLines={1}
+              returnKeyType="send"
+              blurOnSubmit
+              onSubmitEditing={() => Keyboard.dismiss()}
+              onFocus={() => {
+                if (!isAndroid) return;
+                setIsMemoFocused(true);
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+              }}
+              onBlur={() => {
+                if (!isAndroid) return;
+                setIsMemoFocused(false);
+              }}
+            />
+          )}
           <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
-        <View style={{ height: 100 }} />
-      </KeyboardAwareScroll>
-
-      <View
-        style={[
-          styles.bottomButtonContainer,
-          {
-            bottom: safeBottom,
-            paddingBottom: 12 + safeBottom,
-          },
-        ]}>
         {errorMessage ? (
           <View style={styles.errorMessageContainer}>
             <Text style={styles.errorMessageText}>{errorMessage}</Text>
           </View>
         ) : null}
-        <TouchableOpacity
-          style={[
-            styles.bottomSaveButton,
-            (isSaving || (evaluationType === 'score' && scoreError)) && styles.bottomSaveButtonDisabled,
-          ]}
-          onPress={handleSave}
-          disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
-          activeOpacity={0.7}>
+        <View style={[styles.footerButtonRow, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity
+            style={[
+              styles.bottomSaveButton,
+              (isSaving || (evaluationType === 'score' && scoreError)) && styles.bottomSaveButtonDisabled,
+            ]}
+            onPress={handleSave}
+            disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
+            activeOpacity={0.8}>
           {isSaving ? (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <ActivityIndicator size="small" color="#fff" />
@@ -1182,8 +1253,27 @@ export default function AddScreen() {
           ) : (
             <Text style={styles.bottomSaveButtonText}>保存</Text>
           )}
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {Platform.OS === 'ios' && isMemoOpen && (
+        <CommentComposer
+          autoFocus
+          value={memo}
+          onChangeText={setMemo}
+          onSubmit={(v) => {
+            setMemo(v.trim());
+            setIsMemoOpen(false);
+          }}
+          onBlur={() => setIsMemoOpen(false)}
+          onClose={() => setIsMemoOpen(false)}
+          placeholder="メモを入力（例：計算がんばった！）"
+          maxLength={200}
+        />
+      )}
+        </View>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={showPhotoOptions}
@@ -1194,7 +1284,11 @@ export default function AddScreen() {
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowPhotoOptions(false)}>
-          <View style={styles.actionSheet}>
+          <View
+            style={[
+              styles.actionSheet,
+              { paddingBottom: 12 + Math.max(insets.bottom, 12) },
+            ]}>
             <TouchableOpacity
               style={styles.actionSheetButton}
               onPress={takePhoto}
@@ -1235,12 +1329,6 @@ export default function AddScreen() {
         )}
       </Modal>
 
-      {showToast && (
-        <View style={styles.toastContainer}>
-          <Text style={styles.toastText}>記録を残しました</Text>
-        </View>
-      )}
-
       <Modal
         visible={showSaveConfirm}
         transparent={true}
@@ -1258,7 +1346,7 @@ export default function AddScreen() {
                   setPhotoUploadFailed(false);
                   resetForm();
                   setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                    scrollRef.current?.scrollTo({ y: 0, animated: true });
                   }, 0);
                 }}
                 activeOpacity={0.7}>
@@ -1279,7 +1367,6 @@ export default function AddScreen() {
           </View>
         </View>
       </Modal>
-      </View>
     </SafeAreaView>
   );
 }
@@ -1291,18 +1378,19 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 8,
-    paddingBottom: 8,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 56,
   },
   backButton: {
-    padding: 4,
-    minWidth: 40,
+    width: 44,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backButtonText: {
     fontSize: 28,
@@ -1310,29 +1398,46 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Nunito-Bold',
+    fontWeight: '700',
     color: '#333',
+    lineHeight: 22,
     flex: 1,
     textAlign: 'center',
+    ...(Platform.OS === 'android' && {
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+    }),
   },
   headerSpacer: {
     minWidth: 40,
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   section: {
     backgroundColor: '#fff',
-    marginTop: 12,
+    marginTop: 6,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  photoSection: {
+    paddingTop: 0,
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  tightSection: {
+    marginTop: 4,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   photoContainer: {
     borderRadius: 12,
@@ -1384,7 +1489,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 12,
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 8,
   },
   rotateButton: {
@@ -1437,6 +1542,19 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: '#fff',
+  },
+  chipOther: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
+  },
+  chipOtherText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
   },
   chipAdd: {
     paddingHorizontal: 16,
@@ -1631,13 +1749,6 @@ const styles = StyleSheet.create({
   stampTextSelected: {
     color: '#fff',
   },
-  dateDisplayText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#4A90E2',
-    textAlign: 'center',
-  },
   memoInput: {
     minHeight: 100,
     padding: 12,
@@ -1655,36 +1766,40 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
   },
-  bottomButtonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
+  memoText: {
+    fontSize: 15,
+    color: '#222',
+    textAlign: 'left',
+  },
+  memoCard: {
+    minHeight: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    padding: 14,
+    backgroundColor: '#FFF',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  memoPlaceholder: {
+    fontSize: 15,
+    color: '#999',
+    textAlign: 'left',
+  },
+  footerButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    ...Platform.select({
-      web: {
-        boxShadow: '0px -2px 4px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 10,
-      },
-    }),
   },
   bottomSaveButton: {
+    flex: 1,
     backgroundColor: '#4A90E2',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    height: 44,
+    borderRadius: 10,
+    paddingHorizontal: 16,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   bottomSaveButtonDisabled: {
     backgroundColor: '#CCC',
@@ -1693,6 +1808,7 @@ const styles = StyleSheet.create({
   bottomSaveButtonText: {
     color: '#fff',
     fontSize: 17,
+    fontWeight: '700',
     fontFamily: 'Nunito-Bold',
   },
   errorMessageContainer: {
@@ -1725,7 +1841,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 20,
+    paddingTop: 12,
+    paddingHorizontal: 16,
     zIndex: 1001,
   },
   actionSheetButton: {
@@ -1747,22 +1864,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
     color: '#333',
-  },
-  toastContainer: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 20,
-    backgroundColor: '#333',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  toastText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
   },
   saveConfirmOverlay: {
     flex: 1,

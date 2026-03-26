@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 
 export type FullScoreEditorModalProps = {
@@ -37,6 +38,8 @@ export function FullScoreEditorModal({
   onClose,
   onConfirm,
 }: FullScoreEditorModalProps) {
+  const insets = useSafeAreaInsets();
+  const extraBottom = Platform.OS === 'android' ? 12 : 0;
   const [draft, setDraft] = useState('');
 
   useEffect(() => {
@@ -83,7 +86,12 @@ export function FullScoreEditorModal({
       animationType="fade"
       onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.content} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[
+            styles.content,
+            { paddingBottom: Math.max(insets.bottom, 12) + 8 + extraBottom },
+          ]}
+          onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
             <Text style={styles.title}>満点を入力</Text>
             <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.closeBtn}>
@@ -166,7 +174,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
     paddingHorizontal: 24,
     paddingTop: 16,
   },

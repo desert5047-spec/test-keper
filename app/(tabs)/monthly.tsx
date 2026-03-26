@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
+import { getSubjectColor } from '@/lib/subjects';
 import { useAuth } from '@/contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader, useHeaderTop } from '@/components/AppHeader';
@@ -160,20 +161,6 @@ export default function MonthlyScreen() {
     router.push(`/(tabs)/list?year=${year}&month=${month}`);
   };
 
-  const getSubjectColor = (subject: string) => {
-    const colors: { [key: string]: string } = {
-      '国語': '#E74C3C',
-      '算数': '#3498DB',
-      '理科': '#27AE60',
-      '社会': '#E67E22',
-      '英語': '#2C3E50',
-      '生活': '#9B59B6',
-      '図工': '#F39C12',
-      '音楽': '#1ABC9C',
-      '体育': '#E91E63',
-    };
-    return colors[subject] || '#95A5A6';
-  };
 
   const renderMonthCard = (summary: MonthSummary, index: number) => {
     const hasRecords = summary.totalRecords > 0;

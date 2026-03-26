@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Modal,
   ActivityIndicator,
   TextInput,
@@ -14,17 +15,18 @@ import {
   Animated,
   findNodeHandle,
   UIManager,
-  KeyboardAvoidingView,
-  TouchableWithoutFeedback,
+  StatusBar,
   Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { X, Home, Trash2, Camera, RotateCw, RotateCcw, Edit3, ArrowLeft, List, Calendar, Plus, Check } from 'lucide-react-native';
+import { X, Camera, RotateCw, RotateCcw, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { DateField, isValidYmd } from '@/components/DateField';
@@ -32,21 +34,24 @@ import { CameraScreen } from '@/components/CameraScreen';
 import { CameraPreviewScreen } from '@/components/CameraPreviewScreen';
 import { ScoreEditorModal } from '@/components/ScoreEditorModal';
 import { FullScoreEditorModal } from '@/components/FullScoreEditorModal';
+import { CommentComposer } from '@/components/CommentComposer';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord, RecordType, StampType } from '@/types/database';
 import { validateImageUri, isValidImageUri } from '@/utils/imageGuard';
 import { AppHeader, HEADER_HEIGHT, useHeaderTop } from '@/components/AppHeader';
-import { uploadImage, deleteImage, getSignedImageUrl, getStoragePathFromUrl, normalizePhotoUriForDb } from '@/utils/imageUpload';
+import { uploadImage, deleteImage, getStoragePathFromUrl, normalizePhotoUriForDb } from '@/utils/imageUpload';
+import { resolveImageUrl } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { log, error as logError } from '@/lib/logger';
 import { useChild } from '@/contexts/ChildContext';
-import { useSafeBottom } from '@/lib/useSafeBottom';
+import { getSubjectColor, getSubjectsForLevel, type SchoolLevel } from '@/lib/subjects';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const headerHeight = useHeaderHeight();
-  const { safeBottom } = useSafeBottom(16);
+  const insets = useSafeAreaInsets();
   const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
   const { children: contextChildren } = useChild();
@@ -60,6 +65,7 @@ export default function DetailScreen() {
   const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [scoreError, setScoreError] = useState<string>('');
   const [resolvedRecordPhotoUrl, setResolvedRecordPhotoUrl] = useState<string | null>(null);
   const [resolvedEditPhotoUrl, setResolvedEditPhotoUrl] = useState<string | null>(null);
@@ -127,19 +133,67 @@ export default function DetailScreen() {
   const [maxScore, setMaxScore] = useState<string>('100');
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showFullScoreModal, setShowFullScoreModal] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const isAndroid = Platform.OS === 'android';
+  const footerH = 72;
+  const bottomPad = (isAndroid ? footerH : 0) + Math.max(insets.bottom, 12) + 16;
+  const rootLayoutRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const scrollContentAnchorRef = useRef<View>(null);
   const rowRefMap = useRef<Record<string, View | null>>({});
-  const memoYRef = useRef(0);
   const [stamp, setStamp] = useState<string | null>(null);
   const [memo, setMemo] = useState<string>('');
+  const [isMemoOpen, setIsMemoOpen] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [newSubject, setNewSubject] = useState<string>('');
   const [showSubjectInput, setShowSubjectInput] = useState(false);
+  const [showOtherSubjects, setShowOtherSubjects] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const allowNavigationRef = useRef(false);
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const unsavedDiscardRef = useRef<(() => void) | null>(null);
+  const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
-  const MAIN_SUBJECTS = ['国語', '算数', '理科', '社会', '英語'];
+  const navigation = useNavigation();
+  const currentChild = contextChildren.find(c => c.id === selectedChildId) ?? null;
+  const subjectSet = getSubjectsForLevel((currentChild?.school_level as SchoolLevel) ?? null);
+
+  const hasPhotoInEdit = !!(
+    photoUri &&
+    (isValidImageUri(photoUri) || record?.photo_uri)
+  );
+  const canSaveInEdit =
+    hasPhotoInEdit ||
+    (evaluationType === 'score' &&
+      score.trim() !== '' &&
+      !scoreError &&
+      !isNaN(parseInt(score, 10)) &&
+      parseInt(score, 10) >= 0 &&
+      parseInt(maxScore, 10) > 0 &&
+      parseInt(score, 10) <= parseInt(maxScore, 10)) ||
+    (evaluationType === 'stamp' && !!stamp);
+
+  const goBackOrToList = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/list');
+    }
+  };
+
+  const handleCancel = () => {
+    if (editMode && isDirty) {
+      showUnsavedAlert(() => {
+        allowNavigationRef.current = true;
+        setIsDirty(false);
+        if (record) initializeEditForm(record);
+        goBackOrToList();
+      });
+    } else {
+      goBackOrToList();
+    }
+  };
 
   useEffect(() => {
     if (!photoUri) {
@@ -151,7 +205,7 @@ export default function DetailScreen() {
       return;
     }
     let cancelled = false;
-    getSignedImageUrl(photoUri).then((resolved) => {
+    resolveImageUrl(photoUri).then((resolved) => {
       if (!cancelled && resolved) setResolvedEditPhotoUrl(resolved);
     });
     return () => { cancelled = true; };
@@ -178,7 +232,7 @@ export default function DetailScreen() {
     if (data) {
       setRecord(data);
       initializeEditForm(data);
-      const resolved = data.photo_uri ? await getSignedImageUrl(data.photo_uri) : null;
+      const resolved = data.photo_uri ? await resolveImageUrl(data.photo_uri) : null;
       setResolvedRecordPhotoUrl(resolved);
     }
     setLoading(false);
@@ -194,23 +248,62 @@ export default function DetailScreen() {
     setScoreError('');
     setSelectedSubject(data.subject || '');
     setSelectedChildId(data.child_id || null);
-    if (data.subject && !MAIN_SUBJECTS.includes(data.subject)) {
+    setIsDirty(false);
+    const allStandard = [...subjectSet.main, ...subjectSet.other];
+    if (data.subject && !allStandard.includes(data.subject)) {
       setShowSubjectInput(true);
       setNewSubject(data.subject);
     } else {
+      if (data.subject && subjectSet.other.includes(data.subject)) {
+        setShowOtherSubjects(true);
+      }
       setShowSubjectInput(false);
       setNewSubject('');
     }
   };
 
+  const showUnsavedAlert = (onDiscard: () => void) => {
+    unsavedDiscardRef.current = onDiscard;
+    setShowUnsavedModal(true);
+  };
+
+  // Stack headerShown: false のためヘッダーは自前（AppHeader）で統一
+  // useLayoutEffect による headerStyle 設定は削除済み
+
+  // [2] 実測ログ（__DEV__のみ）
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
-  }, []);
+    if (!__DEV__ || !editMode || !record) return;
+    const sb = StatusBar.currentHeight ?? 'N/A';
+    console.log(
+      `[DETAIL][Insets] top=${insets.top} bottom=${insets.bottom}`
+    );
+    console.log(`[DETAIL][StatusBar] currentHeight=${sb}`);
+    console.log(`[DETAIL][HeaderHeight] useHeaderHeight=${headerHeight}`);
+  }, [__DEV__, editMode, record, insets.top, insets.bottom, headerHeight]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (allowNavigationRef.current) return;
+      if (!editMode || !isDirty) return;
+
+      e.preventDefault();
+      showUnsavedAlert(() => {
+        allowNavigationRef.current = true;
+        setIsDirty(false);
+        navigation.dispatch(e.data.action);
+      });
+    });
+    return unsubscribe;
+  }, [navigation, editMode, isDirty]);
 
   const handleOtherSubjectChange = (value: string) => {
     setNewSubject(value);
     if (value.trim().length >= 2) {
-      setSelectedSubject(value.trim());
+      const next = value.trim();
+      if (next !== selectedSubject) {
+        setSelectedSubject(next);
+        setIsDirty(true);
+      }
     }
   };
 
@@ -244,15 +337,6 @@ export default function DetailScreen() {
     }
 
     setScoreError('');
-  };
-
-  const formatDisplayDate = (dateString: string) => {
-    try {
-      const [year, month, day] = dateString.split('-');
-      return `${year}年${parseInt(month)}月${parseInt(day)}日`;
-    } catch {
-      return dateString;
-    }
   };
 
   const showPhotoActionSheet = () => {
@@ -291,7 +375,10 @@ export default function DetailScreen() {
           Alert.alert('エラー', '画像の読み込みに失敗しました。もう一度選択してください。');
           return;
         }
-        setPhotoUri(uri);
+        if (uri !== photoUri) {
+          setPhotoUri(uri);
+          setIsDirty(true);
+        }
       }
     } catch (error: any) {
       Alert.alert('エラー', error.message || '画像の読み込みに失敗しました');
@@ -320,7 +407,10 @@ export default function DetailScreen() {
   };
 
   const handlePreviewSave = () => {
-    if (previewUri) setPhotoUri(previewUri);
+    if (previewUri && previewUri !== photoUri) {
+      setPhotoUri(previewUri);
+      setIsDirty(true);
+    }
     setShowCamera(false);
     setCameraPhase('camera');
     setPreviewUri(null);
@@ -442,7 +532,7 @@ export default function DetailScreen() {
       // 編集時は photoUri が DB のパス（recordId/xxx.jpg）のことがある → 回転には読み込み可能な URL が必要
       let uriToRotate = photoUri;
       if (!isValidImageUri(photoUri)) {
-        const signed = await getSignedImageUrl(photoUri);
+        const signed = await resolveImageUrl(photoUri);
         if (!signed) {
           Alert.alert('エラー', '画像の読み込みに失敗しました');
           return;
@@ -461,6 +551,7 @@ export default function DetailScreen() {
           throw new Error('回転後の画像が無効です');
         }
         setPhotoUri(blobUrl);
+        setIsDirty(true);
         return;
       }
 
@@ -485,6 +576,7 @@ export default function DetailScreen() {
       }
 
       setPhotoUri(result.uri);
+      setIsDirty(true);
     } catch (error: any) {
       logError('[回転]', error);
       Alert.alert('エラー', error.message || '画像の回転に失敗しました');
@@ -500,6 +592,7 @@ export default function DetailScreen() {
         await deleteImage(pathToDelete);
       }
       setPhotoUri(null);
+      setIsDirty(true);
     } catch (e) {
       logError('[写真削除エラー]', e);
       Alert.alert('エラー', '写真の削除に失敗しました');
@@ -645,19 +738,29 @@ export default function DetailScreen() {
       if (error) throw error;
 
       await loadRecord(record.id);
+      setIsDirty(false);
       setEditMode(false);
-      Alert.alert('成功', '記録を更新しました');
+
+      if (pendingActionRef.current) {
+        const action = pendingActionRef.current;
+        pendingActionRef.current = null;
+        action();
+      } else {
+        // 編集保存後は一覧へ戻さず、更新後の詳細表示（非編集モード）に留まる
+      }
     } catch (error: any) {
+      pendingActionRef.current = null;
       logError('[記録更新] 保存エラー');
       Alert.alert('エラー', '保存に失敗しました');
     } finally {
       setIsSaving(false);
     }
   };
+  handleSaveRef.current = handleSave;
 
   const scrollToRecord = (recordId: string) => {
     const rowEl = rowRefMap.current[recordId];
-    const scrollEl = scrollViewRef.current;
+    const scrollEl = scrollRef.current;
     const anchorEl = scrollContentAnchorRef.current;
     if (!rowEl || !scrollEl || !anchorEl) return;
     const rowNode = findNodeHandle(rowEl);
@@ -687,7 +790,11 @@ export default function DetailScreen() {
   const handleScoreModalConfirm = async (value: number | null) => {
     if (!record || !familyId) return;
     const maxScoreNum = parseInt(maxScore, 10) || record.max_score || 100;
-    setScore(value != null ? String(value) : '');
+    const nextScore = value != null ? String(value) : '';
+    if (nextScore !== score) {
+      setIsDirty(true);
+    }
+    setScore(nextScore);
     setRecord((prev) => (prev ? { ...prev, score: value, max_score: maxScoreNum } : null));
     setScoreError('');
     setShowScoreModal(false);
@@ -758,7 +865,7 @@ export default function DetailScreen() {
         throw error;
       }
 
-      router.push('/(tabs)');
+      router.replace('/(tabs)/list');
     } catch (e: any) {
       logError('[記録削除] 削除例外', e);
       if (Platform.OS === 'web') {
@@ -774,46 +881,15 @@ export default function DetailScreen() {
     return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
   };
 
-  const getSubjectColor = (subject: string) => {
-    const colors: { [key: string]: string } = {
-      '国語': '#E74C3C',
-      '算数': '#3498DB',
-      '理科': '#27AE60',
-      '社会': '#E67E22',
-      '英語': '#2C3E50',
-      '生活': '#9B59B6',
-      '図工': '#F39C12',
-      '音楽': '#1ABC9C',
-      '体育': '#E91E63',
-    };
-    return colors[subject] || '#95A5A6';
-  };
 
   const recordPhotoDisplayUri =
     resolvedRecordPhotoUrl || (record?.photo_uri && isValidImageUri(record.photo_uri) ? record.photo_uri : null);
   const editPhotoDisplayUri =
     photoUri && isValidImageUri(photoUri) ? photoUri : resolvedEditPhotoUrl;
 
-  // 編集時：写真・点数・スタンプのいずれかがあれば保存ボタン有効
-  // 写真あり = 新規選択のURI(file/https) または 既存の record.photo_uri（DBのパスは isValidImageUri で false になるため別判定）
-  const hasPhotoInEdit = !!(
-    photoUri &&
-    (isValidImageUri(photoUri) || record?.photo_uri)
-  );
-  const canSaveInEdit =
-    hasPhotoInEdit ||
-    (evaluationType === 'score' &&
-      score.trim() !== '' &&
-      !scoreError &&
-      !isNaN(parseInt(score, 10)) &&
-      parseInt(score, 10) >= 0 &&
-      parseInt(maxScore, 10) > 0 &&
-      parseInt(score, 10) <= parseInt(maxScore, 10)) ||
-    (evaluationType === 'stamp' && !!stamp);
-
   if (isSwitchingChild) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
           <Text style={styles.loadingText}>読み込み中…</Text>
@@ -824,7 +900,7 @@ export default function DetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
@@ -834,7 +910,7 @@ export default function DetailScreen() {
 
   if (!record) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={styles.container}>
           <AppHeader showBack={true} showChildSwitcher={false} />
           <View style={styles.errorContainer}>
@@ -845,36 +921,61 @@ export default function DetailScreen() {
     );
   }
 
+  const handleRootLayout = (e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
+    if (!__DEV__ || !editMode) return;
+    const { x, y, width, height } = e.nativeEvent.layout;
+    rootLayoutRef.current = { x, y, w: width, h: height };
+    console.log(`[DETAIL][RootLayout] x=${x} y=${y} w=${width} h=${height}`);
+    // 編集時: ヘッダーは Stack が描画。コンテナの y = ヘッダー下端のオフセット
+    console.log(`[DETAIL][HeaderLayout] (Stack描画のため推測) y=0 h=${headerHeight}`);
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? headerTop : 0}>
-      <View style={styles.container}>
-        <AppHeader
-          showBack={true}
-          showChildSwitcher={false}
-          showSettings={false}
-          showEdit={!editMode}
-          showDelete={!editMode}
-          onEdit={() => setEditMode(true)}
-          onDelete={confirmDelete}
-        />
+    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+      <View style={styles.container} onLayout={handleRootLayout}>
+        {!editMode && (
+          <AppHeader
+            showBack={true}
+            showChildSwitcher={false}
+            showSettings={false}
+            showEdit={true}
+            showDelete={true}
+            onEdit={() => setEditMode(true)}
+            onDelete={confirmDelete}
+          />
+        )}
+
+        {editMode && (
+          <AppHeader
+            showCancel={true}
+            showSave={true}
+            onCancel={handleCancel}
+            onSave={() => handleSaveRef.current()}
+            isSaving={isSaving}
+            saveDisabled={!canSaveInEdit}
+          />
+        )}
 
         {editMode ? (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ flex: 1 }}>
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <ScrollView
-                ref={scrollViewRef}
-                style={styles.scrollView}
-                contentContainerStyle={{ paddingTop: headerTop, paddingBottom: 320 }}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}>
-          <View ref={scrollContentAnchorRef} collapsable={false} style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>写真</Text>
+          <View style={styles.editModeRoot}>
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
+              <View style={{ flex: 1 }}>
+            <ScrollView
+              ref={scrollRef}
+              style={styles.scrollView}
+              contentContainerStyle={{
+                paddingTop: headerTop,
+                paddingBottom: isAndroid ? bottomPad : 100 + insets.bottom,
+              }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              contentInsetAdjustmentBehavior="never"
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
+              showsVerticalScrollIndicator={false}>
+          <View ref={scrollContentAnchorRef} collapsable={false} style={[styles.section, styles.photoSection]}>
             {photoUri ? (
               <View style={styles.photoContainer}>
                 <TouchableOpacity
@@ -930,8 +1031,8 @@ export default function DetailScreen() {
           </View>
 
           {contextChildren.length > 0 && (
-            <View style={styles.editSection}>
-              <Text style={styles.editSectionTitle}>子供</Text>
+            <View style={[styles.section, { marginTop: 4 }]}>
+              <Text style={styles.sectionTitle}>子供</Text>
               <View style={styles.childChipContainer}>
                 {contextChildren.map((child) => (
                   <TouchableOpacity
@@ -940,7 +1041,12 @@ export default function DetailScreen() {
                       styles.childChip,
                       selectedChildId === child.id && styles.childChipSelected,
                     ]}
-                    onPress={() => setSelectedChildId(child.id)}
+                    onPress={() => {
+                      if (child.id !== selectedChildId) {
+                        setSelectedChildId(child.id);
+                        setIsDirty(true);
+                      }
+                    }}
                     activeOpacity={0.7}>
                     <View style={[styles.childColorBadge, { backgroundColor: child.color }]} />
                     <Text
@@ -956,39 +1062,86 @@ export default function DetailScreen() {
             </View>
           )}
 
-          <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>教科</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>教科</Text>
             {!showSubjectInput ? (
-              <View style={styles.chipContainer}>
-                {MAIN_SUBJECTS.map((subject) => (
-                  <TouchableOpacity
-                    key={subject}
-                    style={[
-                      styles.chip,
-                      selectedSubject === subject && styles.chipSelected,
-                    ]}
-                    onPress={() => {
-                      setSelectedSubject(subject);
-                      setShowSubjectInput(false);
-                      setNewSubject('');
-                    }}
-                    activeOpacity={0.7}>
-                    <Text
+              <>
+                <View style={styles.chipContainer}>
+                  {subjectSet.main.map((subject) => (
+                    <TouchableOpacity
+                      key={subject}
                       style={[
-                        styles.chipText,
-                        selectedSubject === subject && styles.chipTextSelected,
-                      ]}>
-                      {subject}
-                    </Text>
+                        styles.chip,
+                        selectedSubject === subject && styles.chipSelected,
+                        selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
+                      ]}
+                      onPress={() => {
+                        if (subject !== selectedSubject) {
+                          setSelectedSubject(subject);
+                          setShowSubjectInput(false);
+                          setNewSubject('');
+                          setIsDirty(true);
+                          setShowOtherSubjects(false);
+                        }
+                      }}
+                      activeOpacity={0.7}>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selectedSubject === subject && styles.chipTextSelected,
+                        ]}>
+                        {subject}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {showOtherSubjects && (
+                  <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                    {subjectSet.other.map((subject) => (
+                      <TouchableOpacity
+                        key={subject}
+                        style={[
+                          styles.chip,
+                          selectedSubject === subject && styles.chipSelected,
+                          selectedSubject === subject && { backgroundColor: getSubjectColor(subject) },
+                        ]}
+                        onPress={() => {
+                          if (subject !== selectedSubject) {
+                            setSelectedSubject(subject);
+                            setIsDirty(true);
+                          }
+                        }}
+                        activeOpacity={0.7}>
+                        <Text
+                          style={[
+                            styles.chipText,
+                            selectedSubject === subject && styles.chipTextSelected,
+                          ]}>
+                          {subject}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                  {!showOtherSubjects && subjectSet.other.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.chipOther}
+                      onPress={() => setShowOtherSubjects(true)}
+                      activeOpacity={0.7}>
+                      <Text style={styles.chipOtherText}>その他の教科</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.chipAdd}
+                    onPress={() => setShowSubjectInput(true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.chipAddText}>+ 教科を追加</Text>
                   </TouchableOpacity>
-                ))}
-                <TouchableOpacity
-                  style={styles.chipAdd}
-                  onPress={() => setShowSubjectInput(true)}
-                  activeOpacity={0.7}>
-                  <Text style={styles.chipAddText}>+ その他</Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              </>
             ) : (
               <View style={styles.subjectInputRow}>
                 <TextInput
@@ -998,7 +1151,7 @@ export default function DetailScreen() {
                   ]}
                   value={newSubject}
                   onChangeText={handleOtherSubjectChange}
-                  placeholder="教科名を入力（例：生活、図工、音楽、体育）"
+                  placeholder="教科名を入力（例：生活、図工、音楽）"
                   placeholderTextColor="#999"
                   autoFocus
                 />
@@ -1019,15 +1172,20 @@ export default function DetailScreen() {
             )}
           </View>
 
-          <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>評価</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>評価</Text>
             <View style={styles.evaluationTypeContainer}>
               <TouchableOpacity
                 style={[
                   styles.evaluationTypeButton,
                   evaluationType === 'score' && styles.evaluationTypeButtonSelected,
                 ]}
-                onPress={() => setEvaluationType('score')}
+                onPress={() => {
+                  if (evaluationType !== 'score') {
+                    setEvaluationType('score');
+                    setIsDirty(true);
+                  }
+                }}
                 activeOpacity={0.7}>
                 <Text
                   style={[
@@ -1042,7 +1200,12 @@ export default function DetailScreen() {
                   styles.evaluationTypeButton,
                   evaluationType === 'stamp' && styles.evaluationTypeButtonSelected,
                 ]}
-                onPress={() => setEvaluationType('stamp')}
+                onPress={() => {
+                  if (evaluationType !== 'stamp') {
+                    setEvaluationType('stamp');
+                    setIsDirty(true);
+                  }
+                }}
                 activeOpacity={0.7}>
                 <Text
                   style={[
@@ -1110,7 +1273,12 @@ export default function DetailScreen() {
                       styles.stampButton,
                       stamp === s && styles.stampButtonSelected,
                     ]}
-                    onPress={() => setStamp(s)}
+                    onPress={() => {
+                      if (s !== stamp) {
+                        setStamp(s);
+                        setIsDirty(true);
+                      }
+                    }}
                     activeOpacity={0.7}>
                     <Text
                       style={[
@@ -1125,54 +1293,84 @@ export default function DetailScreen() {
             )}
           </View>
 
-          <View style={styles.editSection}>
-            <Text style={styles.editSectionTitle}>日付</Text>
+          <View style={[styles.section, styles.tightSection]}>
+            <Text style={styles.sectionTitle}>日付</Text>
             <DateField
               value={record?.date ?? ''}
               onChange={(d) => {
-                if (record && isValidYmd(d)) setRecord({ ...record, date: d });
+                if (record && isValidYmd(d)) {
+                  setRecord({ ...record, date: d });
+                  setIsDirty(true);
+                }
               }}
               maxDate={new Date()}
               placeholder="タップして選択"
             />
-            {record?.date && isValidYmd(record.date) && (
-              <Text style={styles.dateDisplayText}>{formatDisplayDate(record.date)}</Text>
-            )}
           </View>
 
-          <View
-            style={styles.editSection}
-            onLayout={(e) => { memoYRef.current = e.nativeEvent.layout.y; }}>
-            <Text style={[styles.editSectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
-            <TextInput
-              style={styles.memoInput}
-              value={memo}
-              onChangeText={setMemo}
-              placeholder="メモを入力（例：計算がんばった！）"
-              placeholderTextColor="#999"
-              multiline
-              blurOnSubmit={false}
-              scrollEnabled={false}
-              textAlignVertical="top"
-              maxLength={200}
-              onFocus={() => {
-                requestAnimationFrame(() => {
-                  requestAnimationFrame(() => {
-                    scrollViewRef.current?.scrollTo({
-                      y: Math.max(0, memoYRef.current - 80),
-                      animated: true,
-                    });
-                  });
-                });
-              }}
-            />
+          <View style={[styles.section, styles.tightSection]}>
+            <Text style={[styles.sectionTitle, { marginBottom: 6, fontWeight: '600' }]}>メモ</Text>
+            {Platform.OS === 'ios' ? (
+              <>
+                <Pressable
+                  onPress={() => setIsMemoOpen(true)}
+                  style={styles.memoCard}>
+                  <Text style={memo?.length ? styles.memoText : styles.memoPlaceholder}>
+                    {memo?.length ? memo : 'メモを入力（例：計算がんばった！）'}
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <TextInput
+                value={memo}
+                onChangeText={(t) => {
+                  setMemo(t);
+                  setIsDirty(true);
+                }}
+                placeholder="メモを入力（例：計算がんばった！）"
+                placeholderTextColor="#999"
+                style={[styles.memoInput, { minHeight: 44, paddingVertical: 10, textAlignVertical: 'center' as const }]}
+                maxLength={200}
+                multiline={false}
+                numberOfLines={1}
+                returnKeyType="send"
+                blurOnSubmit
+                onSubmitEditing={() => Keyboard.dismiss()}
+                onFocus={() => {
+                  if (!isAndroid) return;
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+                }}
+              />
+            )}
             <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
           </View>
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: isAndroid ? bottomPad : 16, backgroundColor: '#fff' }} />
             </ScrollView>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+
+            {Platform.OS === 'ios' && isMemoOpen && (
+              <CommentComposer
+                autoFocus
+                value={memo}
+                onChangeText={(t) => {
+                  setMemo(t);
+                  setIsDirty(true);
+                }}
+                onSubmit={(v) => {
+                  const trimmed = v.trim();
+                  setMemo(trimmed);
+                  if (trimmed !== memo.trim()) setIsDirty(true);
+                  setIsMemoOpen(false);
+                }}
+                onBlur={() => setIsMemoOpen(false)}
+                onClose={() => setIsMemoOpen(false)}
+                placeholder="メモを入力（例：計算がんばった！）"
+                maxLength={200}
+              />
+            )}
+              </View>
+            </KeyboardAvoidingView>
+          </View>
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -1216,7 +1414,7 @@ export default function DetailScreen() {
             {record.memo && (
               <View style={styles.memoSection}>
                 <Text style={styles.memoLabel}>メモ</Text>
-                <Text style={styles.memoText}>{record.memo}</Text>
+                <Text style={styles.memoBodyText}>{record.memo}</Text>
               </View>
             )}
 
@@ -1224,57 +1422,6 @@ export default function DetailScreen() {
           </View>
         </ScrollView>
       )}
-
-      <View
-        style={[
-          styles.bottomButtons,
-          { bottom: safeBottom, paddingBottom: 12 + safeBottom },
-        ]}>
-        {editMode ? (
-          <>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                setEditMode(false);
-                initializeEditForm(record);
-              }}
-              activeOpacity={0.7}>
-              <Text style={styles.cancelButtonText}>キャンセル</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                (isSaving || !canSaveInEdit) && styles.saveButtonDisabled,
-              ]}
-              onPress={handleSave}
-              disabled={isSaving || !canSaveInEdit}
-              activeOpacity={0.7}>
-              {isSaving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.saveButtonText}>保存</Text>
-              )}
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity
-              style={styles.homeButton}
-              onPress={() => router.push('/(tabs)')}
-              activeOpacity={0.7}>
-              <Home size={20} color="#fff" />
-              <Text style={styles.homeButtonText}>ホーム</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.backBottomButton}
-              onPress={() => router.back()}
-              activeOpacity={0.7}>
-              <ArrowLeft size={20} color="#4A90E2" />
-              <Text style={styles.backBottomButtonText}>戻る</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
 
       <Modal
         visible={showImageModal}
@@ -1333,6 +1480,47 @@ export default function DetailScreen() {
       </Modal>
 
       <Modal
+        visible={showUnsavedModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowUnsavedModal(false)}>
+        <View style={styles.unsavedOverlay}>
+          <View style={styles.unsavedCard}>
+            <Text style={styles.unsavedTitle}>保存されていません</Text>
+            <Text style={styles.unsavedMessage}>変更を破棄してよろしいですか？</Text>
+            <View style={styles.unsavedActions}>
+              <TouchableOpacity
+                style={[styles.unsavedActionButton, styles.unsavedSaveButton]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowUnsavedModal(false);
+                  pendingActionRef.current = () => {
+                    allowNavigationRef.current = true;
+                    setIsDirty(false);
+                    setEditMode(false);
+                    goBackOrToList();
+                  };
+                  handleSaveRef.current();
+                }}>
+                <Text style={[styles.unsavedActionText, styles.unsavedSaveText]}>保存</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.unsavedActionButton, styles.unsavedDiscardButton]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowUnsavedModal(false);
+                  const onDiscard = unsavedDiscardRef.current;
+                  unsavedDiscardRef.current = null;
+                  onDiscard?.();
+                }}>
+                <Text style={[styles.unsavedActionText, styles.unsavedDiscardText]}>キャンセル(破棄)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={showPhotoOptions}
         transparent={true}
         animationType="fade"
@@ -1341,7 +1529,7 @@ export default function DetailScreen() {
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowPhotoOptions(false)}>
-          <View style={styles.actionSheet}>
+          <View style={[styles.actionSheet, { paddingBottom: 12 + Math.max(insets.bottom, 12) }]}>
             <TouchableOpacity
               style={styles.actionSheetButton}
               onPress={takePhoto}
@@ -1403,15 +1591,18 @@ export default function DetailScreen() {
             initialValue={maxScore.trim() ? parseInt(maxScore, 10) || null : null}
             onClose={() => setShowFullScoreModal(false)}
             onConfirm={(value) => {
-              setMaxScore(String(value));
-              validateScore(score, String(value));
+              const next = String(value);
+              if (next !== maxScore) {
+                setMaxScore(next);
+                setIsDirty(true);
+              }
+              validateScore(score, next);
               setShowFullScoreModal(false);
             }}
           />
         </>
       )}
     </View>
-    </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -1422,6 +1613,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8f8',
   },
   scrollView: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  editModeRoot: {
     flex: 1,
   },
   imageContainer: {
@@ -1589,6 +1784,19 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: '#fff',
   },
+  chipOther: {
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
+    backgroundColor: '#F5F5F5',
+  },
+  chipOtherText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
   chipAdd: {
     borderRadius: 16,
     paddingHorizontal: 12,
@@ -1619,22 +1827,33 @@ const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: '#fff',
   },
-  memoText: {
+  memoBodyText: {
     fontSize: 15,
     color: '#333',
     lineHeight: 22,
   },
-  editSection: {
+  section: {
     backgroundColor: '#fff',
-    marginTop: 12,
+    marginTop: 6,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
-  editSectionTitle: {
+  sectionTitle: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  tightSection: {
+    marginTop: 4,
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
+  photoSection: {
+    paddingTop: 0,
+    marginTop: 4,
+    paddingBottom: 0,
   },
   photoContainer: {
     borderRadius: 12,
@@ -1643,7 +1862,7 @@ const styles = StyleSheet.create({
   },
   photoWrapper: {
     width: '100%',
-    height: 300,
+    height: 280,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -1686,8 +1905,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 12,
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 6,
   },
   rotateButton: {
     width: 48,
@@ -1912,6 +2131,32 @@ const styles = StyleSheet.create({
     marginLeft: -36,
     marginRight: 8,
   },
+  memoCard: {
+    minHeight: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    padding: 14,
+    backgroundColor: '#FFF',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  memoText: {
+    fontSize: 15,
+    color: '#222',
+    textAlign: 'left',
+  },
+  memoPlaceholder: {
+    fontSize: 15,
+    color: '#999',
+    textAlign: 'left',
+  },
+  memoCharCount: {
+    textAlign: 'right',
+    color: '#888',
+    marginTop: 4,
+    fontSize: 12,
+  },
   memoInput: {
     minHeight: 100,
     padding: 12,
@@ -1922,19 +2167,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
     color: '#222',
-  },
-  memoCharCount: {
-    textAlign: 'right',
-    color: '#888',
-    marginTop: 4,
-    fontSize: 12,
-  },
-  dateDisplayText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#4A90E2',
-    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -1990,80 +2222,25 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  bottomButtons: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    gap: 12,
+  bottomSaveButtonWrap: {
+    overflow: 'hidden',
   },
-  homeButton: {
-    flex: 1,
+  bottomSaveButton: {
     backgroundColor: '#4A90E2',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
+    minWidth: 120,
+    height: 44,
     borderRadius: 10,
-    gap: 6,
-  },
-  homeButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-  },
-  backBottomButton: {
-    flex: 1,
-    backgroundColor: '#F0F8FF',
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 16,
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    gap: 6,
-  },
-  backBottomButtonText: {
-    color: '#4A90E2',
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#F0F0F0',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
   },
-  cancelButtonText: {
-    color: '#333',
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-  },
-  saveButton: {
-    flex: 1,
-    backgroundColor: '#4A90E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
-  saveButtonDisabled: {
+  bottomSaveButtonDisabled: {
     backgroundColor: '#CCC',
     opacity: 0.6,
   },
-  saveButtonText: {
+  bottomSaveButtonText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 17,
     fontFamily: 'Nunito-Bold',
   },
   modalOverlay: {
@@ -2075,7 +2252,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 20,
   },
   actionSheetButton: {
     paddingVertical: 18,
@@ -2096,5 +2272,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+  },
+  unsavedOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  unsavedCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+  },
+  unsavedTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#222',
+    marginBottom: 8,
+  },
+  unsavedMessage: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#444',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  unsavedActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  unsavedActionButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
+  },
+  unsavedSaveButton: {
+    borderColor: '#4A90E2',
+  },
+  unsavedDiscardButton: {
+    borderColor: '#E74C3C',
+  },
+  unsavedActionText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+  },
+  unsavedSaveText: {
+    color: '#4A90E2',
+  },
+  unsavedDiscardText: {
+    color: '#E74C3C',
   },
 });

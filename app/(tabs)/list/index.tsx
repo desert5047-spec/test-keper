@@ -18,7 +18,7 @@ import { useDateContext } from '@/contexts/DateContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidImageUri } from '@/utils/imageGuard';
-import { getSignedImageUrl } from '@/lib/storage';
+import { getThumbImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader, useHeaderTop } from '@/components/AppHeader';
@@ -33,18 +33,7 @@ interface Section {
   data: RecordWithImageUrl[];
 }
 
-const SUBJECT_COLORS: { [key: string]: string } = {
-  '国語': '#E74C3C',
-  '算数': '#3498DB',
-  '理科': '#27AE60',
-  '社会': '#E67E22',
-  '英語': '#2C3E50',
-  '生活': '#9B59B6',
-  '図工': '#F39C12',
-  '音楽': '#1ABC9C',
-  '体育': '#E91E63',
-};
-const getSubjectColor = (subject: string) => SUBJECT_COLORS[subject] || '#95A5A6';
+import { getSubjectColor } from '@/lib/subjects';
 
 const THUMB_SIZE = 96;
 
@@ -95,6 +84,11 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
           </View>
           <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
         </View>
+        {item.memo ? (
+          <Text style={styles.memoText} numberOfLines={2} ellipsizeMode="tail">
+            {item.memo}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -164,7 +158,6 @@ export default function ListScreen() {
           Alert.alert('エラー', LOAD_ERROR_MESSAGE);
         }
         return;
-        // sections / stableSections は上書きしない（前回成功分を維持）
       }
 
       if (data) {
@@ -175,7 +168,7 @@ export default function ListScreen() {
               const path = /^https?:\/\//.test(r.photo_uri) ? getStoragePathFromUrl(r.photo_uri) : r.photo_uri;
               if (path) {
                 try {
-                  imageUrl = await getSignedImageUrl(path);
+                  imageUrl = await getThumbImageUrl(path);
                 } catch {
                   imageUrl = null;
                 }
@@ -207,7 +200,6 @@ export default function ListScreen() {
       if (isRefresh) {
         Alert.alert('エラー', LOAD_ERROR_MESSAGE);
       }
-      // sections / stableSections は上書きしない（前回成功分を維持）
     } finally {
       setHasLoadedOnce(true);
       if (isRefresh) setRefreshing(false);
@@ -455,6 +447,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     marginLeft: 10,
     lineHeight: 18,
+  },
+  memoText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Nunito-Regular',
+    marginTop: 4,
   },
   emptyContainer: {
     flex: 1,

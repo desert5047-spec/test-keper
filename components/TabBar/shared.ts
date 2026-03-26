@@ -5,6 +5,9 @@
 export const TAB_BAR_HEIGHT = 64;
 export const TAB_ITEM_PADDING_TOP = 8;
 export const TAB_ITEM_PADDING_BOTTOM = 8;
+/** ベース高さ（safeBottom 除外）。ScrollView paddingBottom 用 */
+export const BOTTOM_NAV_BASE_HEIGHT =
+  TAB_BAR_HEIGHT + TAB_ITEM_PADDING_TOP + TAB_ITEM_PADDING_BOTTOM;
 export const TAB_LABEL_FONT_SIZE = 11;
 export const TAB_LABEL_MARGIN_TOP = 4;
 export const TAB_LABEL_LINE_HEIGHT = 14;

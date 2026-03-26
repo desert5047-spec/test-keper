@@ -93,6 +93,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Nunito-Regular',
     color: '#333',
+    textAlign: 'center',
   },
   placeholderText: {
     color: '#999',

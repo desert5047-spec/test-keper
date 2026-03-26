@@ -16,13 +16,11 @@ import { isSupabaseConfigured, supabaseConfigError, supabase } from '@/lib/supab
 import DebugLabel from '@/components/DebugLabel';
 import { log, warn, error as logError } from '@/lib/logger';
 
-// 本番（!__DEV__）では log/info/debug/warn を無効化。console.error は上書きしない（クラッシュ情報用）
-if (!__DEV__) {
-  console.log = () => {};
-  console.info = () => {};
-  console.debug = () => {};
-  console.warn = () => {};
-}
+// ログを無効化（console.error はクラッシュ情報用に維持）
+console.log = () => {};
+console.info = () => {};
+console.debug = () => {};
+console.warn = () => {};
 
 const debugLog = log;
 
@@ -39,6 +37,19 @@ if (__DEV__) {
 
 const BG = '#FFFFFF';
 const STATUS_BAR_OFFSET = 4;
+
+/**
+ * [1] StatusBar / Stack / SafeArea 構成（__DEV__デバッグ用メモ）
+ *
+ * StatusBar 制御:
+ *   - setTranslucent / setBackgroundColor: なし（削除済み）
+ *   - <StatusBar style="dark" backgroundColor="#fff" /> (expo-status-bar, web以外)
+ *   - app.config: androidStatusBar 未指定（デフォルト＝translucent の可能性あり）
+ *
+ * Stack: screenOptions={{ headerShown: false }}（各画面が独自ヘッダー）
+ * SafeAreaProvider: 使用（react-native-safe-area-context）
+ * TopSafeAreaBg: insets.top - 4 の高さで画面上部に白背景オーバーレイ
+ */
 
 function TopSafeAreaBg() {
   const insets = useSafeAreaInsets();
@@ -57,6 +68,19 @@ function TopSafeAreaBg() {
       }}
     />
   );
+}
+
+function DebugInsets() {
+  const insets = useSafeAreaInsets();
+  const hasLoggedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (hasLoggedRef.current) return;
+    hasLoggedRef.current = true;
+    console.log('[ROOT][Insets]', insets);
+  }, [insets]);
+
+  return null;
 }
 
 /** 無効なリフレッシュトークンエラーかどうか（Expo Go 等で未処理の Promise 拒否を拾う用） */
@@ -158,7 +182,8 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaProvider style={{ flex: 1, backgroundColor: BG }}>
         <TopSafeAreaBg />
-        {Platform.OS !== 'web' && <StatusBar style="dark" backgroundColor={BG} />}
+        <DebugInsets />
+        {Platform.OS !== 'web' && <StatusBar style="dark" translucent={false} backgroundColor="#fff" />}
         <DebugLabel />
         {Platform.OS === 'web' && (
         <style>{`
@@ -183,8 +208,8 @@ export default function RootLayout() {
               <Stack.Screen name="onboarding" />
               <Stack.Screen name="consent" />
               <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="add" />
               <Stack.Screen name="detail" />
+              <Stack.Screen name="add" />
               <Stack.Screen name="settings" />
               <Stack.Screen name="children" />
               <Stack.Screen name="register-child" />

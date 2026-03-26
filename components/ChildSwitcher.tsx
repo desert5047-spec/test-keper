@@ -12,6 +12,7 @@ import {
 import { ChevronDown } from 'lucide-react-native';
 import { useChild } from '@/contexts/ChildContext';
 import { useRouter, usePathname } from 'expo-router';
+import { getGradeDisplayLabel, type SchoolLevel } from '@/lib/subjects';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const ANIM_DURATION = 250;
@@ -135,7 +136,7 @@ export function ChildSwitcher() {
                     <View style={styles.childInfo}>
                       <Text style={styles.childName}>{child.name || '未設定'}</Text>
                       {child.grade && (
-                        <Text style={styles.childGrade}>小学{child.grade}年</Text>
+                        <Text style={styles.childGrade}>{getGradeDisplayLabel(child.school_level as SchoolLevel, child.grade)}</Text>
                       )}
                     </View>
                   </View>
