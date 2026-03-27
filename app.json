@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "jp.testalbum.app",
-      "versionCode": 17,
+      "versionCode": 18,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {

@@ -12,8 +12,8 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Edit3, Trash2, Home, List, Calendar } from 'lucide-react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ArrowLeft, Plus, Edit3, Trash2 } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
 import { supabase } from '@/lib/supabase';
@@ -38,7 +38,6 @@ const COLORS = [
 
 export default function ChildrenScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user, familyId, isFamilyReady } = useAuth();
   const { loadChildren: loadContextChildren } = useChild();
   const [children, setChildren] = useState<Child[]>([]);
@@ -268,7 +267,7 @@ export default function ChildrenScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top', 'bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
@@ -277,11 +276,18 @@ export default function ChildrenScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top', 'bottom']}>
       <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            const canGoBack = (router as { canGoBack?: () => boolean }).canGoBack?.();
+            if (canGoBack) {
+              router.back();
+            } else {
+              router.replace('/settings');
+            }
+          }}
           style={styles.backButton}
           activeOpacity={0.7}>
           <ArrowLeft size={24} color="#333" />
@@ -349,38 +355,6 @@ export default function ChildrenScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={() => router.push('/(tabs)')}
-          activeOpacity={0.7}>
-          <Home size={24} color="#999" strokeWidth={2} />
-          <Text style={styles.tabLabel}>ホーム</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={() => router.push('/(tabs)/list')}
-          activeOpacity={0.7}>
-          <List size={24} color="#999" strokeWidth={2} />
-          <Text style={styles.tabLabel}>一覧</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.addButtonNav}
-          onPress={() => router.push('/add')}
-          activeOpacity={0.85}>
-          <Plus size={32} color="#fff" strokeWidth={2.5} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={() => router.push('/(tabs)/monthly')}
-          activeOpacity={0.7}>
-          <Calendar size={24} color="#999" strokeWidth={2} />
-          <Text style={styles.tabLabel}>記録</Text>
-        </TouchableOpacity>
-      </View>
 
       <Modal
         visible={showModal}
@@ -779,54 +753,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     color: '#fff',
   },
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 8,
-    paddingHorizontal: 8,
-    alignItems: 'flex-end',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    gap: 4,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#999',
-  },
   required: {
     color: '#E74C3C',
-  },
-  addButtonNav: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 8,
-    marginBottom: 8,
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 4px 8px rgba(74, 144, 226, 0.3)',
-      },
-      default: {
-        shadowColor: '#4A90E2',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-      },
-    }),
   },
 });
