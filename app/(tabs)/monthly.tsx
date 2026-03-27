@@ -367,7 +367,6 @@ const styles = StyleSheet.create({
   noRecordsText: {
     fontSize: 14,
     color: '#999',
-    fontStyle: 'italic',
   },
   subjectStatsContainer: {
     marginTop: 16,

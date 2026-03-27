@@ -1,9 +1,10 @@
 export type SchoolLevel = 'elementary' | 'junior_high' | 'high_school';
 
+/** UI に表示する学校区分。high_school は後日追加予定 */
 export const SCHOOL_LEVELS: { value: SchoolLevel; label: string }[] = [
   { value: 'elementary', label: '小学生' },
   { value: 'junior_high', label: '中学生' },
-  { value: 'high_school', label: '高校生' },
+  // { value: 'high_school', label: '高校生' },  // 後日追加
 ];
 
 export function getGradesForLevel(level: SchoolLevel): { label: string; value: number }[] {

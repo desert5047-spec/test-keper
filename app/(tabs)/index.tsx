@@ -314,6 +314,7 @@ export default function HomeScreen() {
   const showEmptyState = hasLoadedOnce && !loading && !refreshing && stableRecords.length === 0 && !loadError;
   const showLoadErrorFullScreen = hasLoadedOnce && loadError && !loading && stableRecords.length === 0;
   const showBannerAndList = hasLoadedOnce && loadError && !loading && stableRecords.length > 0;
+  const showList = !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && stableRecords.length > 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
@@ -373,10 +374,10 @@ export default function HomeScreen() {
         </View>
       ) : showEmptyState ? (
         <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
-          <Text style={styles.emptyText}>まだ記録がありません</Text>
+          <Text style={styles.emptyText}>{year}年{month}月の記録はありません</Text>
           <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
-      ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
+      ) : showList ? (
         <FlatList
           data={stableRecords}
           renderItem={renderItem}
@@ -386,14 +387,6 @@ export default function HomeScreen() {
           initialNumToRender={10}
           contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8 }]}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            refreshing ? null : (
-              <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
-                <Text style={styles.emptyText}>まだ記録がありません</Text>
-                <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
-              </View>
-            )
-          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -517,7 +510,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: {
-    fontSize: 17,
+    fontSize: 18,
     color: '#666',
     marginBottom: 8,
     fontFamily: 'Nunito-SemiBold',
@@ -530,7 +523,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
   },
   emptySubText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#999',
     fontFamily: 'Nunito-Regular',
   },

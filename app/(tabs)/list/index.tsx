@@ -299,6 +299,7 @@ export default function ListScreen() {
           <Text style={styles.emptyText}>
             {year}年{month}月の記録はありません
           </Text>
+          <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
       ) : !showBannerAndList && !showSpinner && !showLoadErrorFullScreen && !showEmptyState ? (
         <ScrollView
@@ -461,9 +462,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: 18,
     color: '#666',
+    marginBottom: 8,
+    fontFamily: 'Nunito-SemiBold',
     textAlign: 'center',
+  },
+  emptySubText: {
+    fontSize: 15,
+    color: '#999',
+    fontFamily: 'Nunito-Regular',
   },
   lastUpdatedText: {
     fontSize: 13,
