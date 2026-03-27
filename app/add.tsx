@@ -1043,6 +1043,7 @@ export default function AddScreen() {
                 onChangeText={handleOtherSubjectChange}
                 placeholder="教科名を入力（例：生活、図工、音楽）"
                 placeholderTextColor="#999"
+                maxLength={8}
                 autoFocus
               />
               {newSubject.trim().length >= 2 && (

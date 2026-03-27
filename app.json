@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "jp.testalbum.app",
-      "buildNumber": "15",
+      "buildNumber": "16",
       "infoPlist": {
         "NSCameraUsageDescription": "テストの写真を撮影するためにカメラを使用します。",
         "NSPhotoLibraryUsageDescription": "テストの写真を選択するために写真ライブラリへアクセスします。",
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "jp.testalbum.app",
-      "versionCode": 15,
+      "versionCode": 16,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
