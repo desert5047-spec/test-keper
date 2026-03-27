@@ -225,9 +225,9 @@ export default function MonthlyScreen() {
   const hasMore = displaySummaries.length > displayCount;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
       <View style={styles.container}>
-      <AppHeader showYearMonthNav={true} />
+      <AppHeader showYearMonthNav={true} safeTopByParent={true} />
 
       {showBannerAndList ? (
         <View style={styles.mainWithBanner}>

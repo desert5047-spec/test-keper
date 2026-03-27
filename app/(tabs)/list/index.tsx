@@ -230,9 +230,9 @@ export default function ListScreen() {
   const showBannerAndList = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length > 0;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
       <View style={styles.container}>
-      <AppHeader showYearMonthNav={true} />
+      <AppHeader showYearMonthNav={true} safeTopByParent={true} />
 
       {showBannerAndList ? (
         <View style={styles.mainWithBanner}>
