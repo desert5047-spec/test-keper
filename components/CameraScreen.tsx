@@ -66,85 +66,75 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
 
     try {
       setIsCapturing(true);
-      debugLog('[CameraScreen] 写真を撮影中...', { platform: Platform.OS });
+      const t0 = Date.now();
 
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         base64: false,
-        skipProcessing: false,
+        skipProcessing: true,
       });
 
-      debugLog('[CameraScreen] 撮影直後', {
+      debugLog('[CameraScreen] 撮影完了', {
+        ms: Date.now() - t0,
         w: photo.width,
         h: photo.height,
-        platform: Platform.OS,
       });
 
       if (!photo.uri) {
         throw new Error('写真のURIが取得できませんでした');
       }
 
-      let uri = photo.uri;
+      // EXIF 正規化後の寸法を予測し、EXIF bake + 3:4 crop を 1 回の
+      // manipulateAsync にまとめる（2回→1回で大幅高速化）
+      const rawW = photo.width;
+      const rawH = photo.height;
 
-      // 全プラットフォームで EXIF 向きをピクセルに焼き込む
-      // iOS でも EXIF 回転メタデータが残っている場合があり、
-      // RNImage.getSize が生ピクセルサイズを返すとレイアウト計算がずれる
-      let normW = photo.width;
-      let normH = photo.height;
-      try {
-        const fixed = await ImageManipulator.manipulateAsync(
-          uri,
-          [{ rotate: 0 }],
-          { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
-        );
-        uri = fixed.uri;
-        normW = fixed.width;
-        normH = fixed.height;
-        debugLog('[CameraScreen] EXIF正規化完了', { w: normW, h: normH });
-      } catch {
-        debugLog('[CameraScreen] EXIF正規化失敗、元画像を使用');
+      // portrait ロックアプリ: センサー横長 (W>H) → EXIF で縦横入替
+      const estW = rawW > rawH ? rawH : rawW;
+      const estH = rawW > rawH ? rawW : rawH;
+
+      const actions: ImageManipulator.Action[] = [{ rotate: 0 }];
+
+      const targetRatio = 3 / 4;
+      const estRatio = estW / estH;
+
+      if (Math.abs(estRatio - targetRatio) > 0.02) {
+        let cropW: number, cropH: number, cropX: number, cropY: number;
+        if (estRatio > targetRatio) {
+          cropH = estH;
+          cropW = Math.round(estH * targetRatio);
+          cropX = Math.round((estW - cropW) / 2);
+          cropY = 0;
+        } else {
+          cropW = estW;
+          cropH = Math.round(estW / targetRatio);
+          cropX = 0;
+          cropY = Math.round((estH - cropH) / 2);
+        }
+        actions.push({
+          crop: { originX: cropX, originY: cropY, width: cropW, height: cropH },
+        });
+        debugLog('[CameraScreen] EXIF+crop 1回実行', {
+          est: `${estW}x${estH}`,
+          crop: `${cropW}x${cropH}`,
+        });
+      } else {
+        debugLog('[CameraScreen] EXIF のみ（3:4 済み）');
       }
 
-      // 正規化後のサイズで 3:4 クロップ判定
-      const targetRatio = 3 / 4;
-      const currentRatio = normW / normH;
-      debugLog('[CameraScreen] 比率チェック', {
-        currentRatio: currentRatio.toFixed(4),
-        targetRatio: targetRatio.toFixed(4),
+      const result = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        actions,
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG },
+      );
+
+      debugLog('[CameraScreen] 処理完了', {
+        totalMs: Date.now() - t0,
+        w: result.width,
+        h: result.height,
       });
 
-      if (Math.abs(currentRatio - targetRatio) > 0.02) {
-        try {
-          let cropW: number, cropH: number, cropX: number, cropY: number;
-          if (currentRatio > targetRatio) {
-            cropH = normH;
-            cropW = Math.round(normH * targetRatio);
-            cropX = Math.round((normW - cropW) / 2);
-            cropY = 0;
-          } else {
-            cropW = normW;
-            cropH = Math.round(normW / targetRatio);
-            cropX = 0;
-            cropY = Math.round((normH - cropH) / 2);
-          }
-          const cropped = await ImageManipulator.manipulateAsync(
-            uri,
-            [{ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } }],
-            { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
-          );
-          debugLog('[CameraScreen] 4:3 crop完了', {
-            from: `${normW}x${normH}`,
-            to: `${cropW}x${cropH}`,
-          });
-          uri = cropped.uri;
-        } catch {
-          debugLog('[CameraScreen] 4:3 crop失敗、元画像を使用');
-        }
-      } else {
-        debugLog('[CameraScreen] 既に3:4比率、cropスキップ');
-      }
-
-      onCapture(uri);
+      onCapture(result.uri);
     } catch (error: any) {
       logError('[CameraScreen] 撮影エラー');
     } finally {

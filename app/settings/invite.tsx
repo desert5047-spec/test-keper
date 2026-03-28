@@ -18,7 +18,7 @@ import { getLpUrl } from '@/lib/lpUrl';
 import { warn, error as logError } from '@/lib/logger';
 
 export default function InviteScreen() {
-  const headerTop = useHeaderTop();
+  const headerTop = useHeaderTop(true);
   const { user, familyId, isFamilyReady } = useAuth();
 
   const [email, setEmail] = useState('');

@@ -36,7 +36,7 @@ function getInitial(name: string | null): string {
 }
 
 export default function FamilyScreen() {
-  const headerTop = useHeaderTop();
+  const headerTop = useHeaderTop(true);
   const { user, familyId, isFamilyReady } = useAuth();
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(false);

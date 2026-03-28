@@ -29,7 +29,7 @@ import { TAB_BAR_HEIGHT, TAB_ITEM_PADDING_TOP, TAB_ITEM_PADDING_BOTTOM, BOTTOM_N
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const headerTop = useHeaderTop();
+  const headerTop = useHeaderTop(true);
   const { safeBottom } = useSafeBottom(16);
 
   const appVersion = Constants.expoConfig?.version ?? 'unknown';

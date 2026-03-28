@@ -11,7 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
@@ -96,7 +96,7 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
 
 export default function ListScreen() {
   const router = useRouter();
-  const headerTop = useHeaderTop();
+  const headerTop = useHeaderTop(true);
   const params = useLocalSearchParams();
   const { year, month, setYearMonth } = useDateContext();
   const { selectedChildId } = useChild();
@@ -168,7 +168,7 @@ export default function ListScreen() {
               const path = /^https?:\/\//.test(r.photo_uri) ? getStoragePathFromUrl(r.photo_uri) : r.photo_uri;
               if (path) {
                 try {
-                  imageUrl = await getThumbImageUrl(path);
+                  imageUrl = await getThumbImageUrl(path, 300);
                 } catch {
                   imageUrl = null;
                 }
@@ -207,9 +207,11 @@ export default function ListScreen() {
     }
   }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
-  useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
+  useFocusEffect(
+    useCallback(() => {
+      loadRecords();
+    }, [loadRecords])
+  );
 
   const handlePress = useCallback(
     (id: string) => {

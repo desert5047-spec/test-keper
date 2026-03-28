@@ -10,10 +10,14 @@ import { useDateContext } from '@/contexts/DateContext';
 export const HEADER_HEIGHT = 52;
 const BG = '#FFFFFF';
 
-/** コンテンツの paddingTop 用。SafeArea + ヘッダー高さ */
-export function useHeaderTop(): number {
+/**
+ * コンテンツの paddingTop 用。
+ * safeTopByParent=true のとき（親が SafeAreaView edges={['top']} で
+ * insets.top を吸収済み）はヘッダー高さのみ返す。
+ */
+export function useHeaderTop(safeTopByParent = false): number {
   const insets = useSafeAreaInsets();
-  return insets.top + HEADER_HEIGHT;
+  return safeTopByParent ? HEADER_HEIGHT : insets.top + HEADER_HEIGHT;
 }
 
 interface AppHeaderProps {

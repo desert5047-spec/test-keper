@@ -139,7 +139,7 @@ export default function HomeScreen() {
     }
   };
   const router = useRouter();
-  const headerTop = useHeaderTop();
+  const headerTop = useHeaderTop(true);
   const [records, setRecords] = useState<RecordWithImageUrl[]>([]);
   const [stableRecords, setStableRecords] = useState<RecordWithImageUrl[]>([]);
   const stableRef = useRef<RecordWithImageUrl[]>([]);

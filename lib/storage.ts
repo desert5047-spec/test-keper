@@ -66,17 +66,20 @@ export async function getSignedImageUrl(
 }
 
 /**
- * 一覧・ホーム用のサムネイルURL（幅800px）。
+ * サムネイルURL。用途に応じて width を指定する。
+ *
+ * - 一覧（96px 表示）→ width=300（Retina 3x で十分）
+ * - ホーム（カード幅 ≈ 画面幅-32px）→ width=800（デフォルト）
  *
  * ⚠ Supabase Free Plan では Image Transformation は無効。
- *   transform パラメータは無視され、フルサイズ（長辺2000px, compress 0.7）が返る。
- *   Pro Plan 以上にアップグレードすると自動的にサムネイルが効くようになる。
- *   Free Plan でも Signed URL キャッシュによる再取得抑制の効果は有効。
- *
- * 表示サイズ: カード幅 ≈ 画面幅-32px（@3x で約1100物理px）→ 800px で Retina 対応。
+ *   transform パラメータは無視され、フルサイズが返る。
+ *   Pro Plan 以上で自動的にサムネイルが効く。
  */
-export async function getThumbImageUrl(path: string): Promise<string> {
-  return getSignedImageUrl(path, { width: 800 });
+export async function getThumbImageUrl(
+  path: string,
+  width: number = 800,
+): Promise<string> {
+  return getSignedImageUrl(path, { width });
 }
 
 /**

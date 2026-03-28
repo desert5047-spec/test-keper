@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
@@ -34,7 +34,7 @@ interface MonthSummary {
 
 export default function MonthlyScreen() {
   const router = useRouter();
-  const headerTop = useHeaderTop();
+  const headerTop = useHeaderTop(true);
   const { year, month } = useDateContext();
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
@@ -153,9 +153,11 @@ export default function MonthlyScreen() {
     }
   }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
-  useEffect(() => {
-    loadMonthlySummaries();
-  }, [loadMonthlySummaries]);
+  useFocusEffect(
+    useCallback(() => {
+      loadMonthlySummaries();
+    }, [loadMonthlySummaries])
+  );
 
   const handleMonthCardPress = (year: number, month: number) => {
     router.push(`/(tabs)/list?year=${year}&month=${month}`);
