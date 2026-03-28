@@ -55,15 +55,7 @@
       "expo-router",
       "expo-font",
       "expo-web-browser",
-      "expo-secure-store",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "deploymentTarget": "15.5"
-          }
-        }
-      ]
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
