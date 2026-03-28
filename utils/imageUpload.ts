@@ -193,12 +193,15 @@ const base64ToUint8Array = (base64: string): Uint8Array => {
   }
 };
 
+const UPLOAD_COMPRESS = 0.7;
+const UPLOAD_MAX_DIMENSION = 2000;
+
 /**
- * 画像をJPEG形式、長辺1600px、圧縮率0.5に圧縮
+ * 画像をJPEG形式に圧縮してアップロード用に最適化する。
+ * 長辺 2000px / compress 0.7 — 文字が読める品質とファイルサイズのバランスを取る設定。
  */
 const compressImage = async (imageUri: string): Promise<string> => {
   if (Platform.OS === 'web') {
-    // Web環境ではCanvas APIを使用
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -210,49 +213,42 @@ const compressImage = async (imageUri: string): Promise<string> => {
           return;
         }
 
-        // 長辺を1600pxにリサイズ
-        const maxDimension = 1600;
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
-          if (width > maxDimension) {
-            height = (height * maxDimension) / width;
-            width = maxDimension;
+          if (width > UPLOAD_MAX_DIMENSION) {
+            height = (height * UPLOAD_MAX_DIMENSION) / width;
+            width = UPLOAD_MAX_DIMENSION;
           }
         } else {
-          if (height > maxDimension) {
-            width = (width * maxDimension) / height;
-            height = maxDimension;
+          if (height > UPLOAD_MAX_DIMENSION) {
+            width = (width * UPLOAD_MAX_DIMENSION) / height;
+            height = UPLOAD_MAX_DIMENSION;
           }
         }
 
         canvas.width = width;
         canvas.height = height;
-
         ctx.drawImage(img, 0, 0, width, height);
 
-        // JPEG形式、圧縮率0.5でエクスポート
         canvas.toBlob(
           (blob) => {
             if (!blob) {
               reject(new Error('Failed to compress image'));
               return;
             }
-            const compressedUri = URL.createObjectURL(blob);
-            resolve(compressedUri);
+            resolve(URL.createObjectURL(blob));
           },
           'image/jpeg',
-          0.5
+          UPLOAD_COMPRESS
         );
       };
       img.onerror = () => reject(new Error('Failed to load image'));
       img.src = imageUri;
     });
   } else {
-    // Native環境（iOS Expo Go含む）: サイズ取得は軽量な getSize、リサイズ・圧縮は1回だけ
     try {
-      const maxDimension = 1600;
       let width: number;
       let height: number;
       try {
@@ -262,7 +258,7 @@ const compressImage = async (imageUri: string): Promise<string> => {
       } catch (sizeErr) {
         debugLog('[画像圧縮] getSize失敗、リサイズなしで圧縮のみ実行');
         const result = await ImageManipulator.manipulateAsync(imageUri, [], {
-          compress: 0.5,
+          compress: UPLOAD_COMPRESS,
           format: ImageManipulator.SaveFormat.JPEG,
         });
         return result.uri;
@@ -271,23 +267,22 @@ const compressImage = async (imageUri: string): Promise<string> => {
       let newWidth = width;
       let newHeight = height;
       if (width > height) {
-        if (width > maxDimension) {
-          newHeight = Math.round((height * maxDimension) / width);
-          newWidth = maxDimension;
+        if (width > UPLOAD_MAX_DIMENSION) {
+          newHeight = Math.round((height * UPLOAD_MAX_DIMENSION) / width);
+          newWidth = UPLOAD_MAX_DIMENSION;
         }
       } else {
-        if (height > maxDimension) {
-          newWidth = Math.round((width * maxDimension) / height);
-          newHeight = maxDimension;
+        if (height > UPLOAD_MAX_DIMENSION) {
+          newWidth = Math.round((width * UPLOAD_MAX_DIMENSION) / height);
+          newHeight = UPLOAD_MAX_DIMENSION;
         }
       }
 
-      // 1回だけリサイズ＋圧縮（二重処理を廃止）
       const result = await ImageManipulator.manipulateAsync(
         imageUri,
         [{ resize: { width: newWidth, height: newHeight } }],
         {
-          compress: 0.5,
+          compress: UPLOAD_COMPRESS,
           format: ImageManipulator.SaveFormat.JPEG,
         }
       );
@@ -307,7 +302,8 @@ const compressImage = async (imageUri: string): Promise<string> => {
  */
 export const uploadImage = async (
   imageUri: string,
-  recordId: string
+  recordId: string,
+  suffix?: string
 ): Promise<string> => {
   debugLog('[画像アップロード開始]', {
     platform: Platform.OS,
@@ -324,7 +320,7 @@ export const uploadImage = async (
   let compressedUri: string | null = null;
 
   try {
-    // 画像を圧縮（JPEG形式、長辺1600px、圧縮率0.5）
+    // 画像を圧縮（JPEG形式、長辺2000px、圧縮率0.7）
     debugLog('[画像圧縮開始]');
     try {
       compressedUri = await compressImage(imageUri);
@@ -343,7 +339,8 @@ export const uploadImage = async (
       throw new Error('画像URIが無効です');
     }
 
-    const filePath = `${recordId}/${Date.now()}.jpg`;
+    const fileLabel = suffix ? `${Date.now()}_${suffix}` : `${Date.now()}`;
+    const filePath = `${recordId}/${fileLabel}.jpg`;
     debugLog('[ファイル情報]', { filePath });
 
     let uploadBody: Blob | Uint8Array;

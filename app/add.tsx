@@ -19,8 +19,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import { Camera, RotateCw, RotateCcw, X, Check } from 'lucide-react-native';
+import { Camera, X, Check } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DateField, isValidYmd } from '@/components/DateField';
@@ -111,7 +110,6 @@ export default function AddScreen() {
   const [scoreError, setScoreError] = useState<string>('');
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showFullScoreModal, setShowFullScoreModal] = useState(false);
-  const [photoRotation, setPhotoRotation] = useState<number>(0);
   const [photoUploadFailed, setPhotoUploadFailed] = useState(false);
 
   useEffect(() => {
@@ -198,7 +196,6 @@ export default function AddScreen() {
               validateImageUri(savedData);
               if (isValidImageUri(savedData)) {
                 setPhotoUri(savedData);
-                setPhotoRotation(0);
                 // 使用したら削除
                 await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
                 debugLog('[写真撮影] AsyncStorageからURIを設定完了', { platform: Platform.OS });
@@ -238,7 +235,6 @@ export default function AddScreen() {
                     validateImageUri(uri);
                     if (isValidImageUri(uri)) {
                       setPhotoUri(uri);
-                      setPhotoRotation(0);
                       // フラグを削除
                       await AsyncStorage.removeItem(PENDING_CAMERA_RESULT_KEY);
                       debugLog('[写真撮影] getPendingResultAsyncからURIを設定完了', { platform: Platform.OS });
@@ -405,7 +401,6 @@ export default function AddScreen() {
         
         try {
           setPhotoUri(uri);
-          setPhotoRotation(0);
           debugLog('[画像選択] 画像URI設定完了', { platform: Platform.OS });
         } catch (setUriError: any) {
           logError('[画像選択] URI設定エラー');
@@ -474,11 +469,8 @@ export default function AddScreen() {
     }
   };
 
-  const handlePreviewSave = () => {
-    if (previewUri) {
-      setPhotoUri(previewUri);
-      setPhotoRotation(0);
-    }
+  const handlePreviewSave = (uri: string) => {
+    setPhotoUri(uri);
     setShowCamera(false);
     setCameraPhase('camera');
     setPreviewUri(null);
@@ -496,35 +488,6 @@ export default function AddScreen() {
     setPreviewUri(null);
   };
 
-  const rotatePhoto = async (direction: 'right' | 'left') => {
-    if (!photoUri) return;
-
-    setIsProcessingImage(true);
-    try {
-      validateImageUri(photoUri);
-
-      const rotation = direction === 'right' ? 90 : -90;
-      const newRotation = (photoRotation + rotation + 360) % 360;
-      const result = await ImageManipulator.manipulateAsync(
-        photoUri,
-        [{ rotate: rotation }],
-        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
-      validateImageUri(result.uri);
-      if (!isValidImageUri(result.uri)) {
-        throw new Error('回転後の画像が無効です');
-      }
-
-      setPhotoUri(result.uri);
-      setPhotoRotation(newRotation);
-    } catch (error: any) {
-      Alert.alert('エラー', error.message || '画像の回転に失敗しました');
-    } finally {
-      setIsProcessingImage(false);
-    }
-  };
-
   const confirmRemovePhoto = () => {
     Alert.alert(
       '写真を削除',
@@ -533,7 +496,6 @@ export default function AddScreen() {
         { text: 'キャンセル', style: 'cancel' },
         { text: '削除', style: 'destructive', onPress: () => {
           setPhotoUri(null);
-          setPhotoRotation(0);
         }},
       ]
     );
@@ -689,7 +651,7 @@ export default function AddScreen() {
             stamp: stampValue,
             memo: memo.trim() || null,
             photo_uri: null,
-            photo_rotation: photoRotation,
+            photo_rotation: 0,
             user_id: user.id,
           };
         if (date && isValidYmd(date)) {
@@ -819,7 +781,6 @@ export default function AddScreen() {
 
   const resetForm = () => {
     setPhotoUri(null);
-    setPhotoRotation(0);
     setScore('');
     setMaxScore('100');
     setStamp(null);
@@ -898,22 +859,6 @@ export default function AddScreen() {
                   <Text style={styles.processingText}>処理中...</Text>
                 </View>
               )}
-              <View style={styles.photoActions}>
-                <TouchableOpacity
-                  style={styles.rotateButton}
-                  onPress={() => rotatePhoto('left')}
-                  disabled={isProcessingImage}
-                  activeOpacity={0.7}>
-                  <RotateCcw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.rotateButton}
-                  onPress={() => rotatePhoto('right')}
-                  disabled={isProcessingImage}
-                  activeOpacity={0.7}>
-                  <RotateCw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
-                </TouchableOpacity>
-              </View>
             </View>
           ) : (
             <TouchableOpacity
@@ -1496,23 +1441,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-  },
-  photoActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  rotateButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
   photoPickerButton: {
     alignItems: 'center',

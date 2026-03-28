@@ -9,7 +9,7 @@
  *
  * 対策:
  *   - Signed URL をインメモリキャッシュし、50分間は再利用する
- *   - 一覧用途は getThumbImageUrl() で幅400pxのサムネイルを返す
+ *   - 一覧用途は getThumbImageUrl() で幅800pxのサムネイルを返す
  *   - 詳細・編集は getSignedImageUrl() でフルサイズを返す
  *   - アプリ内で直接 createSignedUrl() を呼ばない（必ずこのモジュール経由）
  */
@@ -66,15 +66,17 @@ export async function getSignedImageUrl(
 }
 
 /**
- * 一覧・ホーム用のサムネイルURL（幅400px）。
+ * 一覧・ホーム用のサムネイルURL（幅800px）。
  *
  * ⚠ Supabase Free Plan では Image Transformation は無効。
- *   transform パラメータは無視され、フルサイズ（長辺1600px, quality 0.5）が返る。
+ *   transform パラメータは無視され、フルサイズ（長辺2000px, compress 0.7）が返る。
  *   Pro Plan 以上にアップグレードすると自動的にサムネイルが効くようになる。
  *   Free Plan でも Signed URL キャッシュによる再取得抑制の効果は有効。
+ *
+ * 表示サイズ: カード幅 ≈ 画面幅-32px（@3x で約1100物理px）→ 800px で Retina 対応。
  */
 export async function getThumbImageUrl(path: string): Promise<string> {
-  return getSignedImageUrl(path, { width: 400 });
+  return getSignedImageUrl(path, { width: 800 });
 }
 
 /**

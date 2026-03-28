@@ -23,10 +23,8 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import { X, Camera, RotateCw, RotateCcw, Check } from 'lucide-react-native';
+import { X, Camera, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { DateField, isValidYmd } from '@/components/DateField';
@@ -406,9 +404,9 @@ export default function DetailScreen() {
     }
   };
 
-  const handlePreviewSave = () => {
-    if (previewUri && previewUri !== photoUri) {
-      setPhotoUri(previewUri);
+  const handlePreviewSave = (uri: string) => {
+    if (uri !== photoUri) {
+      setPhotoUri(uri);
       setIsDirty(true);
     }
     setShowCamera(false);
@@ -427,163 +425,7 @@ export default function DetailScreen() {
     setPreviewUri(null);
   };
 
-  // Web: fetch → blob URL → Canvas で回転（blob: の場合は fetch 不要）
-  const rotateImageWithCanvas = (imageUrl: string, degrees: number): Promise<string> => {
-    const FETCH_TIMEOUT_MS = 10000;
-    const TOTAL_TIMEOUT_MS = 20000;
-    return new Promise((resolve, reject) => {
-      if (typeof document === 'undefined') {
-        reject(new Error('Web 環境で回転を実行できません'));
-        return;
-      }
-      let settled = false;
-      const settle = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        fn();
-      };
-      const totalTimeoutId = setTimeout(() => {
-        settle(() => reject(new Error('画像の処理がタイムアウトしました')));
-      }, TOTAL_TIMEOUT_MS);
 
-      const runWithImage = (srcUrl: string, revokeBlobUrl?: string) => {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            if (revokeBlobUrl) URL.revokeObjectURL(revokeBlobUrl);
-            const canvas = document.createElement('canvas');
-            const rad = (degrees * Math.PI) / 180;
-            const cos = Math.abs(Math.cos(rad));
-            const sin = Math.abs(Math.sin(rad));
-            canvas.width = Math.floor(img.width * cos + img.height * sin);
-            canvas.height = Math.floor(img.width * sin + img.height * cos);
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              clearTimeout(totalTimeoutId);
-              settle(() => reject(new Error('Canvas 2d が利用できません')));
-              return;
-            }
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.rotate(rad);
-            ctx.drawImage(img, -img.width / 2, -img.height / 2);
-            canvas.toBlob(
-              (resultBlob) => {
-                clearTimeout(totalTimeoutId);
-                if (settled) return;
-                settled = true;
-                if (!resultBlob) {
-                  reject(new Error('回転後の画像の生成に失敗しました'));
-                  return;
-                }
-                resolve(URL.createObjectURL(resultBlob));
-              },
-              'image/jpeg',
-              0.5
-            );
-          } catch (e) {
-            clearTimeout(totalTimeoutId);
-            settle(() => reject(e instanceof Error ? e : new Error('回転処理でエラーが発生しました')));
-          }
-        };
-        img.onerror = () => {
-          clearTimeout(totalTimeoutId);
-          if (revokeBlobUrl) URL.revokeObjectURL(revokeBlobUrl);
-          settle(() => reject(new Error('画像の読み込みに失敗しました')));
-        };
-        img.src = srcUrl;
-      };
-
-      if (imageUrl.startsWith('blob:')) {
-        runWithImage(imageUrl);
-        return;
-      }
-
-      const controller = new AbortController();
-      const fetchTimeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-      fetch(imageUrl, { mode: 'cors', signal: controller.signal })
-        .then((res) => {
-          clearTimeout(fetchTimeoutId);
-          if (!res.ok) throw new Error('画像の取得に失敗しました');
-          return res.blob();
-        })
-        .then((blob) => {
-          const blobUrl = URL.createObjectURL(blob);
-          runWithImage(blobUrl, blobUrl);
-        })
-        .catch((err) => {
-          clearTimeout(fetchTimeoutId);
-          clearTimeout(totalTimeoutId);
-          const msg =
-            err?.name === 'AbortError'
-              ? '画像の取得がタイムアウトしました。ネットワークまたは Supabase Storage の CORS 設定をご確認ください。'
-              : err instanceof Error
-                ? err.message
-                : '画像の取得に失敗しました。CORS設定をご確認ください。';
-          settle(() => reject(new Error(msg)));
-        });
-    });
-  };
-
-  const rotatePhoto = async (direction: 'right' | 'left') => {
-    if (!photoUri) return;
-
-    setIsProcessingImage(true);
-    try {
-      // 編集時は photoUri が DB のパス（recordId/xxx.jpg）のことがある → 回転には読み込み可能な URL が必要
-      let uriToRotate = photoUri;
-      if (!isValidImageUri(photoUri)) {
-        const signed = await resolveImageUrl(photoUri);
-        if (!signed) {
-          Alert.alert('エラー', '画像の読み込みに失敗しました');
-          return;
-        }
-        uriToRotate = signed;
-      } else {
-        validateImageUri(photoUri);
-      }
-
-      const rotation = direction === 'right' ? 90 : -90;
-
-      if (Platform.OS === 'web' && (uriToRotate.startsWith('http://') || uriToRotate.startsWith('https://'))) {
-        const blobUrl = await rotateImageWithCanvas(uriToRotate, rotation);
-        validateImageUri(blobUrl);
-        if (!isValidImageUri(blobUrl)) {
-          throw new Error('回転後の画像が無効です');
-        }
-        setPhotoUri(blobUrl);
-        setIsDirty(true);
-        return;
-      }
-
-      // ネイティブ: ImageManipulator は file:// を要求するため、https の場合は一旦ローカルに保存してから回転
-      let localUri = uriToRotate;
-      if (uriToRotate.startsWith('http://') || uriToRotate.startsWith('https://')) {
-        const cachePath = `${FileSystem.cacheDirectory}temp-rotate-${Date.now()}.jpg`;
-        const downloadResult = await FileSystem.downloadAsync(uriToRotate, cachePath);
-        if (!downloadResult?.uri) throw new Error('画像のダウンロードに失敗しました');
-        localUri = downloadResult.uri;
-      }
-
-      const result = await ImageManipulator.manipulateAsync(
-        localUri,
-        [{ rotate: rotation }],
-        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
-      validateImageUri(result.uri);
-      if (!isValidImageUri(result.uri)) {
-        throw new Error('回転後の画像が無効です');
-      }
-
-      setPhotoUri(result.uri);
-      setIsDirty(true);
-    } catch (error: any) {
-      logError('[回転]', error);
-      Alert.alert('エラー', error.message || '画像の回転に失敗しました');
-    } finally {
-      setIsProcessingImage(false);
-    }
-  };
 
   const handleDeletePhoto = async () => {
     try {
@@ -1002,22 +844,6 @@ export default function DetailScreen() {
                     <Text style={styles.processingText}>処理中...</Text>
                   </View>
                 )}
-                <View style={styles.photoActions}>
-                  <TouchableOpacity
-                    style={styles.rotateButton}
-                    onPress={() => rotatePhoto('left')}
-                    disabled={isProcessingImage}
-                    activeOpacity={0.7}>
-                    <RotateCcw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.rotateButton}
-                    onPress={() => rotatePhoto('right')}
-                    disabled={isProcessingImage}
-                    activeOpacity={0.7}>
-                    <RotateCw size={24} color={isProcessingImage ? '#ccc' : '#666'} />
-                  </TouchableOpacity>
-                </View>
               </View>
             ) : (
               <TouchableOpacity
@@ -1901,23 +1727,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-  },
-  photoActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 0,
-    marginBottom: 6,
-  },
-  rotateButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
   photoPickerButton: {
     alignItems: 'center',
