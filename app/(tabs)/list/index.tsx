@@ -52,13 +52,13 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
       style={styles.recordItem}
       onPress={() => onPress(item.id)}
       activeOpacity={0.8}>
-      <View style={styles.thumbWrap}>
+      <View style={[styles.thumbWrap, photoUrl && { backgroundColor: 'transparent' }]}>
         {photoUrl ? (
           <View style={[styles.thumbRotateWrap, { transform: [{ rotate: `${item.photo_rotation ?? 0}deg` }] }]}>
             <Image
               source={{ uri: photoUrl }}
               style={styles.thumbImg}
-              contentFit="cover"
+              contentFit="contain"
               cachePolicy="memory-disk"
               transition={0}
               recyclingKey={item.id}

@@ -1,12 +1,25 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  ActivityIndicator,
+  Dimensions,
+} from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RotateCcw, RotateCw, Check, Crop, RefreshCw } from 'lucide-react-native';
 import { ImageCropEditor } from './ImageCropEditor';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { log } from '@/lib/logger';
 
 const ACTION_GAP = Platform.select({ android: 20, default: 16 }) as number;
+const { width: SCREEN_W } = Dimensions.get('window');
+
+const PREVIEW_W = SCREEN_W;
+const PREVIEW_H = Math.round(SCREEN_W * (4 / 3));
 
 interface CameraPreviewScreenProps {
   imageUri: string;
@@ -29,8 +42,9 @@ export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPrevie
       const result = await ImageManipulator.manipulateAsync(
         currentUri,
         [{ rotate: rotation }],
-        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
       );
+      log('[Preview] 回転完了', { w: result.width, h: result.height, dir: direction });
       setCurrentUri(result.uri);
     } catch {
       // ignore
@@ -40,37 +54,46 @@ export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPrevie
   };
 
   const handleCropDone = (croppedUri: string) => {
+    log('[Preview] トリミング完了', { uri: croppedUri.slice(-40) });
     setCurrentUri(croppedUri);
     setShowCrop(false);
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.contentWrap}>
-        <View style={styles.imageContainer}>
-          <Image source={{ uri: currentUri }} style={styles.image} contentFit="contain" />
-          {isRotating && (
-            <View style={styles.rotatingOverlay}>
-              <ActivityIndicator size="large" color="#fff" />
-            </View>
-          )}
-        </View>
+    <View style={styles.container}>
+      {/* safe area スペーサー — 状態更新後も確実にノッチ下から開始 */}
+      <View style={{ height: insets.top, backgroundColor: '#000' }} />
+
+      {/* 4:3 固定コンテナで画像を表示 */}
+      <View style={styles.imageContainer}>
+        <Image
+          source={{ uri: currentUri }}
+          style={{ width: PREVIEW_W, height: PREVIEW_H }}
+          contentFit="contain"
+        />
+        {isRotating && (
+          <View style={styles.rotatingOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
       </View>
 
-      {/* 回転ボタン（画像の上に配置） */}
+      {/* 回転ボタン */}
       <View style={styles.rotateRow}>
         <TouchableOpacity
           style={styles.rotateBtn}
           onPress={() => handleRotate('left')}
           disabled={isRotating}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+        >
           <RotateCcw size={22} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.rotateBtn}
           onPress={() => handleRotate('right')}
           disabled={isRotating}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+        >
           <RotateCw size={22} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -80,21 +103,24 @@ export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPrevie
         <TouchableOpacity
           style={styles.retakeButton}
           onPress={onRetake}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <RefreshCw size={18} color="#333" />
           <Text style={styles.retakeText}>再撮影</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.cropButton}
           onPress={() => setShowCrop(true)}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <Crop size={18} color="#4A90E2" />
           <Text style={styles.cropText}>トリミング</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.saveButton}
           onPress={() => onSave(currentUri)}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <Check size={18} color="#fff" />
           <Text style={styles.saveText}>保存</Text>
         </TouchableOpacity>
@@ -106,7 +132,7 @@ export function CameraPreviewScreen({ imageUri, onRetake, onSave }: CameraPrevie
         onCrop={handleCropDone}
         onCancel={() => setShowCrop(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -115,16 +141,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  contentWrap: {
-    flex: 1,
-  },
   imageContainer: {
-    width: '100%',
-    flex: 1,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
+    width: PREVIEW_W,
+    height: PREVIEW_H,
+    alignSelf: 'center',
   },
   rotatingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -148,11 +168,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actions: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
-    paddingTop: 8,
     paddingHorizontal: 16,
     backgroundColor: '#000',
   },
