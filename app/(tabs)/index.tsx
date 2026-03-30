@@ -150,6 +150,7 @@ export default function HomeScreen() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
   const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const canceledRef = useRef(false);
 
   const formatLastUpdated = (d: Date) => {
@@ -179,12 +180,15 @@ export default function HomeScreen() {
     }
   }, [year, month, selectedChildId]);
 
-  const loadRecords = useCallback(async (opts: { isRefresh?: boolean } = {}) => {
+  const PAGE_SIZE = 10;
+
+  const loadRecords = useCallback(async (opts: { isRefresh?: boolean; loadMore?: boolean } = {}) => {
     const isRefresh = opts.isRefresh === true;
+    const isLoadMore = opts.loadMore === true;
     if (!selectedChildId || !isFamilyReady || !familyId) {
       if (!canceledRef.current) {
         if (isRefresh) setRefreshing(false);
-        else setLoading(false);
+        else if (!isLoadMore) setLoading(false);
         if (isFamilyReady && familyId) setHasLoadedOnce(true);
       }
       return;
@@ -193,14 +197,17 @@ export default function HomeScreen() {
     if (!canceledRef.current) {
       setLoadError(null);
       if (isRefresh) setRefreshing(true);
+      else if (isLoadMore) setLoadingMore(true);
       else setLoading(true);
     }
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = new Date(year, month, 0);
     const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
+    const offset = isLoadMore ? stableRef.current.length : 0;
+
     try {
-      const { data, error, count } = await supabase
+      const query = supabase
         .from('records')
         .select('*', { count: 'exact' })
         .eq('child_id', selectedChildId)
@@ -210,7 +217,9 @@ export default function HomeScreen() {
         .lte('date', endDateStr)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
-        .limit(10);
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      const { data, error, count } = await query;
 
       if (canceledRef.current) return;
       if (error) {
@@ -222,7 +231,7 @@ export default function HomeScreen() {
 
       if (data) {
         setTotalCount(count);
-        debugLog(`[記録読み込み] ${data.length}件取得 (全${count}件)`, { platform: Platform.OS });
+        debugLog(`[記録読み込み] ${data.length}件取得 (offset=${offset}, 全${count}件)`, { platform: Platform.OS });
         const recordsWithImage: RecordWithImageUrl[] = await Promise.all(
           data.map(async (r) => {
             let imageUrl: string | null = null;
@@ -240,11 +249,16 @@ export default function HomeScreen() {
           })
         );
         if (canceledRef.current) return;
-        log('[HOME][records sample]', recordsWithImage.slice(0, 3).map((r) => ({ id: r.id, photo_uri: r.photo_uri, imageUrl: r.imageUrl ? 'signed' : null })));
-        const newRows = recordsWithImage;
-        setRecords(newRows);
-        setStableRecords(newRows);
-        setImageErrors({});
+
+        if (isLoadMore) {
+          const merged = [...stableRef.current, ...recordsWithImage];
+          setRecords(merged);
+          setStableRecords(merged);
+        } else {
+          setRecords(recordsWithImage);
+          setStableRecords(recordsWithImage);
+          setImageErrors({});
+        }
         if (!canceledRef.current) {
           setLoadError(null);
           setLastUpdatedAt(new Date());
@@ -255,12 +269,12 @@ export default function HomeScreen() {
         const isNetwork = String(e).includes('Network request failed');
         logLoadError('記録読み込み');
         setLoadError(isNetwork ? 'offline' : 'unknown');
-        // records / stableRecords は上書きしない（前回成功分を維持）
       }
     } finally {
       if (!canceledRef.current) {
         setHasLoadedOnce(true);
         if (isRefresh) setRefreshing(false);
+        else if (isLoadMore) setLoadingMore(false);
         else setLoading(false);
       }
     }
@@ -308,20 +322,28 @@ export default function HomeScreen() {
   const keyExtractor = useCallback((item: RecordWithImageUrl) => item.id, []);
 
   const hasMore = totalCount !== null && totalCount > stableRecords.length;
+  const remaining = totalCount !== null ? totalCount - stableRecords.length : 0;
   const listFooter = useCallback(() => {
     if (!hasMore) return null;
+    if (loadingMore) {
+      return (
+        <View style={styles.loadMoreContainer}>
+          <ActivityIndicator size="small" color="#4A90E2" />
+        </View>
+      );
+    }
     return (
       <TouchableOpacity
         style={styles.showAllButton}
-        onPress={() => router.push('/(tabs)/list')}
+        onPress={() => loadRecords({ loadMore: true })}
         activeOpacity={0.7}
       >
         <Text style={styles.showAllButtonText}>
-          すべての記録を見る（{totalCount}件）
+          次の{Math.min(remaining, PAGE_SIZE)}件を見る
         </Text>
       </TouchableOpacity>
     );
-  }, [hasMore, totalCount, router]);
+  }, [hasMore, remaining, loadingMore, loadRecords]);
 
   if (!isFamilyReady) {
     return (
@@ -607,5 +629,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#4A90E2',
     fontFamily: 'Nunito-SemiBold',
+  },
+  loadMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
   },
 });
