@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
@@ -149,6 +149,7 @@ export default function HomeScreen() {
   const [loadError, setLoadError] = useState<'offline' | 'unknown' | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const canceledRef = useRef(false);
 
   const formatLastUpdated = (d: Date) => {
@@ -171,6 +172,7 @@ export default function HomeScreen() {
       prevMonthKey.current = key;
       setRecords([]);
       setStableRecords([]);
+      setTotalCount(null);
       setHasLoadedOnce(false);
       setLoading(true);
       setLoadError(null);
@@ -198,16 +200,17 @@ export default function HomeScreen() {
     const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
     try {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from('records')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('child_id', selectedChildId)
         .eq('family_id', familyId)
         .or('score.not.is.null,stamp.not.is.null,photo_uri.not.is.null')
         .gte('date', startDate)
         .lte('date', endDateStr)
         .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(10);
 
       if (canceledRef.current) return;
       if (error) {
@@ -218,7 +221,8 @@ export default function HomeScreen() {
       }
 
       if (data) {
-        debugLog(`[記録読み込み] ${data.length}件の記録を取得`, { platform: Platform.OS });
+        setTotalCount(count);
+        debugLog(`[記録読み込み] ${data.length}件取得 (全${count}件)`, { platform: Platform.OS });
         const recordsWithImage: RecordWithImageUrl[] = await Promise.all(
           data.map(async (r) => {
             let imageUrl: string | null = null;
@@ -262,15 +266,16 @@ export default function HomeScreen() {
     }
   }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
-  useFocusEffect(
-    useCallback(() => {
+  const dataKeyRef = useRef('');
+  useEffect(() => {
+    const key = `${year}-${month}-${selectedChildId}-${familyId}`;
+    if (key !== dataKeyRef.current) {
+      dataKeyRef.current = key;
       canceledRef.current = false;
       loadRecords();
-      return () => {
-        canceledRef.current = true;
-      };
-    }, [loadRecords])
-  );
+    }
+    return () => { canceledRef.current = true; };
+  }, [year, month, selectedChildId, familyId, loadRecords]);
 
   const handlePress = useCallback(
     (id: string) => {
@@ -301,6 +306,22 @@ export default function HomeScreen() {
   );
 
   const keyExtractor = useCallback((item: RecordWithImageUrl) => item.id, []);
+
+  const hasMore = totalCount !== null && totalCount > stableRecords.length;
+  const listFooter = useCallback(() => {
+    if (!hasMore) return null;
+    return (
+      <TouchableOpacity
+        style={styles.showAllButton}
+        onPress={() => router.push('/(tabs)/list')}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.showAllButtonText}>
+          すべての記録を見る（{totalCount}件）
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [hasMore, totalCount, router]);
 
   if (!isFamilyReady) {
     return (
@@ -344,6 +365,7 @@ export default function HomeScreen() {
             initialNumToRender={10}
             contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8, paddingBottom: 24 }]}
             showsVerticalScrollIndicator={false}
+            ListFooterComponent={listFooter}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -387,6 +409,7 @@ export default function HomeScreen() {
           initialNumToRender={10}
           contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8 }]}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={listFooter}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -569,5 +592,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  showAllButton: {
+    marginTop: 4,
+    marginBottom: 16,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    alignItems: 'center',
+  },
+  showAllButtonText: {
+    fontSize: 15,
+    color: '#4A90E2',
+    fontFamily: 'Nunito-SemiBold',
   },
 });

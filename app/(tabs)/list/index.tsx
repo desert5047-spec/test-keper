@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { TestRecord } from '@/types/database';
 import { useDateContext } from '@/contexts/DateContext';
@@ -207,11 +207,14 @@ export default function ListScreen() {
     }
   }, [year, month, selectedChildId, isFamilyReady, familyId]);
 
-  useFocusEffect(
-    useCallback(() => {
+  const dataKeyRef = useRef('');
+  useEffect(() => {
+    const key = `${year}-${month}-${selectedChildId}-${familyId}`;
+    if (key !== dataKeyRef.current) {
+      dataKeyRef.current = key;
       loadRecords();
-    }, [loadRecords])
-  );
+    }
+  }, [year, month, selectedChildId, familyId, loadRecords]);
 
   const handlePress = useCallback(
     (id: string) => {
