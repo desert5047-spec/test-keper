@@ -629,21 +629,23 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    gap: 12,
+    gap: 16,
   },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
     ...Platform.select({
       web: {
-        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.06)',
       },
       default: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
         elevation: 2,
       },
     }),
@@ -687,6 +689,8 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#ECECEC',
   },
   cardFirstRow: {
     flexDirection: 'row',

@@ -449,7 +449,7 @@ export default function GraphScreen() {
               {stats && (
                 <View style={styles.statsRow}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>件数</Text>
+                    <Text style={styles.statLabel}>表示件数</Text>
                     <Text style={styles.statValue}>{stats.count}</Text>
                   </View>
                   <View style={styles.statItem}>
