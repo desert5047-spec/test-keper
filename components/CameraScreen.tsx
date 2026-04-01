@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,10 @@ import {
   ActivityIndicator,
   Platform,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { X, RotateCw } from 'lucide-react-native';
+import { X, RotateCw, Zap, ZapOff } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { log, error as logError } from '@/lib/logger';
@@ -30,8 +31,28 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const { safeBottom } = useSafeBottom(16);
+  const shutterFlash = useRef(new Animated.Value(0)).current;
+
+  const fireShutterFlash = useCallback(() => {
+    shutterFlash.setValue(1);
+    Animated.timing(shutterFlash, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [shutterFlash]);
+
+  const toggleFacing = useCallback(() => {
+    setTorchOn(false);
+    setFacing((current) => (current === 'back' ? 'front' : 'back'));
+  }, []);
+
+  const toggleTorch = useCallback(() => {
+    setTorchOn((v) => !v);
+  }, []);
 
   useEffect(() => {
     if (!permission) {
@@ -66,6 +87,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
 
     try {
       setIsCapturing(true);
+      fireShutterFlash();
       const t0 = Date.now();
 
       const photo = await cameraRef.current.takePictureAsync({
@@ -74,31 +96,25 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         skipProcessing: true,
       });
 
-      debugLog('[CameraScreen] 撮影完了', {
-        ms: Date.now() - t0,
-        w: photo.width,
-        h: photo.height,
-      });
+      const t1 = Date.now();
+      debugLog('[CameraScreen] 撮影完了', { ms: t1 - t0, w: photo.width, h: photo.height });
 
       if (!photo.uri) {
         throw new Error('写真のURIが取得できませんでした');
       }
 
-      // EXIF 正規化後の寸法を予測し、EXIF bake + 3:4 crop を 1 回の
-      // manipulateAsync にまとめる（2回→1回で大幅高速化）
       const rawW = photo.width;
       const rawH = photo.height;
-
-      // portrait ロックアプリ: センサー横長 (W>H) → EXIF で縦横入替
       const estW = rawW > rawH ? rawH : rawW;
       const estH = rawW > rawH ? rawW : rawH;
 
-      const actions: ImageManipulator.Action[] = [{ rotate: 0 }];
-
       const targetRatio = 3 / 4;
       const estRatio = estW / estH;
+      const needsCrop = Math.abs(estRatio - targetRatio) > 0.02;
 
-      if (Math.abs(estRatio - targetRatio) > 0.02) {
+      const actions: ImageManipulator.Action[] = [{ rotate: 0 }];
+
+      if (needsCrop) {
         let cropW: number, cropH: number, cropX: number, cropY: number;
         if (estRatio > targetRatio) {
           cropH = estH;
@@ -111,25 +127,19 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
           cropX = 0;
           cropY = Math.round((estH - cropH) / 2);
         }
-        actions.push({
-          crop: { originX: cropX, originY: cropY, width: cropW, height: cropH },
-        });
-        debugLog('[CameraScreen] EXIF+crop 1回実行', {
-          est: `${estW}x${estH}`,
-          crop: `${cropW}x${cropH}`,
-        });
-      } else {
-        debugLog('[CameraScreen] EXIF のみ（3:4 済み）');
+        actions.push({ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } });
       }
 
       const result = await ImageManipulator.manipulateAsync(
         photo.uri,
         actions,
-        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG },
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
       );
 
       debugLog('[CameraScreen] 処理完了', {
         totalMs: Date.now() - t0,
+        shotMs: t1 - t0,
+        procMs: Date.now() - t1,
         w: result.width,
         h: result.height,
       });
@@ -140,10 +150,6 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
     } finally {
       setIsCapturing(false);
     }
-  };
-
-  const toggleFacing = () => {
-    setFacing((current) => (current === 'back' ? 'front' : 'back'));
   };
 
   return (
@@ -164,14 +170,23 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
           style={styles.cameraView}
           facing={facing}
           mode="picture"
+          enableTorch={torchOn}
         >
+          {/* L字コーナーガイド */}
           <View style={styles.cornerOverlay} pointerEvents="none">
             <View style={[styles.corner, styles.cTL]} />
             <View style={[styles.corner, styles.cTR]} />
             <View style={[styles.corner, styles.cBL]} />
             <View style={[styles.corner, styles.cBR]} />
           </View>
+
         </CameraView>
+
+        {/* シャッターフラッシュ */}
+        <Animated.View
+          style={[styles.shutterFlash, { opacity: shutterFlash }]}
+          pointerEvents="none"
+        />
       </View>
 
       <View style={[styles.controls, { paddingBottom: safeBottom + 8 }]}>
@@ -196,7 +211,13 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
           )}
         </TouchableOpacity>
 
-        <View style={styles.placeholder} />
+        <TouchableOpacity
+          style={[styles.torchButton, torchOn && styles.torchButtonOn]}
+          onPress={toggleTorch}
+          activeOpacity={0.7}
+        >
+          {torchOn ? <Zap size={22} color="#FFD600" /> : <ZapOff size={22} color="#fff" />}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -260,6 +281,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: CORNER_W, borderRightWidth: CORNER_W,
     borderColor: 'rgba(255,255,255,0.7)',
   },
+  shutterFlash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#fff',
+  },
   controls: {
     flex: 1,
     flexDirection: 'row',
@@ -282,7 +307,14 @@ const styles = StyleSheet.create({
   captureButtonInner: {
     width: 60, height: 60, borderRadius: 30, backgroundColor: '#fff',
   },
-  placeholder: { width: 50, height: 50 },
+  torchButton: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  torchButtonOn: {
+    backgroundColor: 'rgba(255,214,0,0.25)',
+  },
   message: {
     color: '#fff', fontSize: 16, textAlign: 'center', marginBottom: 20,
   },

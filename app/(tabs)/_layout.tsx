@@ -186,7 +186,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="monthly"
         options={{
-          title: '記録',
+          title: '成績',
           tabBarIcon: ({ color, focused }) => (
             <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
