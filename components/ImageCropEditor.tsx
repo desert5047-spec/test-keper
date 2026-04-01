@@ -15,6 +15,7 @@ import { Image } from 'expo-image';
 import { Check, X } from 'lucide-react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { log, error as logError } from '@/lib/logger';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const MIN_SIZE = 60;
@@ -65,6 +66,7 @@ function computeLayout(iw: number, ih: number): Layout {
 }
 
 export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: Props) {
+  const insets = useSafeAreaInsets();
   // 正規化済み画像URI — 表示とクロップの両方にこれを使う
   const [normUri, setNormUri] = useState('');
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
@@ -222,7 +224,7 @@ export function ImageCropEditor({ visible, imageUri, onCrop, onCancel }: Props) 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={st.root}>
-        <View style={st.header}>
+        <View style={[st.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
           <TouchableOpacity onPress={onCancel} style={st.hBtn}>
             <X size={24} color="#fff" />
           </TouchableOpacity>
@@ -349,7 +351,7 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 56, paddingBottom: 12,
+    paddingHorizontal: 16, paddingBottom: 12,
   },
   hBtn: { padding: 10 },
   done: { backgroundColor: '#4A90E2', borderRadius: 22 },
