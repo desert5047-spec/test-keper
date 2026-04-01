@@ -173,7 +173,7 @@ export default function MonthlyScreen() {
       (data ?? []).forEach((record: TestRecord) => {
         const bucket = toSubjectBucket(record.subject);
         bucketMap[bucket].count += 1;
-        if (record.score !== null && bucket !== 'その他') {
+        if (record.score !== null) {
           bucketMap[bucket].scoreValues.push(normalizeScore(record.score, record.max_score));
         }
       });
@@ -181,12 +181,9 @@ export default function MonthlyScreen() {
       const nextRows: SubjectSummaryRow[] = SUBJECT_ORDER.map((subjectKey) => {
         const bucket = bucketMap[subjectKey];
         const hasScore = bucket.scoreValues.length > 0;
-        const averageScore =
-          subjectKey === 'その他'
-            ? null
-            : hasScore
-              ? Math.round(bucket.scoreValues.reduce((a, b) => a + b, 0) / bucket.scoreValues.length)
-              : null;
+        const averageScore = hasScore
+          ? Math.round(bucket.scoreValues.reduce((a, b) => a + b, 0) / bucket.scoreValues.length)
+          : null;
 
         return {
           key: subjectKey,
@@ -219,13 +216,13 @@ export default function MonthlyScreen() {
   );
 
   const summaryCaption = useMemo(() => {
-    if (mode === 'year') return `${selectedYear}年4月～${selectedYear + 1}年3月`;
+    if (mode === 'year') return `${selectedYear}.4～${selectedYear + 1}.3`;
     if (mode === 'half') {
-      if (selectedHalf === 'first') return `${selectedYear}.4～9月`;
-      return `${selectedYear}.10～${selectedYear + 1}.3月`;
+      if (selectedHalf === 'first') return `${selectedYear}.4～${selectedYear}.9`;
+      return `${selectedYear}.10～${selectedYear + 1}.3`;
     }
     const calendarYear = selectedMonth >= 4 ? selectedYear : selectedYear + 1;
-    return `${calendarYear}年 ${selectedMonth}月`;
+    return `${calendarYear}.${selectedMonth}`;
   }, [mode, selectedYear, selectedMonth, selectedHalf]);
 
   const handleModeChange = useCallback((newMode: PeriodMode) => {

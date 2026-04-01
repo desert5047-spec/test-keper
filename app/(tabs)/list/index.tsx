@@ -165,14 +165,23 @@ export default function ListScreen() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const initialSubject = typeof params.subject === 'string' ? params.subject : null;
+  const pickParam = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[value.length - 1] : value;
+
+  const paramSubject = pickParam(params.subject as string | string[] | undefined);
+  const paramMode = pickParam(params.mode as string | string[] | undefined);
+  const paramHalf = pickParam(params.half as string | string[] | undefined);
+  const paramYear = pickParam(params.year as string | string[] | undefined);
+  const paramMonth = pickParam(params.month as string | string[] | undefined);
+
+  const initialSubject = typeof paramSubject === 'string' ? paramSubject : null;
   const [activeSubject, setActiveSubject] = useState<string | null>(initialSubject);
   const subjectParam = activeSubject;
-  const modeParam = (typeof params.mode === 'string' ? params.mode : 'month') as PeriodMode;
-  const initialHalf = (typeof params.half === 'string' ? params.half : 'first') as HalfMode;
+  const modeParam = (typeof paramMode === 'string' ? paramMode : 'month') as PeriodMode;
+  const initialHalf = (typeof paramHalf === 'string' ? paramHalf : 'first') as HalfMode;
   const [activeHalf, setActiveHalf] = useState<HalfMode>(initialHalf);
   const halfParam = activeHalf;
-  const initialParamYear = params.year ? parseInt(params.year as string, 10) : NaN;
+  const initialParamYear = paramYear ? parseInt(paramYear, 10) : NaN;
   const [periodYear, setPeriodYear] = useState<number>(Number.isFinite(initialParamYear) ? initialParamYear : year);
   const effectiveMode: PeriodMode = modeParam;
 
@@ -181,16 +190,16 @@ export default function ListScreen() {
   }, [initialSubject]);
 
   useEffect(() => {
-    const nextHalf = (typeof params.half === 'string' ? params.half : 'first') as HalfMode;
+    const nextHalf = (typeof paramHalf === 'string' ? paramHalf : 'first') as HalfMode;
     setActiveHalf(nextHalf);
-  }, [params.half]);
+  }, [paramHalf]);
 
   useEffect(() => {
-    const nextYear = params.year ? parseInt(params.year as string, 10) : NaN;
+    const nextYear = paramYear ? parseInt(paramYear, 10) : NaN;
     if (Number.isFinite(nextYear)) {
       setPeriodYear(nextYear);
     }
-  }, [params.year]);
+  }, [paramYear]);
 
   const handlePeriodShift = useCallback((direction: 'next' | 'prev') => {
     if (effectiveMode === 'year') {
@@ -227,18 +236,18 @@ export default function ListScreen() {
     // month モードで URL パラメータが更新されたときだけ DateContext と同期する。
     // これにより、ヘッダーで月送り中に params によって値が戻されるのを防ぐ。
     if (modeParam !== 'month') return;
-    if (!params.year || !params.month) return;
-    const key = `${params.year}-${params.month}`;
+    if (!paramYear || !paramMonth) return;
+    const key = `${paramYear}-${paramMonth}`;
     if (key === appliedMonthParamRef.current) return;
 
-    const newYear = parseInt(params.year as string, 10);
-    const newMonth = parseInt(params.month as string, 10);
+    const newYear = parseInt(paramYear, 10);
+    const newMonth = parseInt(paramMonth, 10);
     if (!Number.isFinite(newYear) || !Number.isFinite(newMonth)) return;
     if (newMonth < 1 || newMonth > 12) return;
 
     appliedMonthParamRef.current = key;
     setYearMonth(newYear, newMonth);
-  }, [modeParam, params.year, params.month, setYearMonth]);
+  }, [modeParam, paramYear, paramMonth, setYearMonth]);
 
   const matchesSubjectFilter = useCallback((subject: string, filter: string | null) => {
     if (!filter) return true;
@@ -269,9 +278,9 @@ export default function ListScreen() {
     }
 
     // month モード: params が DateContext に同期される前は params を直接使う
-    const pY = params.year ? parseInt(params.year as string, 10) : NaN;
-    const pM = params.month ? parseInt(params.month as string, 10) : NaN;
-    const pKey = `${params.year}-${params.month}`;
+    const pY = paramYear ? parseInt(paramYear, 10) : NaN;
+    const pM = paramMonth ? parseInt(paramMonth, 10) : NaN;
+    const pKey = `${paramYear}-${paramMonth}`;
     const useParams = Number.isFinite(pY) && Number.isFinite(pM) && pKey !== appliedMonthParamRef.current;
     const calendarYear = useParams ? pY : year;
     const calendarMonth = useParams ? pM : month;
@@ -281,7 +290,7 @@ export default function ListScreen() {
       startDate: `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-01`,
       endDate: `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`,
     };
-  }, [periodYear, params.month, year, month, effectiveMode, halfParam]);
+  }, [periodYear, paramYear, paramMonth, year, month, effectiveMode, halfParam]);
 
   const flattenSections = useCallback((sectionsData: Section[]): RecordWithImageUrl[] => {
     return sectionsData.flatMap((section) => section.data);
@@ -416,7 +425,7 @@ export default function ListScreen() {
       setTotalCount(null);
       loadRecords();
     }
-  }, [effectiveMode, modeParam, halfParam, periodYear, params.month, year, month, selectedChildId, familyId, subjectParam, loadRecords]);
+  }, [effectiveMode, modeParam, halfParam, periodYear, paramMonth, year, month, selectedChildId, familyId, subjectParam, loadRecords]);
 
   const handlePress = useCallback(
     (id: string) => {
@@ -436,24 +445,24 @@ export default function ListScreen() {
   const showLoadErrorFullScreen = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length === 0;
   const showBannerAndList = hasLoadedOnce && loadError && !isInitialLoading && stableSections.length > 0;
   const navPeriodLabel = (() => {
-    if (effectiveMode === 'year') return `${periodYear}年4月～${periodYear + 1}年3月`;
+    if (effectiveMode === 'year') return `${periodYear}.4～${periodYear + 1}.3`;
     if (effectiveMode === 'half') {
       return halfParam === 'first'
-        ? `${periodYear}.4～9月`
-        : `${periodYear}.10～${periodYear + 1}.3月`;
+        ? `${periodYear}.4～${periodYear}.9`
+        : `${periodYear}.10～${periodYear + 1}.3`;
     }
-    return `${year}年 ${month}月`;
+    return `${year}.${month}`;
   })();
   const emptyPeriodLabel = (() => {
     if (effectiveMode === 'year') {
-      return `${periodYear}年4月～${periodYear + 1}年3月`;
+      return `${periodYear}.4～${periodYear + 1}.3`;
     }
     if (effectiveMode === 'half') {
       return halfParam === 'first'
-        ? `${periodYear}.4～9月`
-        : `${periodYear}.10～${periodYear + 1}.3月`;
+        ? `${periodYear}.4～${periodYear}.9`
+        : `${periodYear}.10～${periodYear + 1}.3`;
     }
-    return `${year}年${month}月`;
+    return `${year}.${month}`;
   })();
   const loadedCount = flattenSections(stableSections).length;
   const hasMore = totalCount !== null && totalCount > loadedCount;

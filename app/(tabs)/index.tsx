@@ -448,7 +448,7 @@ export default function HomeScreen() {
             <ChevronLeft size={18} color="#4B5563" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.periodLabelBtn} onPress={() => setShowMonthPicker(true)} activeOpacity={0.7}>
-            <Text style={styles.periodLabelText}>{year}年 {month}月 ▼</Text>
+            <Text style={styles.periodLabelText}>{year}.{month} ▼</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.periodArrowBtn} onPress={() => handleMonthChange('next')} activeOpacity={0.7}>
             <ChevronRight size={18} color="#4B5563" />
