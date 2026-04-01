@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform, ActivityIndicator, Pressable } from 'react-native';
-import { Settings, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2, X } from 'lucide-react-native';
+import { Settings, ChevronLeft, ChevronRight, ChevronDown, Edit3, Trash2, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +39,7 @@ interface AppHeaderProps {
   onSave?: () => void;
   isSaving?: boolean;
   saveDisabled?: boolean;
+  titleFontSize?: number;
 }
 
 export function AppHeader({
@@ -58,6 +59,7 @@ export function AppHeader({
   onSave,
   isSaving = false,
   saveDisabled = false,
+  titleFontSize,
 }: AppHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -136,8 +138,15 @@ export function AppHeader({
             </TouchableOpacity>
           ) : showBack ? (
             <View style={styles.hit}>
-              <TouchableOpacity onPress={handleBack} style={styles.hitTouchable} activeOpacity={0.7}>
-                <ArrowLeft size={22} color="#4A90E2" />
+              <TouchableOpacity
+                onPress={handleBack}
+                style={styles.hitTouchable}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.backButtonCircle}>
+                  <ChevronLeft size={22} color="#4A90E2" />
+                </View>
               </TouchableOpacity>
             </View>
           ) : showChildSwitcher ? (
@@ -174,7 +183,7 @@ export function AppHeader({
               </TouchableOpacity>
             </View>
           ) : title ? (
-            <Text style={styles.title}>{title}</Text>
+            <Text style={[styles.title, titleFontSize ? { fontSize: titleFontSize } : null]}>{title}</Text>
           ) : (
             <View style={styles.titleSpacer} />
           )}
@@ -313,6 +322,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...(Platform.OS === 'web' && { cursor: 'pointer' as const }),
+  },
+  backButtonCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    marginTop: 2,
   },
   center: {
     flexDirection: 'row',

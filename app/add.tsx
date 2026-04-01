@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, X, Check } from 'lucide-react-native';
+import { Camera, X, Check, ChevronLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DateField, isValidYmd } from '@/components/DateField';
@@ -80,7 +80,6 @@ export default function AddScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const isAndroid = Platform.OS === 'android';
   const footerH = 72;
-  const bottomPad = (isAndroid ? footerH : 0) + Math.max(insets.bottom, 12) + 16;
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -814,7 +813,9 @@ export default function AddScreen() {
           onPress={goBackOrToList}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={styles.backButtonText}>←</Text>
+          <View style={styles.backButtonCircle}>
+            <ChevronLeft size={22} color="#4A90E2" />
+          </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>記録を残す</Text>
         <View style={styles.headerSpacer} />
@@ -825,7 +826,7 @@ export default function AddScreen() {
         style={styles.scrollView}
         contentContainerStyle={{
           paddingTop: 0,
-          paddingBottom: isAndroid ? bottomPad : 24,
+          paddingBottom: footerH + 16,
         }}
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => {
@@ -876,7 +877,11 @@ export default function AddScreen() {
             <Text style={styles.sectionTitle}>
               {`${contextChildren.find(c => c.id === selectedChildId)?.name || '子供'}の記録`}
             </Text>
-            <View style={styles.childChipContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.childChipContainer}
+            >
               {contextChildren.map((child) => (
                 <TouchableOpacity
                   key={child.id}
@@ -906,7 +911,7 @@ export default function AddScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           </View>
         ) : null}
 
@@ -914,7 +919,11 @@ export default function AddScreen() {
           <Text style={styles.sectionTitle}>教科</Text>
           {!showSubjectInput ? (
             <>
-              <View style={styles.chipContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipContainer}
+              >
                 {subjectSet.main.map((subject) => (
                   <TouchableOpacity
                     key={subject}
@@ -934,10 +943,14 @@ export default function AddScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
 
               {showOtherSubjects && (
-                <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[styles.chipContainer, { marginTop: 8 }]}
+                >
                   {subjectSet.other.map((subject) => (
                     <TouchableOpacity
                       key={subject}
@@ -957,10 +970,14 @@ export default function AddScreen() {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               )}
 
-              <View style={[styles.chipContainer, { marginTop: 8 }]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[styles.chipContainer, { marginTop: 8 }]}
+              >
                 {!showOtherSubjects && subjectSet.other.length > 0 && (
                   <TouchableOpacity
                     style={styles.chipOther}
@@ -975,7 +992,7 @@ export default function AddScreen() {
                   activeOpacity={0.7}>
                   <Text style={styles.chipAddText}>+ 教科を追加</Text>
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
             </>
           ) : (
             <View style={styles.inputRow}>
@@ -1188,20 +1205,22 @@ export default function AddScreen() {
           <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
-        {errorMessage ? (
-          <View style={styles.errorMessageContainer}>
-            <Text style={styles.errorMessageText}>{errorMessage}</Text>
-          </View>
-        ) : null}
-        <View style={[styles.footerButtonRow, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity
-            style={[
-              styles.bottomSaveButton,
-              (isSaving || (evaluationType === 'score' && scoreError)) && styles.bottomSaveButtonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
-            activeOpacity={0.8}>
+      </ScrollView>
+
+      {errorMessage ? (
+        <View style={styles.fixedErrorBanner}>
+          <Text style={styles.errorMessageText}>{errorMessage}</Text>
+        </View>
+      ) : null}
+      <View style={[styles.fixedFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <TouchableOpacity
+          style={[
+            styles.bottomSaveButton,
+            (isSaving || (evaluationType === 'score' && scoreError)) && styles.bottomSaveButtonDisabled,
+          ]}
+          onPress={handleSave}
+          disabled={isSaving || (evaluationType === 'score' && !!scoreError)}
+          activeOpacity={0.8}>
           {isSaving ? (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <ActivityIndicator size="small" color="#fff" />
@@ -1210,9 +1229,8 @@ export default function AddScreen() {
           ) : (
             <Text style={styles.bottomSaveButtonText}>保存</Text>
           )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+        </TouchableOpacity>
+      </View>
 
       {Platform.OS === 'ios' && isMemoOpen && (
         <CommentComposer
@@ -1349,10 +1367,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backButtonText: {
-    fontSize: 28,
-    color: '#4A90E2',
-    fontFamily: 'Nunito-Regular',
+  backButtonCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -1460,12 +1481,13 @@ const styles = StyleSheet.create({
   },
   chipContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 8,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: 20,
     backgroundColor: '#f0f0f0',
     borderWidth: 1,
@@ -1726,11 +1748,22 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'left',
   },
-  footerButtonRow: {
+  fixedFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: 20,
+    paddingTop: 10,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  fixedErrorBanner: {
+    backgroundColor: '#FFE5E5',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B6B',
   },
   bottomSaveButton: {
     flex: 1,
@@ -1756,6 +1789,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
+    marginHorizontal: 20,
     marginBottom: 12,
     borderLeftWidth: 4,
     borderLeftColor: '#FF6B6B',
@@ -1867,8 +1901,9 @@ const styles = StyleSheet.create({
   },
   childChipContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    alignItems: 'center',
+    paddingRight: 8,
   },
   childChip: {
     flexDirection: 'row',

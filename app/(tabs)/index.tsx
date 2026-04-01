@@ -8,6 +8,9 @@ import {
   RefreshControl,
   Dimensions,
   ActivityIndicator,
+  Modal,
+  ScrollView,
+  Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -21,8 +24,15 @@ import { getThumbImageUrl } from '@/lib/storage';
 import { getStoragePathFromUrl } from '@/utils/imageUpload';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader, useHeaderTop } from '@/components/AppHeader';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { Platform } from 'react-native';
 import { log, logLoadError } from '@/lib/logger';
+
+const PERIOD_NAV_HEIGHT = 44;
+const SUBJECT_ROW_HEIGHT = 40;
+const HEADER_EXTRA = PERIOD_NAV_HEIGHT + SUBJECT_ROW_HEIGHT;
+const SUBJECT_FILTERS = ['全体', '国語', '算数', '理科', '社会', '英語', 'その他'] as const;
+const MAIN_SUBJECTS = ['国語', '算数', '数学', '理科', '社会', '英語'];
 
 const LOAD_ERROR_MESSAGE = '通信できません。接続を確認して再度お試しください';
 
@@ -32,7 +42,7 @@ import { getSubjectColor } from '@/lib/subjects';
 
 const CARD_IMAGE_SIZE = Dimensions.get('window').width - 32;
 const CARD_IMAGE_HEIGHT_PHOTO = CARD_IMAGE_SIZE;
-const CARD_IMAGE_HEIGHT_NO_PHOTO = 160;
+const CARD_IMAGE_HEIGHT_NO_PHOTO = 80;
 
 interface HomeRecordCardProps {
   item: RecordWithImageUrl;
@@ -151,7 +161,13 @@ export default function HomeScreen() {
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [activeSubject, setActiveSubject] = useState<string>('全体');
   const canceledRef = useRef(false);
+  const listRef = useRef<FlatList<RecordWithImageUrl> | null>(null);
+  const prevContextKeyRef = useRef('');
+  const prevSubjectRef = useRef(activeSubject);
+  const listFadeAnim = useRef(new Animated.Value(1)).current;
+  const subjectSwitchingRef = useRef(false);
 
   const formatLastUpdated = (d: Date) => {
     const h = d.getHours().toString().padStart(2, '0');
@@ -162,7 +178,32 @@ export default function HomeScreen() {
   useEffect(() => {
     stableRef.current = stableRecords;
   }, [stableRecords]);
-  const { year, month } = useDateContext();
+  const { year, month, setYearMonth } = useDateContext();
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(year);
+
+  useEffect(() => {
+    if (showMonthPicker) setPickerYear(year);
+  }, [showMonthPicker, year]);
+
+  const handleMonthChange = useCallback((direction: 'next' | 'prev') => {
+    if (direction === 'next') {
+      if (month === 12) setYearMonth(year + 1, 1);
+      else setYearMonth(year, month + 1);
+    } else {
+      if (month === 1) setYearMonth(year - 1, 12);
+      else setYearMonth(year, month - 1);
+    }
+  }, [year, month, setYearMonth]);
+
+  const handleMonthSelect = useCallback((selectedMonth: number) => {
+    setYearMonth(pickerYear, selectedMonth);
+    setShowMonthPicker(false);
+  }, [pickerYear, setYearMonth]);
+
+  const handlePickerYearChange = useCallback((direction: 'next' | 'prev') => {
+    setPickerYear((y) => (direction === 'next' ? y + 1 : y - 1));
+  }, []);
   const { selectedChildId } = useChild();
   const { familyId, isFamilyReady } = useAuth();
 
@@ -198,7 +239,7 @@ export default function HomeScreen() {
       setLoadError(null);
       if (isRefresh) setRefreshing(true);
       else if (isLoadMore) setLoadingMore(true);
-      else setLoading(true);
+      else if (stableRef.current.length === 0) setLoading(true);
     }
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = new Date(year, month, 0);
@@ -207,7 +248,7 @@ export default function HomeScreen() {
     const offset = isLoadMore ? stableRef.current.length : 0;
 
     try {
-      const query = supabase
+      let query = supabase
         .from('records')
         .select('*', { count: 'exact' })
         .eq('child_id', selectedChildId)
@@ -216,10 +257,17 @@ export default function HomeScreen() {
         .gte('date', startDate)
         .lte('date', endDateStr)
         .order('date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + PAGE_SIZE - 1);
+        .order('created_at', { ascending: false });
 
-      const { data, error, count } = await query;
+      if (activeSubject === '算数') {
+        query = query.in('subject', ['算数', '数学']);
+      } else if (activeSubject === 'その他') {
+        query = query.not('subject', 'in', '("国語","算数","数学","理科","社会","英語")');
+      } else if (activeSubject !== '全体') {
+        query = query.eq('subject', activeSubject);
+      }
+
+      const { data, error, count } = await query.range(offset, offset + PAGE_SIZE - 1);
 
       if (canceledRef.current) return;
       if (error) {
@@ -272,24 +320,43 @@ export default function HomeScreen() {
       }
     } finally {
       if (!canceledRef.current) {
+        if (subjectSwitchingRef.current) {
+          Animated.timing(listFadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }).start();
+          subjectSwitchingRef.current = false;
+        }
         setHasLoadedOnce(true);
         if (isRefresh) setRefreshing(false);
         else if (isLoadMore) setLoadingMore(false);
         else setLoading(false);
       }
     }
-  }, [year, month, selectedChildId, isFamilyReady, familyId]);
+  }, [year, month, selectedChildId, isFamilyReady, familyId, activeSubject]);
 
   const dataKeyRef = useRef('');
   useEffect(() => {
-    const key = `${year}-${month}-${selectedChildId}-${familyId}`;
+    const key = `${year}-${month}-${selectedChildId}-${familyId}-${activeSubject}`;
+    const contextKey = `${year}-${month}-${selectedChildId}-${familyId}`;
+    const onlySubjectChanged =
+      prevContextKeyRef.current === contextKey && prevSubjectRef.current !== activeSubject;
+
     if (key !== dataKeyRef.current) {
       dataKeyRef.current = key;
       canceledRef.current = false;
-      loadRecords();
+      if (onlySubjectChanged) {
+        subjectSwitchingRef.current = true;
+        listRef.current?.scrollToOffset({ offset: 0, animated: false });
+        listFadeAnim.stopAnimation();
+        Animated.timing(listFadeAnim, { toValue: 0.72, duration: 220, useNativeDriver: true }).start(() => {
+          loadRecords();
+        });
+      } else {
+        loadRecords();
+      }
     }
+    prevContextKeyRef.current = contextKey;
+    prevSubjectRef.current = activeSubject;
     return () => { canceledRef.current = true; };
-  }, [year, month, selectedChildId, familyId, loadRecords]);
+  }, [year, month, selectedChildId, familyId, activeSubject, loadRecords]);
 
   const handlePress = useCallback(
     (id: string) => {
@@ -362,7 +429,100 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
       <View style={styles.container}>
-      <AppHeader showYearMonthNav={true} safeTopByParent={true} />
+      <AppHeader showYearMonthNav={false} safeTopByParent={true} />
+
+      <View style={[styles.headerExtraWrap, { top: headerTop }]}>
+        <View style={styles.periodNavRow}>
+          <TouchableOpacity style={styles.periodArrowBtn} onPress={() => handleMonthChange('prev')} activeOpacity={0.7}>
+            <ChevronLeft size={18} color="#4B5563" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.periodLabelBtn} onPress={() => setShowMonthPicker(true)} activeOpacity={0.7}>
+            <Text style={styles.periodLabelText}>{year}年 {month}月 ▼</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.periodArrowBtn} onPress={() => handleMonthChange('next')} activeOpacity={0.7}>
+            <ChevronRight size={18} color="#4B5563" />
+          </TouchableOpacity>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterChipRow}
+          style={styles.filterChipScroll}
+        >
+          {SUBJECT_FILTERS.map((s) => {
+            const isActive = activeSubject === s;
+            const chipColor = s === '全体' ? '#4A90E2' : getSubjectColor(s);
+            return (
+              <TouchableOpacity
+                key={s}
+                style={[
+                  styles.filterChip,
+                  isActive && { backgroundColor: chipColor, borderColor: chipColor },
+                ]}
+                onPress={() => setActiveSubject(s)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterChipText, isActive && { color: '#fff' }]}>{s}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <Modal
+        visible={showMonthPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMonthPicker(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMonthPicker(false)}>
+          <TouchableOpacity
+            style={styles.monthPickerContainer}
+            activeOpacity={1}
+            onPress={() => {}}>
+            <Text style={styles.monthPickerTitle}>年・月を選択</Text>
+            <View style={styles.yearPickerRow}>
+              <TouchableOpacity
+                style={styles.yearPickerArrow}
+                onPress={() => handlePickerYearChange('prev')}
+                activeOpacity={0.7}>
+                <ChevronLeft size={22} color="#666" />
+              </TouchableOpacity>
+              <Text style={styles.yearPickerText}>{pickerYear}年</Text>
+              <TouchableOpacity
+                style={styles.yearPickerArrow}
+                onPress={() => handlePickerYearChange('next')}
+                activeOpacity={0.7}>
+                <ChevronRight size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.monthPickerScroll}>
+              <View style={styles.monthPickerGrid}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[
+                      styles.monthPickerItem,
+                      pickerYear === year && month === m && styles.monthPickerItemSelected,
+                    ]}
+                    onPress={() => handleMonthSelect(m)}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.monthPickerItemText,
+                        pickerYear === year && month === m && styles.monthPickerItemTextSelected,
+                      ]}>
+                      {m}月
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {showBannerAndList ? (
         <View style={styles.mainWithBanner}>
@@ -378,32 +538,35 @@ export default function HomeScreen() {
               <Text style={styles.retryButtonText}>再試行</Text>
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={stableRecords}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            removeClippedSubviews={false}
-            windowSize={5}
-            initialNumToRender={10}
-            contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8, paddingBottom: 24 }]}
-            showsVerticalScrollIndicator={false}
-            ListFooterComponent={listFooter}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={() => loadRecords({ isRefresh: true })}
-              />
-            }
-          />
+          <Animated.View style={{ flex: 1, opacity: listFadeAnim }}>
+            <FlatList
+              ref={listRef}
+              data={stableRecords}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              removeClippedSubviews={false}
+              windowSize={5}
+              initialNumToRender={10}
+              contentContainerStyle={[styles.listContent, { paddingTop: headerTop + HEADER_EXTRA + 8, paddingBottom: 24 }]}
+              showsVerticalScrollIndicator={false}
+              ListFooterComponent={listFooter}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={() => loadRecords({ isRefresh: true })}
+                />
+              }
+            />
+          </Animated.View>
         </View>
       ) : null}
 
       {showSpinner ? (
-        <View style={[styles.loadingContainer, { paddingTop: headerTop + 8 }]}>
+        <View style={[styles.loadingContainer, { paddingTop: headerTop + HEADER_EXTRA + 8 }]}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
       ) : showLoadErrorFullScreen ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + HEADER_EXTRA + 8 }]}>
           <Text style={styles.emptyText}>{LOAD_ERROR_MESSAGE}</Text>
           {lastUpdatedAt ? (
             <Text style={styles.lastUpdatedText}>最終更新: {formatLastUpdated(lastUpdatedAt)}</Text>
@@ -417,28 +580,31 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       ) : showEmptyState ? (
-        <View style={[styles.emptyContainer, { paddingTop: headerTop + 8 }]}>
+        <View style={[styles.emptyContainer, { paddingTop: headerTop + HEADER_EXTRA + 8 }]}>
           <Text style={styles.emptyText}>{year}年{month}月の記録はありません</Text>
           <Text style={styles.emptySubText}>登録ボタンから記録を残しましょう</Text>
         </View>
       ) : showList ? (
-        <FlatList
-          data={stableRecords}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          removeClippedSubviews={false}
-          windowSize={5}
-          initialNumToRender={10}
-          contentContainerStyle={[styles.listContent, { paddingTop: headerTop + 8 }]}
-          showsVerticalScrollIndicator={false}
-          ListFooterComponent={listFooter}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => loadRecords({ isRefresh: true })}
-            />
-          }
-        />
+        <Animated.View style={{ flex: 1, opacity: listFadeAnim }}>
+          <FlatList
+            ref={listRef}
+            data={stableRecords}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            removeClippedSubviews={false}
+            windowSize={5}
+            initialNumToRender={10}
+            contentContainerStyle={[styles.listContent, { paddingTop: headerTop + HEADER_EXTRA + 8 }]}
+            showsVerticalScrollIndicator={false}
+            ListFooterComponent={listFooter}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadRecords({ isRefresh: true })}
+              />
+            }
+          />
+        </Animated.View>
       ) : null}
       </View>
     </SafeAreaView>
@@ -633,5 +799,132 @@ const styles = StyleSheet.create({
   loadMoreContainer: {
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  headerExtraWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    zIndex: 9,
+  },
+  periodNavRow: {
+    height: PERIOD_NAV_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  filterChipScroll: {
+    height: SUBJECT_ROW_HEIGHT,
+  },
+  filterChipRow: {
+    paddingHorizontal: 12,
+    gap: 6,
+    alignItems: 'center',
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#fff',
+  },
+  filterChipText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontFamily: 'Nunito-SemiBold',
+  },
+  periodArrowBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodLabelBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  periodLabelText: {
+    fontSize: 15,
+    color: '#111827',
+    fontFamily: 'Nunito-SemiBold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthPickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    width: '80%',
+    maxWidth: 360,
+    maxHeight: '70%',
+  },
+  monthPickerTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    textAlign: 'center',
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  yearPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  yearPickerArrow: {
+    padding: 4,
+  },
+  yearPickerText: {
+    fontSize: 17,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    minWidth: 72,
+    textAlign: 'center',
+  },
+  monthPickerScroll: {
+    maxHeight: 400,
+  },
+  monthPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 16,
+    gap: 12,
+  },
+  monthPickerItem: {
+    width: '30%',
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  monthPickerItemSelected: {
+    backgroundColor: '#4A90E2',
+  },
+  monthPickerItemText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#666',
+  },
+  monthPickerItemTextSelected: {
+    color: '#fff',
   },
 });

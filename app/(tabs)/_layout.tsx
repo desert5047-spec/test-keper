@@ -1,5 +1,5 @@
 import { Tabs, useRouter } from 'expo-router';
-import { Home, List, Plus, Calendar } from 'lucide-react-native';
+import { Home, TrendingUp, Plus, Calendar } from 'lucide-react-native';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { DateProvider } from '@/contexts/DateContext';
 import { useSafeBottom } from '@/lib/useSafeBottom';
@@ -71,7 +71,7 @@ export default function TabLayout() {
               );
             })}
 
-            {/* 一覧 */}
+            {/* グラフ */}
             {state.routes.slice(1, 2).map((route, idx) => {
               const actualIndex = 1;
               const { options } = descriptors[route.key];
@@ -175,11 +175,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="list"
+        name="graph"
         options={{
-          title: '一覧',
+          title: 'グラフ',
           tabBarIcon: ({ color, focused }) => (
-            <List size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <TrendingUp size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -191,6 +191,10 @@ export default function TabLayout() {
             <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
+      />
+      <Tabs.Screen
+        name="list"
+        options={{ href: null }}
       />
       </Tabs>
     </DateProvider>
