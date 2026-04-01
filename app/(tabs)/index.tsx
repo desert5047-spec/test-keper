@@ -44,6 +44,11 @@ const CARD_IMAGE_SIZE = Dimensions.get('window').width - 32;
 const CARD_IMAGE_HEIGHT_PHOTO = CARD_IMAGE_SIZE;
 const CARD_IMAGE_HEIGHT_NO_PHOTO = 80;
 
+const formatDateMd = (dateStr: string) => {
+  const d = new Date(dateStr);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+};
+
 interface HomeRecordCardProps {
   item: RecordWithImageUrl;
   onPress: (id: string) => void;
@@ -57,16 +62,12 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
   onImageError,
 }: HomeRecordCardProps) {
   const [imgHeight, setImgHeight] = useState(CARD_IMAGE_HEIGHT_PHOTO);
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
-  };
-  const formatEvaluation = (r: TestRecord) =>
-    r.score !== null ? `${r.score}点（${r.max_score}点中）` : (r.stamp || '');
   const subjectColor = getSubjectColor(item.subject);
   const hasPhoto = !!(item.imageUrl && isValidImageUri(item.imageUrl));
   const shouldShowPhoto = hasPhoto && !imageError;
   const imageHeight = shouldShowPhoto ? imgHeight : CARD_IMAGE_HEIGHT_NO_PHOTO;
+  const hasScore = item.score !== null;
+  const maxScore = item.max_score ?? 100;
 
   return (
     <TouchableOpacity
@@ -106,9 +107,6 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
                 }}
               />
             </View>
-            <View style={styles.dateOverlay}>
-              <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
-            </View>
           </>
         ) : (
           <>
@@ -119,9 +117,6 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
                 {imageError ? '写真の読み込みに失敗しました' : '写真なし'}
               </Text>
             )}
-            <View style={styles.dateOverlay}>
-              <Text style={styles.dateOverlayText}>{formatDate(item.date)}</Text>
-            </View>
           </>
         )}
       </View>
@@ -130,7 +125,14 @@ const HomeRecordCard = React.memo(function HomeRecordCard({
           <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
             <Text style={styles.subjectChipText}>{item.subject}</Text>
           </View>
-          <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
+          {hasScore ? (
+            <Text style={styles.scoreRow}>
+              <Text style={styles.scoreMain}>{item.score}</Text>
+              <Text style={styles.scoreSub}> / {maxScore}</Text>
+            </Text>
+          ) : (
+            <Text style={styles.stampText}>{item.stamp || '—'}</Text>
+          )}
         </View>
         {item.memo ? (
           <Text style={styles.memoText} numberOfLines={2} ellipsizeMode="tail">
@@ -375,15 +377,24 @@ export default function HomeScreen() {
   }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: RecordWithImageUrl }) => (
-      <HomeRecordCard
-        item={item}
-        onPress={handlePress}
-        imageError={imageErrors[item.id]}
-        onImageError={handleImageError}
-      />
-    ),
-    [handlePress, handleImageError]
+    ({ item, index }: { item: RecordWithImageUrl; index: number }) => {
+      const prev = index > 0 ? stableRecords[index - 1] : null;
+      const showDateHeader = !prev || prev.date !== item.date;
+      return (
+        <View style={styles.cardGroup}>
+          {showDateHeader ? (
+            <Text style={styles.dateHeaderText}>{formatDateMd(item.date)}</Text>
+          ) : null}
+          <HomeRecordCard
+            item={item}
+            onPress={handlePress}
+            imageError={imageErrors[item.id]}
+            onImageError={handleImageError}
+          />
+        </View>
+      );
+    },
+    [stableRecords, handlePress, imageErrors, handleImageError]
   );
 
   const keyExtractor = useCallback((item: RecordWithImageUrl) => item.id, []);
@@ -665,19 +676,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  dateOverlay: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+  cardGroup: {
+    gap: 6,
   },
-  dateOverlayText: {
-    color: '#fff',
-    fontSize: 13,
-    fontFamily: 'Nunito-SemiBold',
+  dateHeaderText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'Nunito-Regular',
+    marginLeft: 2,
   },
   cardContent: {
     padding: 16,
@@ -701,12 +707,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     lineHeight: 16,
   },
-  evaluationText: {
-    fontSize: 16,
-    color: '#333',
-    fontFamily: 'Nunito-Bold',
+  scoreRow: {
     marginLeft: 12,
-    lineHeight: 20,
+  },
+  scoreMain: {
+    fontSize: 17,
+    color: '#000',
+    fontFamily: 'Nunito-Bold',
+  },
+  scoreSub: {
+    fontSize: 12,
+    color: '#A3A3A3',
+    fontFamily: 'Nunito-Regular',
+  },
+  stampText: {
+    marginLeft: 12,
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'Nunito-Regular',
   },
   memoText: {
     fontSize: 12,

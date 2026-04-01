@@ -65,10 +65,10 @@ interface ListRecordCardProps {
   onPress: (id: string) => void;
 }
 const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: ListRecordCardProps) {
-  const formatEvaluation = (r: TestRecord) =>
-    r.score !== null ? `${r.score}点（${r.max_score}点中）` : (r.stamp || '');
   const subjectColor = getSubjectColor(item.subject);
   const photoUrl = item.imageUrl && isValidImageUri(item.imageUrl) ? item.imageUrl : null;
+  const hasScore = item.score !== null;
+  const maxScore = item.max_score ?? 100;
 
   return (
     <TouchableOpacity
@@ -105,7 +105,14 @@ const ListRecordCard = React.memo(function ListRecordCard({ item, onPress }: Lis
           <View style={[styles.subjectChip, { backgroundColor: subjectColor }]}>
             <Text style={styles.subjectChipText}>{item.subject}</Text>
           </View>
-          <Text style={styles.evaluationText}>{formatEvaluation(item)}</Text>
+          {hasScore ? (
+            <Text style={styles.scoreRow}>
+              <Text style={styles.scoreMain}>{item.score}</Text>
+              <Text style={styles.scoreSub}> / {maxScore}</Text>
+            </Text>
+          ) : (
+            <Text style={styles.stampText}>{item.stamp || '—'}</Text>
+          )}
         </View>
         {item.memo ? (
           <Text style={styles.memoText} numberOfLines={2} ellipsizeMode="tail">
@@ -917,12 +924,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     lineHeight: 14,
   },
-  evaluationText: {
-    fontSize: 15,
-    color: '#333',
-    fontFamily: 'Nunito-Bold',
+  scoreRow: {
     marginLeft: 10,
-    lineHeight: 18,
+    color: '#111',
+  },
+  scoreMain: {
+    fontSize: 16,
+    color: '#111111',
+    fontFamily: 'Nunito-Bold',
+  },
+  scoreSub: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'Nunito-Regular',
+  },
+  stampText: {
+    marginLeft: 10,
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'Nunito-Regular',
   },
   memoText: {
     fontSize: 12,

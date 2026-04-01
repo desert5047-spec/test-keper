@@ -42,7 +42,7 @@ const SUBJECT_COLOR_MAP: Record<string, string> = {
   '数学': '#3498DB',
   '理科': '#27AE60',
   '社会': '#E67E22',
-  '英語': '#2C3E50',
+  '英語': '#8E44AD',
   '生活': '#9B59B6',
   '図工': '#F39C12',
   '音楽': '#1ABC9C',

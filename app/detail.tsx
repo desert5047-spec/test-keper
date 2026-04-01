@@ -859,7 +859,11 @@ export default function DetailScreen() {
           {contextChildren.length > 0 && (
             <View style={[styles.section, { marginTop: 4 }]}>
               <Text style={styles.sectionTitle}>子供</Text>
-              <View style={styles.childChipContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.childChipContainer}
+              >
                 {contextChildren.map((child) => (
                   <TouchableOpacity
                     key={child.id}
@@ -884,7 +888,7 @@ export default function DetailScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             </View>
           )}
 
@@ -892,7 +896,11 @@ export default function DetailScreen() {
             <Text style={styles.sectionTitle}>教科</Text>
             {!showSubjectInput ? (
               <>
-                <View style={styles.chipContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipContainer}
+                >
                   {subjectSet.main.map((subject) => (
                     <TouchableOpacity
                       key={subject}
@@ -920,10 +928,14 @@ export default function DetailScreen() {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
 
                 {showOtherSubjects && (
-                  <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={[styles.chipContainer, { marginTop: 8 }]}
+                  >
                     {subjectSet.other.map((subject) => (
                       <TouchableOpacity
                         key={subject}
@@ -948,10 +960,14 @@ export default function DetailScreen() {
                         </Text>
                       </TouchableOpacity>
                     ))}
-                  </View>
+                  </ScrollView>
                 )}
 
-                <View style={[styles.chipContainer, { marginTop: 8 }]}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[styles.chipContainer, { marginTop: 8 }]}
+                >
                   {!showOtherSubjects && subjectSet.other.length > 0 && (
                     <TouchableOpacity
                       style={styles.chipOther}
@@ -966,7 +982,7 @@ export default function DetailScreen() {
                     activeOpacity={0.7}>
                     <Text style={styles.chipAddText}>+ 教科を追加</Text>
                   </TouchableOpacity>
-                </View>
+                </ScrollView>
               </>
             ) : (
               <View style={styles.subjectInputRow}>
@@ -1591,20 +1607,23 @@ const styles = StyleSheet.create({
   },
   chipContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 8,
   },
   chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
     backgroundColor: '#f0f0f0',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   chipSelected: {
     backgroundColor: '#4A90E2',
   },
   chipText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
     color: '#666',
   },
@@ -1612,28 +1631,28 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   chipOther: {
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
     borderWidth: 1,
     borderColor: '#D0D0D0',
-    backgroundColor: '#F5F5F5',
   },
   chipOtherText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
     color: '#666',
   },
   chipAdd: {
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#4A90E2',
-    backgroundColor: '#fff',
   },
   chipAddText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
     color: '#4A90E2',
   },
@@ -1746,8 +1765,9 @@ const styles = StyleSheet.create({
   },
   childChipContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    alignItems: 'center',
+    paddingRight: 8,
   },
   childChip: {
     flexDirection: 'row',
