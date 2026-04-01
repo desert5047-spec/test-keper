@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
   Dimensions,
   Animated,
 } from 'react-native';
@@ -14,10 +13,9 @@ import { X, RotateCw, Zap, ZapOff, RectangleHorizontal, RectangleVertical } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Accelerometer } from 'expo-sensors';
-import { log, error as logError } from '@/lib/logger';
+import { error as logError } from '@/lib/logger';
 import { useSafeBottom } from '@/lib/useSafeBottom';
 
-const debugLog = log;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const CAMERA_W = SCREEN_W;
@@ -38,8 +36,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   const { safeBottom } = useSafeBottom(16);
   const shutterFlash = useRef(new Animated.Value(0)).current;
 
-  const deviceOrientationRef = useRef<'portrait' | 'landscape'>('portrait');
-  const accelDataRef = useRef({ x: 0, y: -1, z: 0 });
+  const deviceOrientationRef = useRef<'portrait' | 'landscape-left' | 'landscape-right'>('portrait');
 
   const fireShutterFlash = useCallback(() => {
     shutterFlash.setValue(1);
@@ -62,20 +59,24 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   useEffect(() => {
     const HYSTERESIS = 0.2;
     Accelerometer.setUpdateInterval(200);
-    const sub = Accelerometer.addListener(({ x, y, z }) => {
-      accelDataRef.current = { x, y, z };
+    const sub = Accelerometer.addListener(({ x, y }) => {
       const absX = Math.abs(x);
       const absY = Math.abs(y);
       const prev = deviceOrientationRef.current;
+      const wasLandscape = prev.startsWith('landscape');
       let next = prev;
-      if (prev === 'portrait' && absX > absY + HYSTERESIS) {
-        next = 'landscape';
-      } else if (prev === 'landscape' && absY > absX + HYSTERESIS) {
+      if (!wasLandscape && absX > absY + HYSTERESIS) {
+        next = x > 0 ? 'landscape-right' : 'landscape-left';
+      } else if (wasLandscape && absY > absX + HYSTERESIS) {
         next = 'portrait';
+      } else if (wasLandscape && absX > 0.3) {
+        next = x > 0 ? 'landscape-right' : 'landscape-left';
       }
       deviceOrientationRef.current = next;
-      if (!isCapturing && next !== prev) {
-        setCaptureOrientation(next);
+      const newDisplay = next.startsWith('landscape') ? 'landscape' : 'portrait';
+      const oldDisplay = prev.startsWith('landscape') ? 'landscape' : 'portrait';
+      if (!isCapturing && newDisplay !== oldDisplay) {
+        setCaptureOrientation(newDisplay);
       }
     });
     return () => sub.remove();
@@ -115,7 +116,6 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
     try {
       setIsCapturing(true);
       fireShutterFlash();
-      const t0 = Date.now();
 
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
@@ -128,9 +128,8 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         throw new Error('写真のURIが取得できませんでした');
       }
 
-      const accel = accelDataRef.current;
       const physicalOri = deviceOrientationRef.current;
-      const isPhysicalLandscape = physicalOri === 'landscape';
+      const isPhysicalLandscape = physicalOri.startsWith('landscape');
 
       // Step 1: EXIF 正規化のみ（実サイズを確定させる）
       const normalized = await ImageManipulator.manipulateAsync(
@@ -144,49 +143,78 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
       let result;
 
       if (isPhysicalLandscape) {
-        // Step 2a: landscape → 回転 + 必要なら crop
-        const extraRotation = accel.x > 0 ? -90 : 90;
-        const postW = normH;
-        const postH = normW;
-        const targetRatio = 4 / 3;
-        const curRatio = postW / postH;
-        const needsCrop = Number.isFinite(curRatio) && Math.abs(curRatio - targetRatio) > 0.02;
+        // Step 2a: landscape 処理
+        const alreadyLandscape = normW > normH;
 
-        const actions2: ImageManipulator.Action[] = [{ rotate: extraRotation }];
+        if (alreadyLandscape) {
+          // プロダクションビルド: カメラが EXIF で横を正しく処理済み
+          // 追加回転は不要、crop のみ必要なら実施
+          const targetRatio = 4 / 3;
+          const curRatio = normW / normH;
+          const needsCrop = Number.isFinite(curRatio) && Math.abs(curRatio - targetRatio) > 0.02;
 
-        if (needsCrop) {
-          let cropW: number, cropH: number, cropX: number, cropY: number;
-          if (curRatio > targetRatio) {
-            cropH = postH;
-            cropW = Math.round(postH * targetRatio);
-            cropX = Math.round((postW - cropW) / 2);
-            cropY = 0;
+          if (needsCrop) {
+            let cropW: number, cropH: number, cropX: number, cropY: number;
+            if (curRatio > targetRatio) {
+              cropH = normH;
+              cropW = Math.round(normH * targetRatio);
+              cropX = Math.round((normW - cropW) / 2);
+              cropY = 0;
+            } else {
+              cropW = normW;
+              cropH = Math.round(normW / targetRatio);
+              cropX = 0;
+              cropY = Math.round((normH - cropH) / 2);
+            }
+            result = await ImageManipulator.manipulateAsync(
+              normalized.uri,
+              [{ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } }],
+              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+            );
           } else {
-            cropW = postW;
-            cropH = Math.round(postW / targetRatio);
-            cropX = 0;
-            cropY = Math.round((postH - cropH) / 2);
+            result = await ImageManipulator.manipulateAsync(
+              normalized.uri,
+              [],
+              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+            );
           }
-          actions2.push({ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } });
+
+        } else {
+          // 正規化後もポートレート → 手動回転が必要
+          // landscape-left(端末上部が左): RIGHT→TOP = -90 (CCW)
+          // landscape-right(端末上部が右): LEFT→TOP = 90 (CW)
+          const extraRotation = physicalOri === 'landscape-left' ? -90 : 90;
+          const postW = normH;
+          const postH = normW;
+          const targetRatio = 4 / 3;
+          const curRatio = postW / postH;
+          const needsCrop = Number.isFinite(curRatio) && Math.abs(curRatio - targetRatio) > 0.02;
+
+          const actions2: ImageManipulator.Action[] = [{ rotate: extraRotation }];
+
+          if (needsCrop) {
+            let cropW: number, cropH: number, cropX: number, cropY: number;
+            if (curRatio > targetRatio) {
+              cropH = postH;
+              cropW = Math.round(postH * targetRatio);
+              cropX = Math.round((postW - cropW) / 2);
+              cropY = 0;
+            } else {
+              cropW = postW;
+              cropH = Math.round(postW / targetRatio);
+              cropX = 0;
+              cropY = Math.round((postH - cropH) / 2);
+            }
+            actions2.push({ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } });
+          }
+
+          result = await ImageManipulator.manipulateAsync(
+            normalized.uri,
+            actions2,
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+          );
+
         }
-
-        result = await ImageManipulator.manipulateAsync(
-          normalized.uri,
-          actions2,
-          { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
-        );
-
-        debugLog('[CameraScreen] === landscape 処理 ===');
-        debugLog('[CameraScreen] photo(raw)', { w: photo.width, h: photo.height });
-        debugLog('[CameraScreen] exif', photo.exif?.Orientation ?? 'none');
-        debugLog('[CameraScreen] normalized(実際)', { w: normW, h: normH });
-        debugLog('[CameraScreen] accel', { x: accel.x.toFixed(2), y: accel.y.toFixed(2) });
-        debugLog('[CameraScreen] extraRotation', extraRotation);
-        debugLog('[CameraScreen] postRot', { w: postW, h: postH });
-        debugLog('[CameraScreen] needsCrop', needsCrop);
-        debugLog('[CameraScreen] result', { w: result.width, h: result.height });
-        debugLog('[CameraScreen] totalMs', Date.now() - t0);
-        debugLog('[CameraScreen] ========================');
       } else {
         // Step 2b: portrait → 必要なら crop のみ
         const targetRatio = 3 / 4;
@@ -219,16 +247,9 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
           );
         }
 
-        debugLog('[CameraScreen] === portrait 処理 ===');
-        debugLog('[CameraScreen] photo(raw)', { w: photo.width, h: photo.height });
-        debugLog('[CameraScreen] normalized(実際)', { w: normW, h: normH });
-        debugLog('[CameraScreen] needsCrop', needsCrop);
-        debugLog('[CameraScreen] result', { w: result.width, h: result.height });
-        debugLog('[CameraScreen] totalMs', Date.now() - t0);
-        debugLog('[CameraScreen] ========================');
       }
 
-      setCaptureOrientation(physicalOri);
+      setCaptureOrientation(isPhysicalLandscape ? 'landscape' : 'portrait');
       onCapture(result.uri);
     } catch (error: any) {
       logError('[CameraScreen] 撮影エラー');
