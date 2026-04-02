@@ -176,7 +176,7 @@ export default function DetailScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(tabs)/list');
+      router.replace('/(tabs)/index');
     }
   };
 

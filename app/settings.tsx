@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Users, ChevronRight, Home, List, Plus, Calendar, Trash2, LogOut, FileText, Shield, MessageCircle, UserPlus } from 'lucide-react-native';
+import { Users, ChevronRight, Home, TrendingUp, Plus, Calendar, Trash2, LogOut, FileText, Shield, MessageCircle, UserPlus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -326,7 +326,7 @@ export default function SettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.section, styles.sectionFirst]}>
-          <Text style={styles.sectionTitle}>機能</Text>
+          <Text style={styles.sectionTitle}>家族</Text>
 
           <TouchableOpacity
             style={styles.menuItem}
@@ -346,7 +346,6 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>家族</Text>
 
           <TouchableOpacity
             style={styles.menuItem}
@@ -526,7 +525,7 @@ export default function SettingsScreen() {
         ]}>
         <TouchableOpacity
           style={styles.tabButton}
-          onPress={() => router.push('/(tabs)')}
+          onPress={() => router.push('/(tabs)/index')}
           activeOpacity={0.7}>
           <Home size={24} color="#999" strokeWidth={2} />
           <Text style={styles.tabLabel}>ホーム</Text>
@@ -534,10 +533,10 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={styles.tabButton}
-          onPress={() => router.push('/(tabs)/list')}
+          onPress={() => router.push('/(tabs)/graph')}
           activeOpacity={0.7}>
-          <List size={24} color="#999" strokeWidth={2} />
-          <Text style={styles.tabLabel}>一覧</Text>
+          <TrendingUp size={24} color="#999" strokeWidth={2} />
+          <Text style={styles.tabLabel}>グラフ</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -554,7 +553,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/(tabs)/monthly')}
           activeOpacity={0.7}>
           <Calendar size={24} color="#999" strokeWidth={2} />
-          <Text style={styles.tabLabel}>記録</Text>
+          <Text style={styles.tabLabel}>成績</Text>
         </TouchableOpacity>
       </View>
 

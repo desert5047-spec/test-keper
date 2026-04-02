@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Edit3, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, Plus, Edit3, Trash2 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
@@ -290,17 +290,18 @@ export default function ChildrenScreen() {
           }}
           style={styles.backButton}
           activeOpacity={0.7}>
-          <ArrowLeft size={24} color="#333" />
+          <View style={styles.backButtonCircle}>
+            <ChevronLeft size={22} color="#4A90E2" />
+          </View>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>子供設定</Text>
+        <Text style={styles.headerTitle}>子ども設定</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <Text style={styles.description}>
-            兄弟分も記録できます。{'\n'}
-            子供を追加して、それぞれの記録を管理しましょう。
+            子どもを追加して、それぞれの記録を管理しましょう。
           </Text>
 
           {children.length === 0 ? (
@@ -350,7 +351,7 @@ export default function ChildrenScreen() {
           disabled={children.length >= 5}>
           <Plus size={20} color="#fff" />
           <Text style={styles.addButtonText}>
-            {children.length >= 5 ? '上限に達しました（5人）' : '子供を追加'}
+            {children.length >= 5 ? '上限に達しました（5人）' : '子どもを追加'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -490,7 +491,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backButton: {
-    padding: 4,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 20,

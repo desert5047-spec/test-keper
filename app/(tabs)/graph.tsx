@@ -47,7 +47,6 @@ const CHART_PAD = { top: 20, bottom: 20, left: 40, right: 16 };
 const DOT_R = 7;
 const DOT_R_NEWEST = 9;
 const DOT_R_SEL = 10;
-const TOUCH_THRESHOLD = 28;
 const SPARSE_THRESHOLD = 5;
 const Y_TICKS = [0, 25, 50, 75, 100];
 
@@ -112,6 +111,7 @@ export default function GraphScreen() {
   const [count, setCount] = useState<number>(10);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [chartWidth, setChartWidth] = useState(0);
+  const pointTappedRef = useRef(false);
 
   const loadRecords = useCallback(async (opts: { isRefresh?: boolean } = {}) => {
     const isRefresh = opts.isRefresh === true;
@@ -228,19 +228,18 @@ export default function GraphScreen() {
     return { color, opacity: dimmed ? Math.min(opacity * 0.45, 0.2) : opacity };
   }, [filter, selectedIndex]);
 
-  const handleChartPress = useCallback((event: any) => {
-    const { locationX, locationY } = event.nativeEvent;
-    let nearest = -1;
-    let minDist = Infinity;
-    chartPoints.forEach((p, i) => {
-      const d = Math.sqrt((p.x - locationX) ** 2 + (p.y - locationY) ** 2);
-      if (d < TOUCH_THRESHOLD && d < minDist) {
-        minDist = d;
-        nearest = i;
-      }
-    });
-    setSelectedIndex(nearest >= 0 ? nearest : null);
-  }, [chartPoints]);
+  const handlePointPress = useCallback((index: number) => {
+    pointTappedRef.current = true;
+    setSelectedIndex(index);
+  }, []);
+
+  const handleChartBackgroundPress = useCallback(() => {
+    if (pointTappedRef.current) {
+      pointTappedRef.current = false;
+      return;
+    }
+    setSelectedIndex(null);
+  }, []);
 
   const selectedRecord = selectedIndex !== null ? displayRecords[selectedIndex] : null;
 
@@ -271,13 +270,7 @@ export default function GraphScreen() {
       <View style={styles.container}>
         <AppHeader showYearMonthNav={false} safeTopByParent={true} />
 
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: headerTop + 8 }]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => loadRecords({ isRefresh: true })} />
-          }
-        >
+        <View style={[styles.fixedGraphArea, { marginTop: headerTop + 8 }]}>
           {/* Filter chips */}
           <ScrollView
             horizontal
@@ -305,6 +298,7 @@ export default function GraphScreen() {
             })}
           </ScrollView>
 
+          {/* Chart */}
           {showSpinner ? (
             <View style={styles.chartPlaceholder}>
               <ActivityIndicator size="large" color="#4A90E2" />
@@ -321,152 +315,162 @@ export default function GraphScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <>
-              {/* Chart */}
-              <View style={styles.chartContainer} onLayout={handleChartLayout}>
-                {chartWidth > 0 && displayRecords.length > 0 ? (
-                  <>
-                    <Pressable onPress={handleChartPress}>
-                      <Svg width={chartWidth} height={CHART_HEIGHT}>
-                        {Y_TICKS.map(tick => {
-                          const y = CHART_PAD.top + (1 - tick / 100) * plotHeight;
-                          return (
-                            <React.Fragment key={tick}>
-                              <Line
-                                x1={CHART_PAD.left}
-                                y1={y}
-                                x2={chartWidth - CHART_PAD.right}
-                                y2={y}
-                                stroke="#E5E7EB"
-                                strokeWidth={1}
-                              />
-                              <SvgText
-                                x={CHART_PAD.left - 8}
-                                y={y + 4}
-                                textAnchor="end"
-                                fontSize={11}
-                                fill="#9CA3AF"
-                              >
-                                {tick}
-                              </SvgText>
-                            </React.Fragment>
-                          );
-                        })}
-                        {trendLinePoints ? (
-                          <Polyline
-                            points={trendLinePoints}
-                            fill="none"
-                            stroke={trendLineStroke.color}
-                            strokeWidth={TREND_LINE_STROKE_WIDTH}
-                            strokeOpacity={trendLineStroke.opacity}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+            <View style={styles.chartContainer} onLayout={handleChartLayout}>
+              {chartWidth > 0 && displayRecords.length > 0 ? (
+                <Pressable onPress={handleChartBackgroundPress}>
+                  <Svg width={chartWidth} height={CHART_HEIGHT}>
+                    {Y_TICKS.map(tick => {
+                      const y = CHART_PAD.top + (1 - tick / 100) * plotHeight;
+                      return (
+                        <React.Fragment key={tick}>
+                          <Line
+                            x1={CHART_PAD.left}
+                            y1={y}
+                            x2={chartWidth - CHART_PAD.right}
+                            y2={y}
+                            stroke="#E5E7EB"
+                            strokeWidth={1}
                           />
-                        ) : null}
-                        {chartPoints.map((p, i) => {
-                          const isSelected = selectedIndex === i;
-                          const baseR = p.isNewest ? DOT_R_NEWEST : DOT_R;
-                          const r = isSelected ? DOT_R_SEL : baseR;
-                          const dimmed = selectedIndex !== null && !isSelected;
-                          return (
-                            <React.Fragment key={i}>
-                              {isSelected && (
-                                <Circle
-                                  cx={p.x}
-                                  cy={p.y}
-                                  r={DOT_R_SEL + 4}
-                                  fill="none"
-                                  stroke={p.color}
-                                  strokeWidth={2}
-                                  opacity={0.3}
-                                />
-                              )}
-                              {p.isNewest && !isSelected && (
-                                <Circle
-                                  cx={p.x}
-                                  cy={p.y}
-                                  r={baseR + 5}
-                                  fill={p.color}
-                                  opacity={dimmed ? 0.06 : 0.15}
-                                />
-                              )}
-                              <Circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={r}
-                                fill={p.color}
-                                opacity={dimmed ? 0.3 : 1}
-                              />
-                            </React.Fragment>
-                          );
-                        })}
-                      </Svg>
-                    </Pressable>
-                  </>
-                ) : chartWidth > 0 && displayRecords.length === 0 ? (
-                  <View style={styles.chartPlaceholder}>
-                    <Text style={styles.emptyText}>該当する記録がありません</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {/* Count selector */}
-              <View style={styles.countRow}>
-                {COUNT_OPTIONS.map(c => (
-                  <TouchableOpacity
-                    key={c}
-                    style={[styles.countChip, count === c && styles.countChipActive]}
-                    onPress={() => setCount(c)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.countChipText, count === c && styles.countChipTextActive]}>
-                      {c}件
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Detail card */}
-              {selectedRecord && (
-                <TouchableOpacity
-                  style={styles.detailCard}
-                  onPress={() => router.push(`/detail?id=${selectedRecord.id}`)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.detailDot, { backgroundColor: getDotColor(selectedRecord.subject) }]} />
-                  <View style={styles.detailContent}>
-                    <Text style={styles.detailDate}>{formatRecordDate(selectedRecord.date)}</Text>
-                    <Text style={styles.detailSubject}>{selectedRecord.subject}</Text>
-                    <Text style={styles.detailScore}>
-                      {selectedRecord.score}点 / {selectedRecord.max_score}点
-                    </Text>
-                  </View>
-                  <Text style={styles.detailArrow}>›</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Summary stats */}
-              {stats && (
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>表示件数</Text>
-                    <Text style={styles.statValue}>{stats.count}</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>最高</Text>
-                    <Text style={styles.statValue}>{stats.max}</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>最低</Text>
-                    <Text style={styles.statValue}>{stats.min}</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statLabel, { color: '#bbb' }]}>平均</Text>
-                    <Text style={[styles.statValue, styles.statValueMuted]}>{stats.avg}</Text>
-                  </View>
+                          <SvgText
+                            x={CHART_PAD.left - 8}
+                            y={y + 4}
+                            textAnchor="end"
+                            fontSize={11}
+                            fill="#9CA3AF"
+                          >
+                            {tick}
+                          </SvgText>
+                        </React.Fragment>
+                      );
+                    })}
+                    {trendLinePoints ? (
+                      <Polyline
+                        points={trendLinePoints}
+                        fill="none"
+                        stroke={trendLineStroke.color}
+                        strokeWidth={TREND_LINE_STROKE_WIDTH}
+                        strokeOpacity={trendLineStroke.opacity}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    ) : null}
+                    {chartPoints.map((p, i) => {
+                      const isSelected = selectedIndex === i;
+                      const baseR = p.isNewest ? DOT_R_NEWEST : DOT_R;
+                      const r = isSelected ? DOT_R_SEL : baseR;
+                      const dimmed = selectedIndex !== null && !isSelected;
+                      return (
+                        <React.Fragment key={i}>
+                          {isSelected && (
+                            <Circle
+                              cx={p.x}
+                              cy={p.y}
+                              r={DOT_R_SEL + 4}
+                              fill="none"
+                              stroke={p.color}
+                              strokeWidth={2}
+                              opacity={0.3}
+                            />
+                          )}
+                          {p.isNewest && !isSelected && (
+                            <Circle
+                              cx={p.x}
+                              cy={p.y}
+                              r={baseR + 5}
+                              fill={p.color}
+                              opacity={dimmed ? 0.06 : 0.15}
+                            />
+                          )}
+                          <Circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={r}
+                            fill={p.color}
+                            opacity={dimmed ? 0.3 : 1}
+                          />
+                          <Circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={16}
+                            fill="transparent"
+                            onPress={() => handlePointPress(i)}
+                          />
+                        </React.Fragment>
+                      );
+                    })}
+                  </Svg>
+                </Pressable>
+              ) : chartWidth > 0 && displayRecords.length === 0 ? (
+                <View style={styles.chartPlaceholder}>
+                  <Text style={styles.emptyText}>該当する記録がありません</Text>
                 </View>
-              )}
-            </>
+              ) : null}
+            </View>
+          )}
+        </View>
+
+        <ScrollView
+          style={styles.listScroll}
+          contentContainerStyle={styles.listScrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => loadRecords({ isRefresh: true })} />
+          }
+        >
+          {/* Count selector */}
+          <View style={styles.countRow}>
+            {COUNT_OPTIONS.map(c => (
+              <TouchableOpacity
+                key={c}
+                style={[styles.countChip, count === c && styles.countChipActive]}
+                onPress={() => setCount(c)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.countChipText, count === c && styles.countChipTextActive]}>
+                  {c}件
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Detail card */}
+          {selectedRecord && (
+            <TouchableOpacity
+              style={styles.detailCard}
+              onPress={() => router.push(`/detail?id=${selectedRecord.id}`)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.detailInlineText}>
+                <Text style={[styles.detailBullet, { color: getDotColor(selectedRecord.subject) }]}>● </Text>
+                <Text style={styles.detailDateInline}>{formatRecordDate(selectedRecord.date)}　</Text>
+                <Text style={styles.detailSubjectInline}>{selectedRecord.subject}　</Text>
+                <Text style={styles.detailScoreMain}>{selectedRecord.score}</Text>
+                <Text style={styles.detailScoreInline}>／{selectedRecord.max_score}点中</Text>
+              </Text>
+              <Text style={styles.detailArrow}>›</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Summary stats */}
+          {stats && (
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>表示件数</Text>
+                <Text style={styles.statValue}>{stats.count}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>最高</Text>
+                <Text style={styles.statValue}>{stats.max}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>最低</Text>
+                <Text style={styles.statValue}>{stats.min}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={[styles.statLabel, { color: '#bbb' }]}>平均</Text>
+                <Text style={[styles.statValue, styles.statValueMuted]}>{stats.avg}</Text>
+              </View>
+            </View>
           )}
         </ScrollView>
       </View>
@@ -479,7 +483,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
-  scrollContent: {
+  fixedGraphArea: {
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEAEA',
+    backgroundColor: '#f8f8f8',
+    ...Platform.select({
+      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.04)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 1,
+      },
+    }),
+  },
+  listScroll: {
+    flex: 1,
+  },
+  listScrollContent: {
     paddingBottom: 24,
   },
   loadingContainer: {
@@ -595,34 +618,36 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  detailDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginRight: 12,
-  },
-  detailContent: {
+  detailInlineText: {
     flex: 1,
   },
-  detailDate: {
+  detailBullet: {
+    fontSize: 20,
+    color: '#4B5563',
+    fontFamily: 'Nunito-SemiBold',
+  },
+  detailDateInline: {
     fontSize: 12,
     color: '#9CA3AF',
     fontFamily: 'Nunito-SemiBold',
   },
-  detailSubject: {
-    fontSize: 15,
+  detailSubjectInline: {
+    fontSize: 16,
     color: '#1F2937',
     fontFamily: 'Nunito-Bold',
-    marginTop: 2,
   },
-  detailScore: {
+  detailScoreMain: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontFamily: 'Nunito-Bold',
+  },
+  detailScoreInline: {
     fontSize: 14,
     color: '#4B5563',
     fontFamily: 'Nunito-SemiBold',
-    marginTop: 2,
   },
   detailArrow: {
-    fontSize: 22,
+    fontSize: 30,
     color: '#D1D5DB',
     fontFamily: 'Nunito-Bold',
     marginLeft: 8,

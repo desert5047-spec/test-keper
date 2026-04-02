@@ -2,7 +2,7 @@
   "expo": {
     "name": "Test Album",
     "slug": "test-album",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "testalbum",
@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "jp.testalbum.app",
-      "buildNumber": "23",
+      "buildNumber": "24",
       "infoPlist": {
         "NSCameraUsageDescription": "テストの写真を撮影するためにカメラを使用します。",
         "NSPhotoLibraryUsageDescription": "テストの写真を選択するために写真ライブラリへアクセスします。",
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "jp.testalbum.app",
-      "versionCode": 24,
+      "versionCode": 25,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
