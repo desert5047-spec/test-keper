@@ -44,7 +44,7 @@ export function CalendarPicker({
   selectedDate,
   onDateSelect,
   onClose,
-  maxDate = new Date(),
+  maxDate,
 }: CalendarPickerProps) {
   const parseDate = (dateString: string): Date => {
     try {
@@ -119,14 +119,14 @@ export function CalendarPicker({
 
   const handleNextMonth = () => {
     const nextMonth = new Date(monthData.year, monthData.month + 1, 1);
-    if (nextMonth <= maxDate) {
+    if (!maxDate || nextMonth <= maxDate) {
       setCurrentMonth(nextMonth);
     }
   };
 
   const handleDayPress = (day: number) => {
     const newDate = new Date(monthData.year, monthData.month, day);
-    if (newDate <= maxDate) {
+    if (!maxDate || newDate <= maxDate) {
       const formattedDate = `${monthData.year}-${String(monthData.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       onDateSelect(formattedDate);
       onClose();
@@ -147,13 +147,24 @@ export function CalendarPicker({
   };
 
   const isDisabledDay = (day: number): boolean => {
+    if (!maxDate) return false;
     const date = new Date(monthData.year, monthData.month, day);
     return date > maxDate;
   };
 
   const isNextMonthDisabled = (): boolean => {
+    if (!maxDate) return false;
     const nextMonth = new Date(monthData.year, monthData.month + 1, 1);
     return nextMonth > maxDate;
+  };
+
+  const isTodayDay = (day: number): boolean => {
+    const today = new Date();
+    return (
+      today.getFullYear() === monthData.year &&
+      today.getMonth() === monthData.month &&
+      today.getDate() === day
+    );
   };
 
   return (
@@ -233,6 +244,7 @@ export function CalendarPicker({
                       <TouchableOpacity
                         style={[
                           styles.dayButton,
+                          isTodayDay(day) && !selected && styles.dayButtonToday,
                           selected && styles.dayButtonSelected,
                           disabled && styles.dayButtonDisabled,
                         ]}
@@ -364,6 +376,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 8,
+  },
+  dayButtonToday: {
+    borderWidth: 1.5,
+    borderColor: '#4A90E2',
+    backgroundColor: '#EEF5FF',
   },
   dayButtonSelected: {
     backgroundColor: '#4A90E2',

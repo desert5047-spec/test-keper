@@ -778,13 +778,15 @@ export default function AddScreen() {
     }
   };
 
-  const resetForm = () => {
+  const resetForm = (opts?: { keepDate?: boolean }) => {
     setPhotoUri(null);
     setScore('');
     setMaxScore('100');
     setStamp(null);
     setMemo('');
-    setDate(getTodayLocal());
+    if (!opts?.keepDate) {
+      setDate(getTodayLocal());
+    }
   };
 
   const saveConfirmMessage =
@@ -817,7 +819,7 @@ export default function AddScreen() {
             <ChevronLeft size={22} color="#4A90E2" />
           </View>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>記録を残す</Text>
+        <Text style={styles.headerTitle}>テスト結果</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -1161,7 +1163,6 @@ export default function AddScreen() {
           <DateField
             value={date}
             onChange={setDate}
-            maxDate={new Date()}
             placeholder="タップして選択"
           />
         </View>
@@ -1319,7 +1320,7 @@ export default function AddScreen() {
                 onPress={() => {
                   setShowSaveConfirm(false);
                   setPhotoUploadFailed(false);
-                  resetForm();
+                  resetForm({ keepDate: true });
                   setTimeout(() => {
                     scrollRef.current?.scrollTo({ y: 0, animated: true });
                   }, 0);

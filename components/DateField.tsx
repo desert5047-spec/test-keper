@@ -25,7 +25,7 @@ interface DateFieldProps {
 export function DateField({
   value,
   onChange,
-  maxDate = new Date(),
+  maxDate,
   placeholder = 'タップして選択',
 }: DateFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
