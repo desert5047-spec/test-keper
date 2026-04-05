@@ -7,11 +7,11 @@ import {
   ActivityIndicator,
   Dimensions,
   Animated,
+  Platform,
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { X, RotateCw, Zap, ZapOff, RectangleHorizontal, RectangleVertical } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImageManipulator from 'expo-image-manipulator';
 import { Accelerometer } from 'expo-sensors';
 import { error as logError } from '@/lib/logger';
 import { useSafeBottom } from '@/lib/useSafeBottom';
@@ -22,7 +22,10 @@ const CAMERA_W = SCREEN_W;
 const CAMERA_H = Math.round(SCREEN_W * (4 / 3));
 
 interface CameraScreenProps {
-  onCapture: (uri: string) => void;
+  onCapture: (capture: {
+    uri: string;
+    physicalOrientation: 'portrait' | 'landscape-left' | 'landscape-right';
+  }) => void;
   onCancel: () => void;
 }
 
@@ -116,12 +119,15 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
     try {
       setIsCapturing(true);
       fireShutterFlash();
+      // Android は skipProcessing で撮影完了を短縮。
+      // iOS は端末差分（向き/表示崩れ）を避けるため通常処理に寄せる。
+      const shouldSkipProcessing = Platform.OS === 'android';
 
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         base64: false,
-        exif: true,
-        skipProcessing: true,
+        exif: false,
+        skipProcessing: shouldSkipProcessing,
       });
 
       if (!photo.uri) {
@@ -131,126 +137,8 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
       const physicalOri = deviceOrientationRef.current;
       const isPhysicalLandscape = physicalOri.startsWith('landscape');
 
-      // Step 1: EXIF 正規化のみ（実サイズを確定させる）
-      const normalized = await ImageManipulator.manipulateAsync(
-        photo.uri,
-        [{ rotate: 0 }],
-        { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
-      );
-      const normW = normalized.width;
-      const normH = normalized.height;
-
-      let result;
-
-      if (isPhysicalLandscape) {
-        // Step 2a: landscape 処理
-        const alreadyLandscape = normW > normH;
-
-        if (alreadyLandscape) {
-          // プロダクションビルド: カメラが EXIF で横を正しく処理済み
-          // 追加回転は不要、crop のみ必要なら実施
-          const targetRatio = 4 / 3;
-          const curRatio = normW / normH;
-          const needsCrop = Number.isFinite(curRatio) && Math.abs(curRatio - targetRatio) > 0.02;
-
-          if (needsCrop) {
-            let cropW: number, cropH: number, cropX: number, cropY: number;
-            if (curRatio > targetRatio) {
-              cropH = normH;
-              cropW = Math.round(normH * targetRatio);
-              cropX = Math.round((normW - cropW) / 2);
-              cropY = 0;
-            } else {
-              cropW = normW;
-              cropH = Math.round(normW / targetRatio);
-              cropX = 0;
-              cropY = Math.round((normH - cropH) / 2);
-            }
-            result = await ImageManipulator.manipulateAsync(
-              normalized.uri,
-              [{ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } }],
-              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
-            );
-          } else {
-            result = await ImageManipulator.manipulateAsync(
-              normalized.uri,
-              [],
-              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
-            );
-          }
-
-        } else {
-          // 正規化後もポートレート → 手動回転が必要
-          // landscape-left(端末上部が左): RIGHT→TOP = -90 (CCW)
-          // landscape-right(端末上部が右): LEFT→TOP = 90 (CW)
-          const extraRotation = physicalOri === 'landscape-left' ? -90 : 90;
-          const postW = normH;
-          const postH = normW;
-          const targetRatio = 4 / 3;
-          const curRatio = postW / postH;
-          const needsCrop = Number.isFinite(curRatio) && Math.abs(curRatio - targetRatio) > 0.02;
-
-          const actions2: ImageManipulator.Action[] = [{ rotate: extraRotation }];
-
-          if (needsCrop) {
-            let cropW: number, cropH: number, cropX: number, cropY: number;
-            if (curRatio > targetRatio) {
-              cropH = postH;
-              cropW = Math.round(postH * targetRatio);
-              cropX = Math.round((postW - cropW) / 2);
-              cropY = 0;
-            } else {
-              cropW = postW;
-              cropH = Math.round(postW / targetRatio);
-              cropX = 0;
-              cropY = Math.round((postH - cropH) / 2);
-            }
-            actions2.push({ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } });
-          }
-
-          result = await ImageManipulator.manipulateAsync(
-            normalized.uri,
-            actions2,
-            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
-          );
-
-        }
-      } else {
-        // Step 2b: portrait → 必要なら crop のみ
-        const targetRatio = 3 / 4;
-        const curRatio = normW / normH;
-        const needsCrop = Number.isFinite(curRatio) && Math.abs(curRatio - targetRatio) > 0.02;
-
-        if (needsCrop) {
-          let cropW: number, cropH: number, cropX: number, cropY: number;
-          if (curRatio > targetRatio) {
-            cropH = normH;
-            cropW = Math.round(normH * targetRatio);
-            cropX = Math.round((normW - cropW) / 2);
-            cropY = 0;
-          } else {
-            cropW = normW;
-            cropH = Math.round(normW / targetRatio);
-            cropX = 0;
-            cropY = Math.round((normH - cropH) / 2);
-          }
-          result = await ImageManipulator.manipulateAsync(
-            normalized.uri,
-            [{ crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } }],
-            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
-          );
-        } else {
-          result = await ImageManipulator.manipulateAsync(
-            normalized.uri,
-            [],
-            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
-          );
-        }
-
-      }
-
       setCaptureOrientation(isPhysicalLandscape ? 'landscape' : 'portrait');
-      onCapture(result.uri);
+      onCapture({ uri: photo.uri, physicalOrientation: physicalOri });
     } catch (error: any) {
       logError('[CameraScreen] 撮影エラー');
     } finally {

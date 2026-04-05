@@ -69,6 +69,11 @@ interface Child {
   color: string;
 }
 
+type CameraCapturePayload = {
+  uri: string;
+  physicalOrientation: 'portrait' | 'landscape-left' | 'landscape-right';
+};
+
 export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
@@ -99,7 +104,7 @@ export default function AddScreen() {
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
-  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [previewCapture, setPreviewCapture] = useState<CameraCapturePayload | null>(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
@@ -438,32 +443,32 @@ export default function AddScreen() {
     // iOS/Android とも expo-camera + アプリ内プレビュー（再撮影/保存）に統一
     debugLog('[写真撮影] カメラ起動', { platform: Platform.OS });
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
     setShowCamera(true);
   };
 
-  const handleCameraCapture = async (uri: string) => {
+  const handleCameraCapture = async (capture: CameraCapturePayload) => {
     try {
       debugLog('[写真撮影] カメラからURIを取得 → プレビューへ', { platform: Platform.OS });
       try {
-        validateImageUri(uri);
+        validateImageUri(capture.uri);
       } catch (validateError: any) {
         logError('[写真撮影] URI検証エラー');
         Alert.alert('エラー', `画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         return;
       }
-      if (!isValidImageUri(uri)) {
+      if (!isValidImageUri(capture.uri)) {
         logError('[写真撮影] 無効なURI');
         Alert.alert('エラー', '画像の形式が正しくありません');
         return;
       }
-      setPreviewUri(uri);
+      setPreviewCapture(capture);
       setCameraPhase('preview');
     } catch (error: any) {
       logError('[写真撮影] カメラキャプチャ処理エラー');
       setShowCamera(false);
       setCameraPhase('camera');
-      setPreviewUri(null);
+      setPreviewCapture(null);
       Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
     }
   };
@@ -472,19 +477,19 @@ export default function AddScreen() {
     setPhotoUri(uri);
     setShowCamera(false);
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
   };
 
   const handlePreviewRetake = () => {
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
   };
 
   const handleCameraCancel = () => {
     debugLog('[写真撮影] カメラをキャンセル', { platform: Platform.OS });
     setShowCamera(false);
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
   };
 
   const confirmRemovePhoto = () => {
@@ -1291,9 +1296,10 @@ export default function AddScreen() {
         visible={showCamera}
         animationType="slide"
         onRequestClose={handleCameraCancel}>
-        {cameraPhase === 'preview' && previewUri ? (
+        {cameraPhase === 'preview' && previewCapture ? (
           <CameraPreviewScreen
-            imageUri={previewUri}
+            imageUri={previewCapture.uri}
+            physicalOrientation={previewCapture.physicalOrientation}
             onRetake={handlePreviewRetake}
             onSave={handlePreviewSave}
           />

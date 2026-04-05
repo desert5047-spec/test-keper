@@ -7,6 +7,7 @@ export interface Child {
   name: string | null;
   grade: string | null;
   school_level: string | null;
+  birth_date: string | null;
   color: string;
   is_default: boolean;
   user_id: string;
