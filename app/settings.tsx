@@ -525,7 +525,7 @@ export default function SettingsScreen() {
         ]}>
         <TouchableOpacity
           style={styles.tabButton}
-          onPress={() => router.push('/(tabs)/index')}
+          onPress={() => router.push('/(tabs)')}
           activeOpacity={0.7}>
           <Home size={24} color="#999" strokeWidth={2} />
           <Text style={styles.tabLabel}>ホーム</Text>
