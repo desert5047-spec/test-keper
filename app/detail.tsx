@@ -707,7 +707,7 @@ export default function DetailScreen() {
         throw error;
       }
 
-      router.replace('/(tabs)/list');
+      router.replace('/(tabs)');
     } catch (e: any) {
       logError('[記録削除] 削除例外', e);
       if (Platform.OS === 'web') {

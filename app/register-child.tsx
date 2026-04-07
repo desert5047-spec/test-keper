@@ -17,6 +17,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useChild } from '@/contexts/ChildContext';
 import { useFonts, Nunito_400Regular, Nunito_700Bold, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
 import { SCHOOL_LEVELS, getGradesForLevel, type SchoolLevel } from '@/lib/subjects';
+import { getDefaultBirthDateForGrade, inferGradeFromBirthDate } from '@/lib/grade';
+import { BirthDatePickerField } from '@/components/BirthDatePickerField';
 
 export default function RegisterChildScreen() {
   const router = useRouter();
@@ -25,6 +27,7 @@ export default function RegisterChildScreen() {
   const [name, setName] = useState('');
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel>('elementary');
   const [grade, setGrade] = useState<number | null>(null);
+  const [birthDate, setBirthDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [fontsLoaded] = useFonts({
@@ -58,6 +61,21 @@ export default function RegisterChildScreen() {
     setGrade(null);
   };
 
+  const handleBirthDateChange = (value: string) => {
+    setBirthDate(value);
+    const inferred = inferGradeFromBirthDate(value);
+    if (inferred) {
+      setSchoolLevel(inferred.schoolLevel);
+      setGrade(inferred.grade);
+    }
+  };
+
+  const handleGradeSelect = (nextGrade: number) => {
+    setGrade(nextGrade);
+    // 学年主導UX: 学年変更時は代表生年月日(4/2)を毎回更新する。
+    setBirthDate(getDefaultBirthDateForGrade(schoolLevel, nextGrade));
+  };
+
   if (!fontsLoaded) {
     return null;
   }
@@ -87,8 +105,10 @@ export default function RegisterChildScreen() {
 
     const { error } = await supabase.from('children').insert({
       name: trimmedName,
+      // 互換用途: birth_date が未設定の既存データ向けに grade/school_level も保存継続。
       grade: grade.toString(),
       school_level: schoolLevel,
+      birth_date: birthDate.trim() || null,
       color: '#999999',
       is_default: false,
       user_id: user.id,
@@ -174,7 +194,7 @@ export default function RegisterChildScreen() {
                     grade === gradeOption.value && styles.gradeButtonSelected,
                     pressed && styles.gradeButtonPressed,
                   ]}
-                  onPress={() => setGrade(gradeOption.value)}
+                  onPress={() => handleGradeSelect(gradeOption.value)}
                   android_ripple={{ color: 'transparent' }}>
                   <Text
                     style={[
@@ -190,6 +210,16 @@ export default function RegisterChildScreen() {
               ))}
             </View>
             <Text style={styles.hint}>あとから変更できます</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.optionalLabel}>生年月日（任意）</Text>
+            <BirthDatePickerField
+              value={birthDate}
+              onChange={handleBirthDateChange}
+              placeholder="タップして選択"
+            />
+            <Text style={styles.optionalHint}>通常は学年選択だけでOKです（未入力時は内部で 4/2 を設定）</Text>
           </View>
         </View>
 
@@ -260,6 +290,17 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#999',
+    marginTop: 4,
+  },
+  optionalLabel: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#888',
+  },
+  optionalHint: {
+    fontSize: 11,
     fontFamily: 'Nunito-Regular',
     color: '#999',
     marginTop: 4,

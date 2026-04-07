@@ -10,6 +10,7 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, Plus, Edit3, Trash2 } from 'lucide-react-native';
@@ -19,14 +20,17 @@ import { useChild } from '@/contexts/ChildContext';
 import { supabase } from '@/lib/supabase';
 import { deleteImage } from '@/utils/imageUpload';
 import { error as logError } from '@/lib/logger';
+import { BirthDatePickerField } from '@/components/BirthDatePickerField';
 
 import { SCHOOL_LEVELS, getGradesForLevel, getGradeDisplayLabel, type SchoolLevel } from '@/lib/subjects';
+import { getDefaultBirthDateForGrade, inferGradeFromBirthDate, resolveCurrentSchoolInfo } from '@/lib/grade';
 
 interface Child {
   id: string;
   name: string | null;
   grade: string | null;
   school_level: SchoolLevel | null;
+  birth_date: string | null;
   color: string;
   is_default: boolean;
 }
@@ -47,6 +51,7 @@ export default function ChildrenScreen() {
   const [name, setName] = useState('');
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel>('elementary');
   const [grade, setGrade] = useState<number | null>(null);
+  const [birthDate, setBirthDate] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
 
   useEffect(() => {
@@ -84,17 +89,48 @@ export default function ChildrenScreen() {
     setName('');
     setSchoolLevel('elementary');
     setGrade(null);
+    setBirthDate('');
     setSelectedColor(COLORS[0]);
     setShowModal(true);
   };
 
   const openEditModal = (child: Child) => {
+    const resolved = resolveCurrentSchoolInfo({
+      birthDate: child.birth_date,
+      schoolLevel: child.school_level,
+      grade: child.grade,
+    });
     setEditingChild(child);
     setName(child.name || '');
-    setSchoolLevel(child.school_level || 'elementary');
-    setGrade(child.grade ? parseInt(child.grade) : null);
+    setSchoolLevel(resolved.schoolLevel ?? 'elementary');
+    setGrade(resolved.grade);
+    setBirthDate(child.birth_date || '');
     setSelectedColor(child.color);
     setShowModal(true);
+  };
+
+  const handleBirthDateChange = (value: string) => {
+    setBirthDate(value);
+    const inferred = inferGradeFromBirthDate(value);
+    if (inferred) {
+      setSchoolLevel(inferred.schoolLevel);
+      setGrade(inferred.grade);
+    }
+  };
+
+  const handleGradeSelect = (nextGrade: number) => {
+    setGrade(nextGrade);
+    // 学年主導UX: 学年変更時は代表生年月日(4/2)を毎回更新する。
+    setBirthDate(getDefaultBirthDateForGrade(schoolLevel, nextGrade));
+  };
+
+  const getDisplayGrade = (child: Child) => {
+    const resolved = resolveCurrentSchoolInfo({
+      birthDate: child.birth_date,
+      schoolLevel: child.school_level,
+      grade: child.grade,
+    });
+    return getGradeDisplayLabel(resolved.schoolLevel, resolved.grade);
   };
 
   const handleSave = async () => {
@@ -130,8 +166,10 @@ export default function ChildrenScreen() {
         .from('children')
         .update({
           name: trimmedName,
+          // 互換用途: birth_date が未設定の既存データ向けに grade/school_level も保存継続。
           grade: grade?.toString(),
           school_level: schoolLevel,
+          birth_date: birthDate.trim() || null,
           color: selectedColor,
         })
         .eq('id', editingChild.id)
@@ -154,8 +192,10 @@ export default function ChildrenScreen() {
         .from('children')
         .insert({
           name: trimmedName,
+          // 互換用途: birth_date が未設定の既存データ向けに grade/school_level も保存継続。
           grade: grade?.toString(),
           school_level: schoolLevel,
+          birth_date: birthDate.trim() || null,
           color: selectedColor,
           is_default: false,
           user_id: user.id,
@@ -317,8 +357,8 @@ export default function ChildrenScreen() {
                     <View style={[styles.colorBadge, { backgroundColor: child.color }]} />
                     <View style={styles.childInfo}>
                       <Text style={styles.childName}>{child.name || '未設定'}</Text>
-                      {child.grade && (
-                        <Text style={styles.childGrade}>{getGradeDisplayLabel(child.school_level, child.grade)}</Text>
+                      {(child.grade || child.birth_date) && (
+                        <Text style={styles.childGrade}>{getDisplayGrade(child)}</Text>
                       )}
                     </View>
                   </View>
@@ -363,9 +403,18 @@ export default function ChildrenScreen() {
         animationType="fade"
         onRequestClose={() => setShowModal(false)}>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKeyboardWrap}
+          >
           <View style={styles.modalContent}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
             <Text style={styles.modalTitle}>
-              {editingChild ? '子供を編集' : '子供を追加'}
+              {editingChild ? '子どもの設定' : '子どもを追加'}
             </Text>
 
             <View style={styles.modalSection}>
@@ -420,7 +469,7 @@ export default function ChildrenScreen() {
                       styles.gradeButton,
                       grade === gradeOption.value && styles.gradeButtonSelected,
                     ]}
-                    onPress={() => setGrade(gradeOption.value)}
+                    onPress={() => handleGradeSelect(gradeOption.value)}
                     activeOpacity={0.7}>
                     <Text
                       style={[
@@ -432,6 +481,16 @@ export default function ChildrenScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalOptionalLabel}>生年月日（任意）</Text>
+              <BirthDatePickerField
+                value={birthDate}
+                onChange={handleBirthDateChange}
+                placeholder="タップして選択"
+              />
+              <Text style={styles.modalHint}>通常は学年選択だけでOKです（未入力時は内部で 4/2 を設定）</Text>
             </View>
 
             <View style={styles.modalSection}>
@@ -466,7 +525,9 @@ export default function ChildrenScreen() {
                 <Text style={styles.modalSaveText}>保存</Text>
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
       </View>
@@ -481,14 +542,13 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: 16,
-    paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    height: 52,
   },
   backButton: {
     width: 44,
@@ -629,28 +689,47 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modalKeyboardWrap: {
+    width: '100%',
+    alignItems: 'center',
   },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 460,
+    maxHeight: '90%',
+  },
+  modalScroll: {
+    width: '100%',
+  },
+  modalScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 18,
   },
   modalTitle: {
     fontSize: 20,
     fontFamily: 'Nunito-Bold',
     color: '#333',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modalSection: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   modalLabel: {
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
     color: '#333',
+    marginBottom: 8,
+  },
+  modalOptionalLabel: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: '#777',
     marginBottom: 8,
   },
   modalInput: {
@@ -739,7 +818,7 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 4,
+    marginTop: 8,
   },
   modalCancelButton: {
     flex: 1,

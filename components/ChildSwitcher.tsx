@@ -13,6 +13,7 @@ import { ChevronDown } from 'lucide-react-native';
 import { useChild } from '@/contexts/ChildContext';
 import { useRouter, usePathname } from 'expo-router';
 import { getGradeDisplayLabel, type SchoolLevel } from '@/lib/subjects';
+import { resolveCurrentSchoolInfo } from '@/lib/grade';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const ANIM_DURATION = 250;
@@ -68,7 +69,7 @@ export function ChildSwitcher() {
     setSelectedChildId(childId);
     closeModal(() => {
       if (pathname.includes('/detail')) {
-        router.replace('/(tabs)/list');
+        router.replace('/(tabs)');
       }
     });
   };
@@ -76,6 +77,15 @@ export function ChildSwitcher() {
   if (!selectedChild) return null;
 
   const showChevron = children.length > 1;
+
+  const getDisplayGrade = (child: (typeof children)[number]) => {
+    const resolved = resolveCurrentSchoolInfo({
+      birthDate: child.birth_date,
+      schoolLevel: child.school_level as SchoolLevel,
+      grade: child.grade,
+    });
+    return getGradeDisplayLabel(resolved.schoolLevel, resolved.grade);
+  };
 
   return (
     <>
@@ -135,8 +145,8 @@ export function ChildSwitcher() {
                     </View>
                     <View style={styles.childInfo}>
                       <Text style={styles.childName}>{child.name || '未設定'}</Text>
-                      {child.grade && (
-                        <Text style={styles.childGrade}>{getGradeDisplayLabel(child.school_level as SchoolLevel, child.grade)}</Text>
+                      {(child.grade || child.birth_date) && (
+                        <Text style={styles.childGrade}>{getDisplayGrade(child)}</Text>
                       )}
                     </View>
                   </View>

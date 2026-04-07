@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { resolveCurrentSchoolInfo } from '@/lib/grade';
 
 const SELECTED_CHILD_ID_KEY = '@selected_child_id';
 
@@ -17,6 +18,7 @@ interface Child {
   name: string | null;
   grade: number | null;
   school_level: string | null;
+  birth_date: string | null;
   color: string;
 }
 
@@ -84,7 +86,21 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
       debugLog(`[ChildContext] ${data.length}人の子供を取得`, { 
         platform: Platform.OS 
       });
-      setChildren(data);
+      const normalizedChildren = data.map((child) => {
+        const resolved = resolveCurrentSchoolInfo({
+          birthDate: child.birth_date,
+          schoolLevel: child.school_level,
+          grade: child.grade,
+        });
+        if (!resolved.schoolLevel || !resolved.grade) return child;
+        // birth_date があれば毎回現在の学校年度で再計算し、なければ保存値を使う。
+        return {
+          ...child,
+          grade: resolved.grade,
+          school_level: resolved.schoolLevel,
+        };
+      });
+      setChildren(normalizedChildren);
       
       // selectedChildIdが設定されていない、または現在のselectedChildIdがchildrenに存在しない場合
       if (!selectedChildId || !data.find(c => c.id === selectedChildId)) {

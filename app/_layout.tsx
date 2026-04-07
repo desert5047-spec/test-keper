@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LogBox, Platform, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -24,9 +25,14 @@ console.warn = () => {};
 
 const debugLog = log;
 
-void SplashScreen.preventAutoHideAsync().catch((error) => {
-  warn('[RootLayout] SplashScreen.preventAutoHideAsyncエラー');
-});
+const isExpoGo = (Constants as any).appOwnership === 'expo';
+const shouldManageNativeSplash = Platform.OS !== 'web' && !isExpoGo;
+
+if (shouldManageNativeSplash) {
+  void SplashScreen.preventAutoHideAsync().catch(() => {
+    warn('[RootLayout] SplashScreen.preventAutoHideAsyncエラー');
+  });
+}
 
 // 無効なリフレッシュトークンエラーはアプリ側で signOut して処理するため、コンソールの ERROR 表示を抑制
 LogBox.ignoreLogs(['Invalid Refresh Token', 'Refresh Token Not Found', 'AuthApiError']);
@@ -143,16 +149,18 @@ export default function RootLayout() {
 
   useEffect(() => {
     try {
-      if (fontsLoaded || fontError) {
+      if ((fontsLoaded || fontError) && shouldManageNativeSplash) {
         debugLog('[RootLayout] フォント読み込み完了、スプラッシュ画面を非表示', { fontsLoaded, fontError: !!fontError, platform: Platform.OS });
         SplashScreen.hideAsync().catch(() => {
-          logError('[RootLayout] SplashScreen.hideAsyncエラー');
+          // Expo Go 等ではネイティブスプラッシュ未登録のため握りつぶす
         });
       }
     } catch (error) {
       logError('[RootLayout] useEffectエラー');
       // エラーが発生してもスプラッシュ画面を非表示にする
-      SplashScreen.hideAsync().catch(() => {});
+      if (shouldManageNativeSplash) {
+        SplashScreen.hideAsync().catch(() => {});
+      }
     }
   }, [fontsLoaded, fontError]);
 

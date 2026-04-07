@@ -69,6 +69,11 @@ interface Child {
   color: string;
 }
 
+type CameraCapturePayload = {
+  uri: string;
+  physicalOrientation: 'portrait' | 'landscape-left' | 'landscape-right';
+};
+
 export default function AddScreen() {
   const debugLog = log;
   const router = useRouter();
@@ -77,9 +82,10 @@ export default function AddScreen() {
   const headerTop = useHeaderTop();
   const { user, familyId, isFamilyReady } = useAuth();
   const { selectedChildId: contextSelectedChildId, children: contextChildren, selectedChild } = useChild();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const isAndroid = Platform.OS === 'android';
   const footerH = 72;
+  const bottomPad = (isAndroid ? footerH : 0) + Math.max(insets.bottom, 12) + 16 + (isAndroid ? 100 : 0);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('国語');
   const [newSubject, setNewSubject] = useState<string>('');
@@ -95,11 +101,12 @@ export default function AddScreen() {
   const [memo, setMemo] = useState<string>('');
   const [isMemoOpen, setIsMemoOpen] = useState(false);
   const [isMemoFocused, setIsMemoFocused] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPhase, setCameraPhase] = useState<'camera' | 'preview'>('camera');
-  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [previewCapture, setPreviewCapture] = useState<CameraCapturePayload | null>(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
@@ -146,6 +153,20 @@ export default function AddScreen() {
       setSelectedChildId(contextSelectedChildId);
     }
   }, [contextSelectedChildId]);
+
+  useEffect(() => {
+    if (!isAndroid) return;
+    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setIsKeyboardVisible(false);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [isAndroid]);
 
   // Androidでexpo-cameraを使用するため、この処理は不要になりました
   // ただし、エラー回避のため、コードは残しています（実行されません）
@@ -438,32 +459,32 @@ export default function AddScreen() {
     // iOS/Android とも expo-camera + アプリ内プレビュー（再撮影/保存）に統一
     debugLog('[写真撮影] カメラ起動', { platform: Platform.OS });
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
     setShowCamera(true);
   };
 
-  const handleCameraCapture = async (uri: string) => {
+  const handleCameraCapture = async (capture: CameraCapturePayload) => {
     try {
       debugLog('[写真撮影] カメラからURIを取得 → プレビューへ', { platform: Platform.OS });
       try {
-        validateImageUri(uri);
+        validateImageUri(capture.uri);
       } catch (validateError: any) {
         logError('[写真撮影] URI検証エラー');
         Alert.alert('エラー', `画像のURI検証に失敗しました: ${validateError.message || '不明なエラー'}`);
         return;
       }
-      if (!isValidImageUri(uri)) {
+      if (!isValidImageUri(capture.uri)) {
         logError('[写真撮影] 無効なURI');
         Alert.alert('エラー', '画像の形式が正しくありません');
         return;
       }
-      setPreviewUri(uri);
+      setPreviewCapture(capture);
       setCameraPhase('preview');
     } catch (error: any) {
       logError('[写真撮影] カメラキャプチャ処理エラー');
       setShowCamera(false);
       setCameraPhase('camera');
-      setPreviewUri(null);
+      setPreviewCapture(null);
       Alert.alert('エラー', error?.message || '画像の処理に失敗しました');
     }
   };
@@ -472,19 +493,19 @@ export default function AddScreen() {
     setPhotoUri(uri);
     setShowCamera(false);
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
   };
 
   const handlePreviewRetake = () => {
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
   };
 
   const handleCameraCancel = () => {
     debugLog('[写真撮影] カメラをキャンセル', { platform: Platform.OS });
     setShowCamera(false);
     setCameraPhase('camera');
-    setPreviewUri(null);
+    setPreviewCapture(null);
   };
 
   const confirmRemovePhoto = () => {
@@ -778,19 +799,24 @@ export default function AddScreen() {
     }
   };
 
-  const resetForm = () => {
+  const resetForm = (opts?: { keepDate?: boolean }) => {
     setPhotoUri(null);
     setScore('');
     setMaxScore('100');
     setStamp(null);
     setMemo('');
-    setDate(getTodayLocal());
+    if (!opts?.keepDate) {
+      setDate(getTodayLocal());
+    }
   };
 
   const saveConfirmMessage =
     photoUploadFailed
       ? '記録は保存されましたが、写真のアップロードに失敗しました。\n続けて入力しますか？'
       : '記録は保存されました。\n続けて入力しますか？';
+  const footerPaddingBottom = isAndroid && isKeyboardVisible ? 8 : 12 + insets.bottom;
+  const footerPaddingTop = isAndroid && isKeyboardVisible ? 6 : 10;
+  const scrollBottomPadding = isAndroid && isKeyboardVisible ? 16 : footerH + 16;
 
   const goBackOrToList = () => {
     if (router.canGoBack?.()) {
@@ -801,9 +827,10 @@ export default function AddScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right']}>
         <KeyboardAvoidingView
         style={{ flex: 1 }}
+        enabled={Platform.OS === 'ios'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
         <View style={{ flex: 1 }}>
@@ -817,22 +844,18 @@ export default function AddScreen() {
             <ChevronLeft size={22} color="#4A90E2" />
           </View>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>記録を残す</Text>
+        <Text style={styles.headerTitle}>テスト結果</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
-        ref={scrollRef}
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={{
           paddingTop: 0,
-          paddingBottom: footerH + 16,
+          paddingBottom: scrollBottomPadding,
         }}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => {
-          if (!isAndroid || !isMemoFocused) return;
-          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-        }}
         keyboardDismissMode="interactive"
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustKeyboardInsets={Platform.OS === 'ios' ? false : undefined}
@@ -1161,7 +1184,6 @@ export default function AddScreen() {
           <DateField
             value={date}
             onChange={setDate}
-            maxDate={new Date()}
             placeholder="タップして選択"
           />
         </View>
@@ -1194,7 +1216,15 @@ export default function AddScreen() {
               onFocus={() => {
                 if (!isAndroid) return;
                 setIsMemoFocused(true);
-                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+                if (__DEV__) debugLog('[ADD][memo] onFocus', { hasRef: !!scrollViewRef.current });
+                setTimeout(() => {
+                  if (__DEV__) debugLog('[ADD][memo] scrollToEnd@50ms', { hasRef: !!scrollViewRef.current });
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 50);
+                setTimeout(() => {
+                  if (__DEV__) debugLog('[ADD][memo] scrollToEnd@180ms', { hasRef: !!scrollViewRef.current });
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 180);
               }}
               onBlur={() => {
                 if (!isAndroid) return;
@@ -1205,6 +1235,8 @@ export default function AddScreen() {
           <Text style={styles.memoCharCount}>{memo.length} / 200</Text>
         </View>
 
+        <View style={{ height: isAndroid && isMemoFocused ? bottomPad : 0, backgroundColor: '#fff' }} />
+
       </ScrollView>
 
       {errorMessage ? (
@@ -1212,7 +1244,14 @@ export default function AddScreen() {
           <Text style={styles.errorMessageText}>{errorMessage}</Text>
         </View>
       ) : null}
-      <View style={[styles.fixedFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View
+        style={[
+          styles.fixedFooter,
+          {
+            paddingTop: footerPaddingTop,
+            paddingBottom: footerPaddingBottom,
+          },
+        ]}>
         <TouchableOpacity
           style={[
             styles.bottomSaveButton,
@@ -1288,20 +1327,26 @@ export default function AddScreen() {
 
       <Modal
         visible={showCamera}
-        animationType="slide"
+        animationType="none"
+        presentationStyle="fullScreen"
+        statusBarTranslucent={false}
+        hardwareAccelerated
         onRequestClose={handleCameraCancel}>
-        {cameraPhase === 'preview' && previewUri ? (
-          <CameraPreviewScreen
-            imageUri={previewUri}
-            onRetake={handlePreviewRetake}
-            onSave={handlePreviewSave}
-          />
-        ) : (
-          <CameraScreen
-            onCapture={handleCameraCapture}
-            onCancel={handleCameraCancel}
-          />
-        )}
+        <View style={styles.cameraModalContainer}>
+          {cameraPhase === 'preview' && previewCapture ? (
+            <CameraPreviewScreen
+              imageUri={previewCapture.uri}
+              physicalOrientation={previewCapture.physicalOrientation}
+              onRetake={handlePreviewRetake}
+              onSave={handlePreviewSave}
+            />
+          ) : (
+            <CameraScreen
+              onCapture={handleCameraCapture}
+              onCancel={handleCameraCancel}
+            />
+          )}
+        </View>
       </Modal>
 
       <Modal
@@ -1319,9 +1364,9 @@ export default function AddScreen() {
                 onPress={() => {
                   setShowSaveConfirm(false);
                   setPhotoUploadFailed(false);
-                  resetForm();
+                  resetForm({ keepDate: true });
                   setTimeout(() => {
-                    scrollRef.current?.scrollTo({ y: 0, animated: true });
+                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
                   }, 0);
                 }}
                 activeOpacity={0.7}>
@@ -1989,5 +2034,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
     color: '#fff',
+  },
+  cameraModalContainer: {
+    flex: 1,
+    backgroundColor: '#000',
   },
 });

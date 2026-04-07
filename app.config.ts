@@ -43,6 +43,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     if (!supabaseAnonKey) supabaseAnonKey = 'sb_publishable_rbyn5OYRcxTARliQAn8B7g_y5pkgOby';
   }
 
+  const blockedPermissions = Array.from(
+    new Set([
+      ...(config.android?.blockedPermissions ?? []),
+      'android.permission.ACTIVITY_RECOGNITION',
+    ])
+  );
+
   return {
     ...config,
     version: pkg.version, // ← version を package.json から取得
@@ -76,6 +83,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.android,
       package: 'jp.testalbum.app',
       versionCode: 23,
+      blockedPermissions,
       intentFilters: [
         {
           action: 'VIEW',
