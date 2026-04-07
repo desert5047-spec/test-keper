@@ -13,6 +13,7 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { X, RotateCw, Zap, ZapOff, RectangleHorizontal, RectangleVertical } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Accelerometer } from 'expo-sensors';
+import * as Haptics from 'expo-haptics';
 import { error as logError } from '@/lib/logger';
 import { useSafeBottom } from '@/lib/useSafeBottom';
 
@@ -29,26 +30,81 @@ interface CameraScreenProps {
   onCancel: () => void;
 }
 
+const LiveCameraSurface = React.memo(function LiveCameraSurface({
+  cameraRef,
+  facing,
+  torchOn,
+}: {
+  cameraRef: React.RefObject<CameraView | null>;
+  facing: CameraType;
+  torchOn: boolean;
+}) {
+  return (
+    <View style={styles.cameraWrap}>
+      <CameraView
+        ref={cameraRef}
+        style={styles.cameraView}
+        facing={facing}
+        mode="picture"
+        animateShutter={false}
+        flash="off"
+        enableTorch={torchOn}
+      >
+        {/* L字コーナーガイド */}
+        <View style={styles.cornerOverlay} pointerEvents="none">
+          <View style={[styles.corner, styles.cTL]} />
+          <View style={[styles.corner, styles.cTR]} />
+          <View style={[styles.corner, styles.cBL]} />
+          <View style={[styles.corner, styles.cBR]} />
+        </View>
+      </CameraView>
+    </View>
+  );
+});
+
 export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [isCapturingUi, setIsCapturingUi] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [captureOrientation, setCaptureOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const cameraRef = useRef<CameraView>(null);
+  const isCapturingRef = useRef(false);
   const { safeBottom } = useSafeBottom(16);
-  const shutterFlash = useRef(new Animated.Value(0)).current;
+  const captureButtonScale = useRef(new Animated.Value(1)).current;
 
   const deviceOrientationRef = useRef<'portrait' | 'landscape-left' | 'landscape-right'>('portrait');
 
-  const fireShutterFlash = useCallback(() => {
-    shutterFlash.setValue(1);
-    Animated.timing(shutterFlash, {
-      toValue: 0,
-      duration: 180,
+  const playCaptureButtonFeedback = useCallback(() => {
+    const minScale = Platform.OS === 'android' ? 0.97 : 0.95;
+    captureButtonScale.stopAnimation();
+    Animated.sequence([
+      Animated.timing(captureButtonScale, {
+        toValue: minScale,
+        duration: 70,
+        useNativeDriver: true,
+      }),
+      Animated.timing(captureButtonScale, {
+        toValue: 1,
+        duration: 110,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [captureButtonScale]);
+
+  const triggerLightHaptics = useCallback(() => {
+    if (Platform.OS === 'web') return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, []);
+
+  const resetCaptureButtonScale = useCallback(() => {
+    captureButtonScale.stopAnimation();
+    Animated.timing(captureButtonScale, {
+      toValue: 1,
+      duration: 80,
       useNativeDriver: true,
     }).start();
-  }, [shutterFlash]);
+  }, [captureButtonScale]);
 
   const toggleFacing = useCallback(() => {
     setTorchOn(false);
@@ -78,12 +134,12 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
       deviceOrientationRef.current = next;
       const newDisplay = next.startsWith('landscape') ? 'landscape' : 'portrait';
       const oldDisplay = prev.startsWith('landscape') ? 'landscape' : 'portrait';
-      if (!isCapturing && newDisplay !== oldDisplay) {
+      if (!isCapturingRef.current && newDisplay !== oldDisplay) {
         setCaptureOrientation(newDisplay);
       }
     });
     return () => sub.remove();
-  }, [isCapturing]);
+  }, []);
 
   useEffect(() => {
     if (!permission) {
@@ -92,11 +148,7 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   }, [permission, requestPermission]);
 
   if (!permission) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <View style={styles.container} />;
   }
 
   if (!permission.granted) {
@@ -114,20 +166,18 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
   }
 
   const handleCapture = async () => {
-    if (!cameraRef.current || isCapturing) return;
+    if (!cameraRef.current || isCapturingRef.current) return;
 
     try {
-      setIsCapturing(true);
-      fireShutterFlash();
-      // Android は skipProcessing で撮影完了を短縮。
-      // iOS は端末差分（向き/表示崩れ）を避けるため通常処理に寄せる。
-      const shouldSkipProcessing = Platform.OS === 'android';
-
+      isCapturingRef.current = true;
+      setIsCapturingUi(true);
+      playCaptureButtonFeedback();
+      triggerLightHaptics();
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 1,
         base64: false,
         exif: false,
-        skipProcessing: shouldSkipProcessing,
+        skipProcessing: true,
       });
 
       if (!photo.uri) {
@@ -135,14 +185,13 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
       }
 
       const physicalOri = deviceOrientationRef.current;
-      const isPhysicalLandscape = physicalOri.startsWith('landscape');
-
-      setCaptureOrientation(isPhysicalLandscape ? 'landscape' : 'portrait');
       onCapture({ uri: photo.uri, physicalOrientation: physicalOri });
     } catch (error: any) {
       logError('[CameraScreen] 撮影エラー');
     } finally {
-      setIsCapturing(false);
+      isCapturingRef.current = false;
+      setIsCapturingUi(false);
+      resetCaptureButtonScale();
     }
   };
 
@@ -165,30 +214,11 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
         </View>
       </SafeAreaView>
 
-      <View style={styles.cameraWrap}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.cameraView}
-          facing={facing}
-          mode="picture"
-          enableTorch={torchOn}
-        >
-          {/* L字コーナーガイド */}
-          <View style={styles.cornerOverlay} pointerEvents="none">
-            <View style={[styles.corner, styles.cTL]} />
-            <View style={[styles.corner, styles.cTR]} />
-            <View style={[styles.corner, styles.cBL]} />
-            <View style={[styles.corner, styles.cBR]} />
-          </View>
-
-        </CameraView>
-
-        {/* シャッターフラッシュ */}
-        <Animated.View
-          style={[styles.shutterFlash, { opacity: shutterFlash }]}
-          pointerEvents="none"
-        />
-      </View>
+      <LiveCameraSurface
+        cameraRef={cameraRef}
+        facing={facing}
+        torchOn={torchOn}
+      />
 
       <View style={[styles.controls, { paddingBottom: safeBottom + 8 }]}>
         <TouchableOpacity
@@ -199,18 +229,20 @@ export function CameraScreen({ onCapture, onCancel }: CameraScreenProps) {
           <RotateCw size={24} color="#fff" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.captureButton, isCapturing && styles.captureButtonDisabled]}
-          onPress={handleCapture}
-          disabled={isCapturing}
-          activeOpacity={0.8}
-        >
-          {isCapturing ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <View style={styles.captureButtonInner} />
-          )}
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: captureButtonScale }] }}>
+          <TouchableOpacity
+            style={[styles.captureButton, isCapturingUi && styles.captureButtonDisabled]}
+            onPress={handleCapture}
+            disabled={isCapturingUi}
+            activeOpacity={0.9}
+          >
+            {isCapturingUi ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <View style={styles.captureButtonInner} />
+            )}
+          </TouchableOpacity>
+        </Animated.View>
 
         <TouchableOpacity
           style={[styles.torchButton, torchOn && styles.torchButtonOn]}
@@ -260,6 +292,7 @@ const styles = StyleSheet.create({
     height: CAMERA_H,
     alignSelf: 'center',
     overflow: 'hidden',
+    backgroundColor: '#000',
   },
   cameraView: {
     width: CAMERA_W,
@@ -292,10 +325,6 @@ const styles = StyleSheet.create({
     bottom: 4, right: 4,
     borderBottomWidth: CORNER_W, borderRightWidth: CORNER_W,
     borderColor: 'rgba(255,255,255,0.7)',
-  },
-  shutterFlash: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#fff',
   },
   controls: {
     flex: 1,

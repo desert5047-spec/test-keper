@@ -206,8 +206,9 @@ export function CameraPreviewScreen({ imageUri, physicalOrientation = 'portrait'
       <View style={styles.imageContainer}>
         <Image
           source={{ uri: currentUri }}
-          style={{ width: PREVIEW_W, height: PREVIEW_H }}
+          style={styles.previewImage}
           contentFit="contain"
+          transition={0}
         />
         {(isRotating || isPreparing) && (
           <View style={styles.rotatingOverlay}>
@@ -286,10 +287,16 @@ const styles = StyleSheet.create({
     width: PREVIEW_W,
     height: PREVIEW_H,
     alignSelf: 'center',
+    backgroundColor: '#000',
+  },
+  previewImage: {
+    width: PREVIEW_W,
+    height: PREVIEW_H,
+    backgroundColor: '#000',
   },
   rotatingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
   },

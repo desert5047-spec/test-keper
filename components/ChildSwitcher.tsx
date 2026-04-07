@@ -69,7 +69,7 @@ export function ChildSwitcher() {
     setSelectedChildId(childId);
     closeModal(() => {
       if (pathname.includes('/detail')) {
-        router.replace('/(tabs)/list');
+        router.replace('/(tabs)');
       }
     });
   };
